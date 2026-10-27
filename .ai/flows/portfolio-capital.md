@@ -105,8 +105,11 @@ aceita zera a sequencia. Retomada sempre manual (portfolio pela API do Safe Mode
 1. Runner precisa estar associado a portfolio conhecido.
 2. Safe Mode do portfolio nao pode bloquear operacao.
 3. `GlobalBalance` precisa existir.
-4. Exposicao atual + valor solicitado precisa respeitar
-   `maxAllocationPercent` do runner.
+4. O valor solicitado precisa caber no espaco do runner
+   (`RunnerExposureService.allocationRoom`): `maxAllocationPercent × totalBalance` menos a exposicao,
+   que e o custo pago do lote ativo (OPEN ou CLOSING) mais a parte nao executada das BUY em voo. SELL
+   em voo nao soma. O lote preenchido continua contando ate ser vendido (T62, decisao B). O mesmo
+   espaco e o `maxOperationAmount` do contexto da estrategia.
 5. Reserva atomica precisa mover capital de disponivel para reservado.
 
 Falha em qualquer passo levanta `CapitalReservationRejectedException`. O

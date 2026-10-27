@@ -1,5 +1,6 @@
 package com.marmitt.core.application.usecase.runner.processsignal;
 
+import com.marmitt.core.domain.portfolio.GlobalBalance;
 import com.marmitt.core.domain.runner.Position;
 import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
@@ -7,30 +8,32 @@ import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
+import java.util.Optional;
 
 /**
- * Calcula a exposicao financeira atual do runner: capital comprometido em posicoes abertas
- * e ordens em voo que ainda nao foram liquidadas.
+ * Calcula a exposicao financeira atual do runner: o capital que ele tem investido e o que ainda
+ * esta a caminho (T62, decisao B do mantenedor).
  *
- * <p><b>Exposicao em voo</b> e o somatorio dos valores totais de transacoes nos status
- * PENDING, SUBMITTED ou PARTIAL — capital que ja foi reservado mas cuja execucao final
- * (FILLED) ou falha (CANCELED/REJECTED/EXPIRED) ainda nao foi confirmada pela exchange.
+ * <p><b>Exposicao</b> = custo pago do lote ativo ({@code costBasis}, OPEN ou CLOSING) + a parte ainda
+ * nao executada das BUY em voo (PENDING, SUBMITTED ou PARTIAL). Um fill parcial ja entra no lote, por
+ * isso a BUY em voo conta so o que falta executar. SELL em voo nao soma: so reduz exposicao, e o lote que
+ * ela trava ja esta no custo.
  *
- * <p>Essa informacao e usada em dois contextos:
+ * <p>{@code maxAllocationPercent × totalBalance} menos a exposicao e o espaco do runner
+ * ({@link #allocationRoom}): a reserva de capital recusa BUY acima dele e o contexto da estrategia o
+ * informa como {@code maxOperationAmount}. Uma conta so para os dois.
+ *
+ * <p>Usado por:
  * <ul>
- *   <li>{@link RunnerSignalPolicy}: para verificar se o runner SINGLE ja tem posicao
- *       aberta ou ordem em voo antes de aceitar um novo BUY.</li>
+ *   <li>{@link RunnerSignalPolicy}: politica SINGLE (posicao aberta ou ordem em voo).</li>
  *   <li>{@link PreTradeRiskPolicy}: limites {@code maxOpenPositions}/{@code maxPendingOrders} (T50).</li>
- *   <li>{@link CapitalReservationPolicy}: para calcular se o novo BUY ultrapassaria
- *       o limite de alocacao maxima ({@code maxAllocationPercent}) do runner.</li>
+ *   <li>{@link CapitalReservationPolicy}: teto de alocacao do runner na reserva.</li>
+ *   <li>{@link RunnerContextAssembler}: {@code maxOperationAmount} do contexto.</li>
+ *   <li>Metrica de utilizacao de capital do runner (T51).</li>
  * </ul>
- *
- * <p>{@link #loadSnapshot} e o metodo preferido no caminho BUY com politica SINGLE,
- * pois carrega posicoes e transacoes em uma unica chamada e compartilha o resultado
- * entre a policy e a reserva — evitando consultas duplicadas ao banco.
  */
 public class RunnerExposureService {
 
@@ -41,64 +44,55 @@ public class RunnerExposureService {
     }
 
     /**
-     * Calcula o valor financeiro total em voo para o runner.
-     * Usado como fallback quando o snapshot nao foi pre-carregado
-     * (ex.: reserva sem snapshot pre-carregado).
-     */
-    public BigDecimal calculateInFlightExposure(UUID runnerId) {
-        return inFlightSummary(runnerId).exposure();
-    }
-
-    /**
-     * Exposicao em voo e a ordem em voo mais antiga do runner. Fonte unica da exposicao usada pela
-     * reserva e pela metrica de utilizacao de capital (T51).
-     */
-    public InFlightSummary inFlightSummary(UUID runnerId) {
-        List<Transaction> inFlight = strategyRunnerRepository.findByRunnerIdAndStatuses(runnerId, TransactionStatus.IN_FLIGHT);
-        return new InFlightSummary(sumTotals(inFlight), inFlight.stream()
-                .map(Transaction::getRequestedAt)
-                .min(Instant::compareTo)
-                .orElse(null));
-    }
-
-    /**
-     * Carrega posicoes abertas e ordens em voo em uma unica consulta e retorna
-     * um snapshot imutavel com as informacoes necessarias para a policy e a reserva.
-     *
-     * <p>Preferivel a {@link #calculateInFlightExposure} quando o caller precisa tanto
-     * do flag booleano (para {@link RunnerSignalPolicy}) quanto do valor numerico (para
-     * {@link CapitalReservationPolicy}), evitando duas roundtrips ao banco.
+     * Foto da exposicao do runner: posicoes abertas, ordens em voo e o capital investido.
      */
     public ExposureSnapshot loadSnapshot(StrategyRunner runner) {
         List<Position> openPositions = strategyRunnerRepository.findOpenPositionsByRunnerId(runner.getId());
+        Optional<Position> activeLot =
+                strategyRunnerRepository.findActivePositionByRunnerIdAndSymbol(runner.getId(), runner.getSymbol());
         List<Transaction> inFlight = strategyRunnerRepository.findByRunnerIdAndStatuses(runner.getId(), TransactionStatus.IN_FLIGHT);
 
-        return new ExposureSnapshot(openPositions.size(), inFlight.size(), sumTotals(inFlight));
-    }
-
-    private static BigDecimal sumTotals(List<Transaction> inFlight) {
-        return inFlight.stream()
-                .map(Transaction::getTotal)
+        BigDecimal lotCost = activeLot.map(Position::getCostBasis).orElse(BigDecimal.ZERO);
+        BigDecimal pendingBuys = inFlight.stream()
+                .filter(Transaction::isBuy)
+                .map(RunnerExposureService::unexecutedTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Instant oldestInFlightAt = inFlight.stream()
+                .map(Transaction::getRequestedAt)
+                .min(Instant::compareTo)
+                .orElse(null);
+        return new ExposureSnapshot(openPositions.size(), inFlight.size(), lotCost.add(pendingBuys), oldestInFlightAt);
     }
 
-    /**
-     * @param exposure        somatorio dos totais das ordens em voo
-     * @param oldestRequestedAt envio da ordem em voo mais antiga, {@code null} sem ordem
-     */
-    public record InFlightSummary(BigDecimal exposure, Instant oldestRequestedAt) {
+    /** Teto de alocacao do runner: {@code maxAllocationPercent × totalBalance} do portfolio. */
+    public static BigDecimal allocationLimit(StrategyRunner runner, GlobalBalance balance) {
+        return runner.getMaxAllocationPercent().multiply(balance.getTotalBalance());
+    }
+
+    /** Quanto o runner ainda pode investir: o teto menos a exposicao, nunca negativo. */
+    public static BigDecimal allocationRoom(StrategyRunner runner, GlobalBalance balance, BigDecimal exposure) {
+        return allocationLimit(runner, balance).subtract(exposure).max(BigDecimal.ZERO);
+    }
+
+    private static BigDecimal unexecutedTotal(Transaction buy) {
+        BigDecimal executed = buy.getExecutedQuantity() == null ? BigDecimal.ZERO : buy.getExecutedQuantity();
+        if (executed.signum() == 0) {
+            return buy.getTotal();
+        }
+        return buy.getQuantity().subtract(executed).max(BigDecimal.ZERO)
+                .multiply(buy.getPrice()).setScale(8, RoundingMode.HALF_UP);
     }
 
     /**
      * Foto do estado de exposicao do runner no momento do tick.
      *
-     * @param openPositions    posicoes abertas — limite {@code maxOpenPositions} (T50)
-     * @param inFlightOrders   ordens em voo (PENDING, SUBMITTED, PARTIAL) — limite {@code maxPendingOrders} (T50)
-     * @param inFlightExposure somatorio dos valores totais das ordens em voo —
-     *                         usado pela {@link CapitalReservationPolicy} para calcular
-     *                         se o novo BUY ultrapassa o limite de alocacao do runner
+     * @param openPositions    lotes OPEN do runner — limite {@code maxOpenPositions} e politica SINGLE
+     * @param inFlightOrders   ordens em voo (BUY e SELL) — limite {@code maxPendingOrders}
+     * @param exposure         custo do lote ativo + parte nao executada das BUY em voo
+     * @param oldestInFlightAt envio da ordem em voo mais antiga, {@code null} sem ordem
      */
-    public record ExposureSnapshot(int openPositions, int inFlightOrders, BigDecimal inFlightExposure) {
+    public record ExposureSnapshot(int openPositions, int inFlightOrders, BigDecimal exposure,
+                                   Instant oldestInFlightAt) {
 
         /** Ao menos uma posicao aberta ou ordem em voo — usado pela politica SINGLE. */
         public boolean hasOpenOrInFlight() {

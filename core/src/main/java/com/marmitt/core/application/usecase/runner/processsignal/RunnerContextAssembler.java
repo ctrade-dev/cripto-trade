@@ -30,21 +30,25 @@ import java.util.Optional;
  *       pendente) e informada separadamente para que a estrategia saiba o que pode vender.</li>
  *   <li><b>Ordens pendentes ({@code pendingOrders}):</b> transacoes BUY/SELL
  *       nos status PENDING, SUBMITTED ou PARTIAL que ainda nao foram confirmadas pela exchange.</li>
- *   <li><b>Limite de exposicao ({@code maxExposurePerSymbol}):</b> percentual maximo
- *       do capital total que pode estar alocado neste runner simultaneamente.</li>
+ *   <li><b>{@code maxOperationAmount}:</b> o maximo que o runner pode gastar agora — o menor entre o
+ *       saldo disponivel do portfolio e o espaco do runner no teto de alocacao
+ *       ({@link RunnerExposureService#allocationRoom}, a mesma conta da reserva, T62).</li>
  * </ul>
  */
 class RunnerContextAssembler {
 
     private final GlobalBalanceRepositoryPort globalBalanceRepository;
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
+    private final RunnerExposureService exposureService;
     private final BigDecimal minimumOperationAmount;
 
     public RunnerContextAssembler(GlobalBalanceRepositoryPort globalBalanceRepository,
                                   StrategyRunnerRepositoryPort strategyRunnerRepository,
+                                  RunnerExposureService exposureService,
                                   BigDecimal minimumOperationAmount) {
         this.globalBalanceRepository = globalBalanceRepository;
         this.strategyRunnerRepository = strategyRunnerRepository;
+        this.exposureService = exposureService;
         this.minimumOperationAmount = minimumOperationAmount;
     }
 
@@ -88,7 +92,8 @@ class RunnerContextAssembler {
                 ))
                 .orElse(PositionContext.empty(runner.getSymbol()));
 
-        BigDecimal maxOperationAmount = balance.getAvailableBalance();
+        BigDecimal maxOperationAmount = balance.getAvailableBalance().min(RunnerExposureService.allocationRoom(
+                runner, balance, exposureService.loadSnapshot(runner).exposure()));
 
         return StrategyContextDto.builder()
                 .runnerId(runner.getId())

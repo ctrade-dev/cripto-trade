@@ -23,9 +23,9 @@ import java.math.BigDecimal;
  *       e permitido independente do saldo. Falha com {@code RISK_VIOLATION}.</li>
  *   <li><b>GlobalBalance existe:</b> inconsistencia de dados — portfolio sem saldo nao
  *       deve ocorrer em operacao normal. Falha com {@code INSUFFICIENT_FUNDS}.</li>
- *   <li><b>Limite de exposicao do runner:</b> a exposicao atual (ordens em voo) mais o
- *       valor do novo BUY nao pode ultrapassar {@code maxAllocationPercent × totalBalance}.
- *       Falha com {@code RUNNER_LIMIT_EXCEEDED}.</li>
+ *   <li><b>Limite de exposicao do runner:</b> o valor do novo BUY nao pode passar do espaco do
+ *       runner ({@link RunnerExposureService#allocationRoom}: {@code maxAllocationPercent × totalBalance}
+ *       menos o custo do lote ativo e as BUY em voo, T62). Falha com {@code RUNNER_LIMIT_EXCEEDED}.</li>
  *   <li><b>Reserva atomica:</b> decrementa o saldo disponivel no banco via CAS. Falha
  *       com {@code INSUFFICIENT_FUNDS} se o saldo disponivel for insuficiente.</li>
  * </ol>
@@ -34,8 +34,8 @@ import java.math.BigDecimal;
  * capturada pelo {@link BuySignalHandler} que descarta o sinal sem propagar o erro.
  *
  * <p>O parametro {@code precomputedExposure} permite reaproveitar o valor ja calculado
- * pelo {@link RunnerExposureService#loadSnapshot} para runners com politica SINGLE,
- * evitando uma segunda consulta ao banco para calcular a exposicao em voo.
+ * pelo {@link RunnerExposureService#loadSnapshot} no pipeline BUY, evitando uma segunda consulta
+ * ao banco.
  */
 @Slf4j
 class CapitalReservationPolicy {
@@ -57,7 +57,7 @@ class CapitalReservationPolicy {
      *
      * @param capitalRequest     pedido com valor, runner e transacao de referencia
      * @param runner             runner que originou o sinal BUY
-     * @param precomputedExposure exposicao em voo ja calculada, ou {@code null} para
+     * @param precomputedExposure exposicao do runner ja calculada, ou {@code null} para
      *                           calcular sob demanda via {@link RunnerExposureService}
      * @throws com.marmitt.core.application.exception.CapitalReservationRejectedException
      *         se qualquer regra de aprovacao falhar
@@ -86,11 +86,11 @@ class CapitalReservationPolicy {
 
         BigDecimal currentExposure = precomputedExposure != null
                 ? precomputedExposure
-                : exposureService.calculateInFlightExposure(runner.getId());
-        BigDecimal maxAllocation = runner.getMaxAllocationPercent().multiply(balance.getTotalBalance());
-        if (currentExposure.add(capitalRequest.amount()).compareTo(maxAllocation) > 0) {
-            log.warn("persistBuyAndReserve: RUNNER_LIMIT_EXCEEDED runner={} currentExposure={} requested={} maxAllocation={}",
-                    runner.getId(), currentExposure, capitalRequest.amount(), maxAllocation);
+                : exposureService.loadSnapshot(runner).exposure();
+        BigDecimal room = RunnerExposureService.allocationRoom(runner, balance, currentExposure);
+        if (capitalRequest.amount().compareTo(room) > 0) {
+            log.warn("persistBuyAndReserve: RUNNER_LIMIT_EXCEEDED runner={} currentExposure={} requested={} room={}",
+                    runner.getId(), currentExposure, capitalRequest.amount(), room);
             throw new CapitalReservationRejectedException(capitalRequest.transactionId(), RejectionReason.RUNNER_LIMIT_EXCEEDED);
         }
 

@@ -21,7 +21,7 @@ class PreTradeRiskPolicyTest {
     private static final BigDecimal TICK = new BigDecimal("65000");
     private static final BigDecimal QTY = new BigDecimal("0.001");
     private static final RunnerExposureService.ExposureSnapshot FLAT =
-            new RunnerExposureService.ExposureSnapshot(0, 0, BigDecimal.ZERO);
+            new RunnerExposureService.ExposureSnapshot(0, 0, BigDecimal.ZERO, null);
 
     private final PreTradeRiskPolicy policy = new PreTradeRiskPolicy();
     private final StrategyRunner runner = runner(1, 1);
@@ -48,11 +48,11 @@ class PreTradeRiskPolicyTest {
         StrategyRunner roomy = runner(2, 2);
 
         assertEquals(Optional.of(SignalDecision.REJECTED_MAX_POSITIONS), policy.rejection(roomy, buy(), TICK,
-                new RunnerExposureService.ExposureSnapshot(2, 0, BigDecimal.ZERO)));
+                new RunnerExposureService.ExposureSnapshot(2, 0, BigDecimal.ZERO, null)));
         assertEquals(Optional.of(SignalDecision.REJECTED_MAX_PENDING), policy.rejection(roomy, buy(), TICK,
-                new RunnerExposureService.ExposureSnapshot(1, 2, new BigDecimal("130"))));
+                new RunnerExposureService.ExposureSnapshot(1, 2, new BigDecimal("130"), null)));
         assertEquals(Optional.empty(), policy.rejection(roomy, buy(), TICK,
-                new RunnerExposureService.ExposureSnapshot(1, 1, new BigDecimal("65"))));
+                new RunnerExposureService.ExposureSnapshot(1, 1, new BigDecimal("65"), null)));
     }
 
     @Test

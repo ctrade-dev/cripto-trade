@@ -100,7 +100,12 @@ Strings `date-time` (`2026-07-03T14:22:05.123Z`). Sem epoch, sem timezone local.
 - **`totalCapital`** é `available + reserved` do portfolio, exposto para **dimensionar** a ordem (ex.:
   "alocar X% do capital"). Não é um limite: o teto de exposição do runner (`maxAllocationPercent`) e
   o saldo disponível são aplicados pelo ctrade na reserva, e uma ordem acima deles é recusada. Para o
-  máximo que o runner pode gastar agora, use `maxOperationAmount`/`availableCapital`.
+  máximo que o runner pode gastar agora, use `maxOperationAmount`.
+- **`maxOperationAmount`** é o menor entre `availableCapital` (saldo disponível do portfolio) e o espaço
+  do runner no teto: `maxAllocationPercent × totalCapital` menos o custo pago do lote aberto e das BUY
+  em voo (T62). É a mesma conta da reserva: uma BUY de valor até `maxOperationAmount` não é recusada
+  pelo teto, salvo corrida com outro runner do mesmo portfolio. Com lote aberto, o custo dele ocupa o
+  teto até a venda; `maxOperationAmount` pode ser `0`.
 
 ### Response (`Decision`) — regras de coerência por `decision`
 

@@ -135,8 +135,9 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         this.signalPolicy = new RunnerSignalPolicy();
         this.preTradeRiskPolicy = new PreTradeRiskPolicy();
         this.signalEvaluator = new StrategySignalEvaluator(strategyRepository);
+        this.runnerExposureService = new RunnerExposureService(strategyRunnerRepository);
         this.contextAssembler = new RunnerContextAssembler(
-                globalBalanceRepository, strategyRunnerRepository, MINIMUM_OPERATION_AMOUNT);
+                globalBalanceRepository, strategyRunnerRepository, this.runnerExposureService, MINIMUM_OPERATION_AMOUNT);
         this.tradeIntentFactory = new TradeIntentFactory();
         this.orderNormalizer = new OrderNormalizer(orderNormalizers);
         this.buySignalHandler = new BuySignalHandler(this.tradeIntentFactory, orderDispatch);
@@ -146,7 +147,6 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                 this.cancelSignalHandler);
         this.protectionHandler = new PositionProtectionHandler(strategyRunnerRepository, this.tradeIntentFactory,
                 this.cancelSignalHandler);
-        this.runnerExposureService = new RunnerExposureService(strategyRunnerRepository);
         this.capitalReservationPolicy = new CapitalReservationPolicy(
                 portfolioRepository, globalBalanceRepository, this.runnerExposureService);
     }
@@ -568,7 +568,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         try {
             if (transaction.isBuy()) {
                 BigDecimal precomputedExposure = exposureSnapshot != null
-                        ? exposureSnapshot.inFlightExposure()
+                        ? exposureSnapshot.exposure()
                         : null;
                 BuyExecutionContext buyContext = tradeIntentFactory
                         .buildBuyExecutionContext(runner, transaction, precomputedExposure);

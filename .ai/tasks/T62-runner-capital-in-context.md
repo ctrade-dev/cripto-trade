@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T41 (contrato do strategy service), T50 (limites pré-trade). Origem: rodada das cinco
 apps da T60 na testnet (2026-10-27).
-**Status:** Planejado — decisão de negócio pendente (item 1 da solução).
+**Status:** Em andamento — decisão B (custo pago) tomada em 2026-10-27.
 
 ---
 
@@ -56,6 +56,22 @@ cresce sem limite de alocação). Opções:
 
 Recomendação: **B**, porque é o que `maxAllocationPercent` sugere para quem opera. Mas é regra de
 risco: precisa do ok do mantenedor (`development-manual.md` §11).
+
+## Decisões registradas (2026-10-27)
+
+1. **Opção B, custo pago** (mantenedor). Exposição do runner = `costBasis` do lote ativo (OPEN ou
+   CLOSING) + parte **não executada** das BUY em voo. O lote preenchido ocupa o teto até ser vendido;
+   pelo custo pago, o espaço não oscila com o preço.
+2. **BUY parcial conta só o que falta executar**, porque o fill parcial já entra no lote (sem contar o
+   mesmo dinheiro duas vezes).
+3. **SELL em voo não soma** (antes somava o total da SELL): venda só reduz exposição, e o lote que ela
+   trava já está no custo.
+4. **Fonte única** em `RunnerExposureService` (`loadSnapshot`, `allocationLimit`, `allocationRoom`): reserva,
+   contexto (`maxOperationAmount`) e a métrica `capital.utilization.runner` usam a mesma conta. Os métodos
+   antigos (`calculateInFlightExposure`, `inFlightSummary`) saíram.
+5. Sem mudança de schema nem de versão do contrato (1.1.0): o campo passa a valer o que a descrição já
+   prometia. A cópia do `openapi.yaml` em `ctrade-strategies` só muda descrição; sincronizar no próximo
+   PR de lá.
 
 ## Fora do escopo
 

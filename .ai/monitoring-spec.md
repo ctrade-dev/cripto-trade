@@ -245,7 +245,7 @@
 
 ### ✅ Entregue pela T51 (estado operacional)
 - `circuit_breaker.current_level`, `circuit_breaker.duration.active.seconds`, `circuit_breaker.runner.suspended.count` por portfolio
-- `capital.utilization.global` (portfolio), `capital.utilization.runner` e `capital.reservation.oldest.age.seconds` (runner)
+- `capital.utilization.global` (portfolio), `capital.utilization.runner` e `capital.reservation.oldest.age.seconds` (runner). Desde a T62, `capital.utilization.runner` = exposição (custo do lote ativo + BUY em voo) ÷ teto do runner; antes contava só as ordens em voo
 - `runner.lifecycle.transitions.total`, `runner.lifecycle.current_state`, `runner.lifecycle.terminating.duration`, `runner.lifecycle.termination.stuck`
 - Health `/actuator/health` com o componente `safeMode` (nível por portfolio)
 - Alertas Grafana (grupo `ctrade-operational`): Safe Mode ativo, runner travado em TERMINATING, cancel rate > 10/min, rejection rate > 50% em 5 min, utilização global > 80%

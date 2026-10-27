@@ -102,14 +102,13 @@ public class ReportOperationalStateUseCase implements ReportOperationalStatePort
     }
 
     private void reportRunner(StrategyRunner runner, GlobalBalance balance, Instant now) {
-        RunnerExposureService.InFlightSummary inFlight = exposureService.inFlightSummary(runner.getId());
-        BigDecimal limit = balance == null ? BigDecimal.ZERO
-                : runner.getMaxAllocationPercent().multiply(balance.getTotalBalance());
+        RunnerExposureService.ExposureSnapshot exposure = exposureService.loadSnapshot(runner);
+        BigDecimal limit = balance == null ? BigDecimal.ZERO : RunnerExposureService.allocationLimit(runner, balance);
         BigDecimal utilization = limit.signum() > 0
-                ? inFlight.exposure().divide(limit, 8, RoundingMode.HALF_UP)
+                ? exposure.exposure().divide(limit, 8, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
-        Duration oldest = inFlight.oldestRequestedAt() == null ? Duration.ZERO
-                : Duration.between(inFlight.oldestRequestedAt(), now);
+        Duration oldest = exposure.oldestInFlightAt() == null ? Duration.ZERO
+                : Duration.between(exposure.oldestInFlightAt(), now);
         metrics.recordRunnerState(runner.getId(), utilization, oldest);
     }
 
