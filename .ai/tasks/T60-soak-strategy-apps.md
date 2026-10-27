@@ -4,7 +4,7 @@
 **Responsável:** Claude (num repositório próprio, fora do ctrade)
 **Dependências:** T41/T40 (contrato 1.1, `docs/strategy-service/CONTRACT.md`), T54 (catálogo por API). Desbloqueia
 a fase 3 da T53; serve de portfólio inicial para o M3 do roadmap (`.ai/agentic-strategy-roadmap.md`).
-**Status:** Em andamento — tendência e caos entregues e validados na testnet (`ctrade-dev/ctrade-strategies`, PR #1); faltam livro, reversão e rompimento.
+**Status:** Em andamento — as cinco apps entregues (`ctrade-dev/ctrade-strategies`, PRs #1 e #2) e aceitas no cadastro; falta uma rodada em que tendência, livro e rompimento fechem uma ida e volta (critério 2).
 
 ---
 
@@ -156,6 +156,33 @@ em BTCUSDT. Duas janelas: 2026-10-21 23:04–23:40Z (até o ctrade cair) e 2026-
 - **Lacuna:** o SELL acima do disponível **de um lote** não foi exercitado, porque o caos sem
   `CHAOS_HOLD_POSITION` nunca tem lote (a recusa vista foi "sem posição"). Ligar o modo na próxima
   rodada.
+
+### Rodadas com as cinco apps (2026-10-27)
+
+**Rodada 1** (portfolio `soak-t60-5`, 13:14–13:56Z; tetos 0,4 × 4 e caos 0,2; caos com
+`CHAOS_HOLD_POSITION=true`):
+
+- Cadastro: as cinco `VERIFIED`.
+- Achados:
+  - **T61:** o `OVERSELL` do caos foi à exchange, a SELL ficou `SUBMITTED`, a conciliação deu `ERROR`
+    a cada minuto e o watchdog pôs o portfolio em Safe Mode HALT. SELL com `targetLotId` de outro
+    runner também passava.
+  - **T62:** `maxOperationAmount` ignorava o custo do lote aberto. As ~1.230 `REJECTED_CAPITAL` da
+    rodada, porém, eram do Safe Mode (`RISK_VIOLATION`), não do teto.
+  - **`baseUrl` com `localhost`:** o Java resolve para `::1`, o Docker publica só em `127.0.0.1`, e a
+    conexão nova trava no Windows além do timeout de 250 ms. O caos ficou 12 minutos inalcançável
+    depois de um `TIMEOUT` derrubar a conexão keep-alive. Usar `127.0.0.1`.
+
+**Rodada 2** (portfolio `val-t61-t62`, 16:23–16:41Z, banco limpo, mesmos tetos), validação de T61 e T62:
+
+- `OVERSELL` × 4 viraram `REJECTED_QUANTITY`, sem ordem. Utilização do caos com lote aberto = 0,197.
+- Reversão: 2 idas e voltas `FILLED`. Rompimento: BUY `FILLED`, sem saída na janela. Tendência: BUY
+  parada no livro. Livro: 13 BUY canceladas e recolocadas, sem preenchimento.
+- Caos: todas as falhas apareceram com o efeito previsto (`TIMEOUT`, `DISCONNECT`, `SERVER_ERROR`,
+  `MALFORMED`, `INCOHERENT`, `PRICE_DEVIATION`, `CANCEL_UNKNOWN`, `OVERSELL`).
+- ctrade: zero `ERROR`, estado operacional `OK` do início ao fim, sem halt nem Safe Mode.
+- Critério 2 ainda aberto: tendência, livro e rompimento precisam de uma janela maior para fechar uma ida
+  e volta.
 
 ## Fora do escopo
 

@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T41 (strategy service remoto), T44 (proteção do lote), T50 (limites pré-trade).
 Origem: rodada das cinco apps da T60 na testnet (2026-10-27), fault `OVERSELL` do `SoakChaos`.
-**Status:** Em andamento
+**Status:** Concluído — PR #166; validada na testnet em 2026-10-27 (critério 6).
 
 ---
 
@@ -66,6 +66,14 @@ runner do mesmo portfolio (ou de outro portfolio).
 - Sem teste E2E pela métrica: a regra está no `SellSignalHandler` (unitário cobre os casos), o
   mapeamento para `REJECTED_QUANTITY` é um `switch` exaustivo e a trava no SQL tem teste de integração.
   O caminho inteiro é validado na testnet com o fault `OVERSELL` do caos (critério 6).
+
+## Validação na testnet (portfolio `val-t61-t62`, 2026-10-27 16:23–16:41Z, cinco apps)
+
+Caos com `CHAOS_HOLD_POSITION=true` e lote aberto de `0.00049`. O fault `OVERSELL` saiu 4 vezes
+(`SHOULD_SELL 0.00098`); as 4 viraram `REJECTED_QUANTITY` com o `WARN` `SELL signal discarded - quantity=0.00098
+above lot=... quantity=0.00049000`. Nenhuma transação SELL criada (o runner do caos ficou só com a BUY
+`FILLED`), nenhum `ERROR`, sem Safe Mode. Na rodada anterior o mesmo caso foi à exchange, ficou
+`SUBMITTED` e levou o portfolio a HALT pelo watchdog.
 
 ## Fora do escopo
 

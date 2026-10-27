@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T41 (contrato do strategy service), T50 (limites pré-trade). Origem: rodada das cinco
 apps da T60 na testnet (2026-10-27).
-**Status:** Em andamento — decisão B (custo pago) tomada em 2026-10-27.
+**Status:** Concluído — decisão B (custo pago) tomada em 2026-10-27; PR #168; validada na testnet em 2026-10-27.
 
 ---
 
@@ -92,6 +92,12 @@ risco: precisa do ok do mantenedor (`development-manual.md` §11).
    `RUNNER_LIMIT_EXCEEDED` sem corrida.
 3. Reserva e contexto usam a mesma função (teste cobre os dois pelo mesmo cenário).
 4. Teste reproduz a recusa por `RUNNER_LIMIT_EXCEEDED` com `maxOperationAmount` atual e a ausência dela depois.
+
+## Validação na testnet (portfolio `val-t61-t62`, 2026-10-27 16:23–16:41Z, cinco apps)
+
+- O runner do caos, com lote aberto de ~39,5 USDT e nenhuma ordem em voo, marcou
+  `capital.utilization.runner` = 0,197 (custo do lote ÷ teto de 200). Antes da T62 marcaria 0.
+- Nenhum `RUNNER_LIMIT_EXCEEDED` nos 18 minutos, com os tetos somando 180% do portfolio.
 
 ## Fontes
 

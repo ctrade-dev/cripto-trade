@@ -185,13 +185,13 @@ explicação (erro comprovadamente da testnet é aceito se registrado).
 ## Roteiro — Apps de estratégia da T60 (fase 3)
 
 As apps vivem em `ctrade-dev/ctrade-strategies` (README de lá: parâmetros, falhas do caos, `GET /stats`).
-Disponíveis: **tendência** e **caos**; livro, reversão e rompimento entram depois.
+Disponíveis: **tendência**, **reversão**, **livro**, **rompimento** e **caos**.
 
 ### 1. Subir as apps (mantenedor)
 
 ```powershell
 cd ..\ctrade-strategies
-docker compose up -d --build     # trend em 127.0.0.1:8091, chaos em 127.0.0.1:8095
+docker compose up -d --build     # trend 8091, reversion 8092, book 8093, breakout 8094, chaos 8095 (127.0.0.1)
 ```
 
 Na VPS: os serviços entram na rede do Compose do ctrade, sem `ports`, e o `baseUrl` passa a ser
@@ -204,10 +204,15 @@ Na VPS: os serviços entram na rede do Compose do ctrade, sem `ports`, e o `base
 
 | App | `strategyRef` | `name` | `version` | `baseUrl` local |
 |---|---|---|---|---|
-| tendência | `c7a1b2d3-0001-4000-8000-000000000001` | `SoakTrend` | `1.0.0` | `http://localhost:8091/v1` |
-| caos | `c7a1b2d3-0005-4000-8000-000000000005` | `SoakChaos` | `1.0.0` | `http://localhost:8095/v1` |
+| tendência | `c7a1b2d3-0001-4000-8000-000000000001` | `SoakTrend` | `1.0.0` | `http://127.0.0.1:8091/v1` |
+| reversão | `c7a1b2d3-0002-4000-8000-000000000002` | `SoakReversion` | `1.0.0` | `http://127.0.0.1:8092/v1` |
+| livro | `c7a1b2d3-0003-4000-8000-000000000003` | `SoakBook` | `1.0.0` | `http://127.0.0.1:8093/v1` |
+| rompimento | `c7a1b2d3-0004-4000-8000-000000000004` | `SoakBreakout` | `1.0.0` | `http://127.0.0.1:8094/v1` |
+| caos | `c7a1b2d3-0005-4000-8000-000000000005` | `SoakChaos` | `1.0.0` | `http://127.0.0.1:8095/v1` |
 
-Esperado `verification=VERIFIED` e `usable=true`.
+Esperado `verification=VERIFIED` e `usable=true`. Use `127.0.0.1`, não `localhost`: o Java resolve
+`localhost` para `::1`, o Docker publica só em IPv4, e no Windows a conexão nova trava além do timeout
+de 250 ms (a estratégia fica `UNREACHABLE` depois que a conexão keep-alive cai).
 
 ### 3. Portfolio e runners (agente; limites combinados com o mantenedor no início da rodada)
 
@@ -216,7 +221,11 @@ Esperado `verification=VERIFIED` e `usable=true`.
   (`PATCH /api/admin/runners/{id}`).
 - O runner do caos com capital pequeno. A guarda de rejeições consecutivas (5) pode parar esse runner;
   o halt aparece na linha do tempo como `AUTOMATIC` e não reprova a rodada se vier do caos.
-- `POST /api/admin/runners/{id}/start` em cada um.
+- `POST /api/admin/runners/{id}/start` em cada um. O id do runner criado vem em `runnerId`.
+
+Durante a rodada, conferir `GET /api/admin/operational-state` junto com as transações: Safe Mode
+automático recusa toda BUY com `RISK_VIOLATION`, e essas recusas aparecem como `REJECTED_CAPITAL` na
+métrica de decisões, fáceis de confundir com o teto do runner.
 
 ### 4. No fim da rodada (agente)
 
@@ -232,6 +241,8 @@ Esperado `verification=VERIFIED` e `usable=true`.
 | 1 | 2026-10-20 | 1 (smoke) | ~15 min | 4 cenários / BTCUSDT, máquina local | Ramos OK; trades 100% iguais à exchange; DLQ vazia. Reprovada por F1 (bug) e por ruído de `ERROR` (F5). | F1–F6 abaixo |
 | 2 | 2026-10-20 | 1 (smoke) | ~17 min | 4 cenários / BTCUSDT, máquina local | **Aprovada.** F1, F2, F4 e F5 confirmados corrigidos; 271 fills 100% iguais à exchange; DLQ vazia; zero `ERROR`. | F3 (T57), F7 abaixo |
 | 3 | 2026-10-21 | 1 (smoke) | ~8 min | cenários 1, 2 e 3 / BTCUSDT, máquina local, banco da rodada 2 | **Aprovada.** T57 validada: `EXCHANGE_BALANCE_DIVERGENCE` `OK` em 64 leituras durante a operação, com lotes abertos e ordens no livro; trades 100% iguais; DLQ vazia; zero `ERROR`. | F8 abaixo |
+| 4 | 2026-10-27 | 3 (apps T60) | ~42 min | 5 apps / BTCUSDT, máquina local | **Reprovada.** SELL acima do lote foi à exchange, ficou `SUBMITTED` e o watchdog pôs o portfolio em Safe Mode. | T61, T62; `baseUrl` em `127.0.0.1` (detalhes na T60) |
+| 5 | 2026-10-27 | 3 (apps T60) | ~18 min | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; zero `ERROR`; estado operacional `OK` o tempo todo. | Tendência, livro e rompimento sem ida e volta na janela (T60, critério 2) |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
