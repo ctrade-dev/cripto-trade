@@ -351,7 +351,12 @@ components:
             available + reserved do portfolio, para dimensionar a ordem. Nao e
             limite: teto do runner e saldo sao aplicados pelo ctrade na reserva.
         availableCapital: { $ref: '#/components/schemas/Decimal' }
-        maxOperationAmount: { $ref: '#/components/schemas/Decimal' }
+        maxOperationAmount:
+          allOf: [{ $ref: '#/components/schemas/Decimal' }]
+          description: >
+            Maximo que o runner pode gastar agora: o menor entre availableCapital e o espaco do runner
+            no teto (maxAllocationPercent x totalCapital menos o custo do lote aberto e das BUY em voo).
+            Mesma conta da reserva (T62).
         minOperationAmount: { $ref: '#/components/schemas/Decimal' }
         maxOpenPositions: { type: integer }
         currentOpenPositions: { type: integer }

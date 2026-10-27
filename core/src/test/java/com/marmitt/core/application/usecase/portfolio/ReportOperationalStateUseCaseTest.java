@@ -2,6 +2,7 @@ package com.marmitt.core.application.usecase.portfolio;
 
 import com.marmitt.core.domain.portfolio.GlobalBalance;
 import com.marmitt.core.domain.portfolio.Portfolio;
+import com.marmitt.core.domain.runner.Position;
 import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.enums.RunnerStatus;
@@ -85,11 +86,14 @@ class ReportOperationalStateUseCaseTest {
         Transaction newer = inFlight("400", NOW.minusSeconds(10));
         when(runners.findByRunnerIdAndStatuses(active.getId(), TransactionStatus.IN_FLIGHT))
                 .thenReturn(List.of(newer, older));
+        Position lot = mock(Position.class);
+        when(lot.getCostBasis()).thenReturn(new BigDecimal("500"));
+        when(runners.findActivePositionByRunnerIdAndSymbol(active.getId(), "BTCUSDT")).thenReturn(Optional.of(lot));
 
         useCase.report();
 
-        // limite = 0.25 x 10000 = 2500; em voo = 1000 -> 40%
-        verify(metrics).recordRunnerState(active.getId(), new BigDecimal("0.40000000"), Duration.ofSeconds(400));
+        // limite = 0.25 x 10000 = 2500; exposicao = lote 500 + BUY em voo 1000 = 1500 -> 60% (T62)
+        verify(metrics).recordRunnerState(active.getId(), new BigDecimal("0.60000000"), Duration.ofSeconds(400));
     }
 
     @Test
@@ -144,11 +148,13 @@ class ReportOperationalStateUseCaseTest {
         when(runner.getStatusChangedAt()).thenReturn(statusChangedAt);
         when(runner.canAcceptSignals()).thenReturn(operational);
         when(runner.getMaxAllocationPercent()).thenReturn(new BigDecimal("0.25"));
+        when(runner.getSymbol()).thenReturn("BTCUSDT");
         return runner;
     }
 
     private static Transaction inFlight(String total, Instant requestedAt) {
         Transaction transaction = mock(Transaction.class);
+        when(transaction.isBuy()).thenReturn(true);
         when(transaction.getTotal()).thenReturn(new BigDecimal(total));
         when(transaction.getRequestedAt()).thenReturn(requestedAt);
         return transaction;
