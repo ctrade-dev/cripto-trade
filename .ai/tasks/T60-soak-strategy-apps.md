@@ -4,7 +4,7 @@
 **Responsável:** Claude (num repositório próprio, fora do ctrade)
 **Dependências:** T41/T40 (contrato 1.1, `docs/strategy-service/CONTRACT.md`), T54 (catálogo por API). Desbloqueia
 a fase 3 da T53; serve de portfólio inicial para o M3 do roadmap (`.ai/agentic-strategy-roadmap.md`).
-**Status:** Em andamento — as cinco apps entregues (`ctrade-dev/ctrade-strategies`, PRs #1 e #2) e aceitas no cadastro; falta uma rodada em que tendência, livro e rompimento fechem uma ida e volta (critério 2).
+**Status:** Em andamento — as cinco apps entregues (`ctrade-dev/ctrade-strategies`, PRs #1 e #2) e aceitas no cadastro; critério 2 cumprido por quatro das cinco; falta calibrar o livro para preencher na testnet.
 
 ---
 
@@ -181,8 +181,16 @@ em BTCUSDT. Duas janelas: 2026-10-21 23:04–23:40Z (até o ctrade cair) e 2026-
 - Caos: todas as falhas apareceram com o efeito previsto (`TIMEOUT`, `DISCONNECT`, `SERVER_ERROR`,
   `MALFORMED`, `INCOHERENT`, `PRICE_DEVIATION`, `CANCEL_UNKNOWN`, `OVERSELL`).
 - ctrade: zero `ERROR`, estado operacional `OK` do início ao fim, sem halt nem Safe Mode.
-- Critério 2 ainda aberto: tendência, livro e rompimento precisam de uma janela maior para fechar uma ida
-  e volta.
+- A rodada seguiu até 18:18Z (~1h55 no total) e terminou com os cinco runners em `HALT` manual:
+  - idas e voltas `FILLED`: tendência 9, reversão 17, rompimento 4;
+  - caos: 28 `OVERSELL` → `REJECTED_QUANTITY`, sem ordem;
+  - zero `ERROR` no Loki, estado operacional `OK` o tempo todo, sem halt automático nem Safe Mode;
+  - realizado do portfolio −0,08 USDT.
+- **Livro não preencheu nenhuma vez** (66 BUY canceladas e recolocadas). A causa é de calibração da
+  app, não do ctrade. A BUY descansa 0,1% abaixo do tick (`BOOK_OFFSET`, ~80 USDT) e é cancelada após
+  40 ticks (~90 s), e na testnet o BTC raramente cai 0,1% em 90 s. É o mesmo caso do limiar da
+  tendência na rodada de 2026-10-21. Ajuste proposto no repositório das apps: offset menor (ex.: 0,02%)
+  ou mais ticks antes de cancelar.
 
 ## Fora do escopo
 

@@ -242,7 +242,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 | 2 | 2026-10-20 | 1 (smoke) | ~17 min | 4 cenários / BTCUSDT, máquina local | **Aprovada.** F1, F2, F4 e F5 confirmados corrigidos; 271 fills 100% iguais à exchange; DLQ vazia; zero `ERROR`. | F3 (T57), F7 abaixo |
 | 3 | 2026-10-21 | 1 (smoke) | ~8 min | cenários 1, 2 e 3 / BTCUSDT, máquina local, banco da rodada 2 | **Aprovada.** T57 validada: `EXCHANGE_BALANCE_DIVERGENCE` `OK` em 64 leituras durante a operação, com lotes abertos e ordens no livro; trades 100% iguais; DLQ vazia; zero `ERROR`. | F8 abaixo |
 | 4 | 2026-10-27 | 3 (apps T60) | ~42 min | 5 apps / BTCUSDT, máquina local | **Reprovada.** SELL acima do lote foi à exchange, ficou `SUBMITTED` e o watchdog pôs o portfolio em Safe Mode. | T61, T62; `baseUrl` em `127.0.0.1` (detalhes na T60) |
-| 5 | 2026-10-27 | 3 (apps T60) | ~18 min | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; zero `ERROR`; estado operacional `OK` o tempo todo. | Tendência, livro e rompimento sem ida e volta na janela (T60, critério 2) |
+| 5 | 2026-10-27 | 3 (apps T60) | ~1h55 | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; 30 idas e voltas (tendência, reversão, rompimento); zero `ERROR`; estado operacional `OK` o tempo todo. | Livro sem preenchimento: calibração da app (T60) |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
