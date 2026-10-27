@@ -68,6 +68,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T60 | Apps de estratégia para o soak (fora do ctrade)                 | Média | Claude | Concluído |
 | T61 | SELL limitada ao lote do runner                                 | Baixa | Claude | Concluído |
 | T62 | Capital do contexto pelo teto do runner                         | Baixa | Claude | Concluído |
+| T63 | Ambiente de soak na VPS (compose, túnel SSH, runbook)           | Média | Claude | Pendente  |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução

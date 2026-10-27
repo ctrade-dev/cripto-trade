@@ -81,14 +81,15 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
 
 ## Pré-requisitos ainda abertos
 
-- **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4).
+- **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4). Spec na **T63**.
 - **Apps de estratégia para o soak:** o ctrade só define o contrato; as estratégias são apps
   independentes, em qualquer linguagem. Para as rodadas pesadas é preciso ter várias apps que
   implementem o contrato (o `strategy-service-reference` serve só a SMA com parâmetros fixos). Spec na
-  **T60** (cinco perfis: tendência, reversão, livro, rompimento e caos). Tendência e caos prontos
-  em `ctrade-dev/ctrade-strategies` (roteiro abaixo); os outros três em andamento.
+  **T60** (cinco perfis: tendência, reversão, livro, rompimento e caos), concluída: as cinco em
+  `ctrade-dev/ctrade-strategies` (roteiro abaixo).
 - ~~Catálogo remoto estático~~ resolvido pela **T54**: estratégias cadastradas por API, sem restart.
-- **Acesso do Claude** aos endpoints, métricas e logs da VPS para o relatório de fim de rodada.
+- **Acesso do Claude** aos endpoints, métricas e logs da VPS para o relatório de fim de rodada (túnel SSH,
+  T63).
 
 ## Riscos e limitações conhecidas
 
