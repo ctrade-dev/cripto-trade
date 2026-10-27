@@ -4,7 +4,7 @@
 **Responsável:** Claude (num repositório próprio, fora do ctrade)
 **Dependências:** T41/T40 (contrato 1.1, `docs/strategy-service/CONTRACT.md`), T54 (catálogo por API). Desbloqueia
 a fase 3 da T53; serve de portfólio inicial para o M3 do roadmap (`.ai/agentic-strategy-roadmap.md`).
-**Status:** Em andamento — as cinco apps entregues (`ctrade-dev/ctrade-strategies`, PRs #1 e #2) e aceitas no cadastro; critério 2 cumprido por quatro das cinco; falta calibrar o livro para preencher na testnet.
+**Status:** Concluído — as cinco apps entregues (`ctrade-dev/ctrade-strategies`, PRs #1, #2 e #3) e validadas na testnet em 2026-10-27; todos os critérios cumpridos.
 
 ---
 
@@ -189,8 +189,11 @@ em BTCUSDT. Duas janelas: 2026-10-21 23:04–23:40Z (até o ctrade cair) e 2026-
 - **Livro não preencheu nenhuma vez** (66 BUY canceladas e recolocadas). A causa é de calibração da
   app, não do ctrade. A BUY descansa 0,1% abaixo do tick (`BOOK_OFFSET`, ~80 USDT) e é cancelada após
   40 ticks (~90 s), e na testnet o BTC raramente cai 0,1% em 90 s. É o mesmo caso do limiar da
-  tendência na rodada de 2026-10-21. Ajuste proposto no repositório das apps: offset menor (ex.: 0,02%)
-  ou mais ticks antes de cancelar.
+  tendência na rodada de 2026-10-21.
+- **Livro recalibrado** (`ctrade-strategies` PR #3): `BOOK_OFFSET` 0,02%, `BOOK_TAKE_PROFIT` 0,03% e
+  `BOOK_MAX_ORDER_TICKS` 80. O runner do livro foi retomado sozinho às 18:27Z com a imagem do branch e
+  fechou uma ida e volta em ~9 min (BUY 0.00148 @ 80589,75, SELL @ 80613,93, ambas `FILLED`), sem
+  `ERROR`. Critério 2 cumprido pelas cinco.
 
 ## Fora do escopo
 
