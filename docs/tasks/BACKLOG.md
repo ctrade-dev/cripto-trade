@@ -66,6 +66,8 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T58 | Preço para lotes abertos sem runner operando                    | Baixa | Claude | Concluído |
 | T59 | Linha do tempo de eventos e relatório de rodada                 | Média | Claude | Concluído |
 | T60 | Apps de estratégia para o soak (fora do ctrade)                 | Média | Claude | Em andamento |
+| T61 | SELL limitada ao lote do runner                                 | Baixa | Claude | Em andamento |
+| T62 | Capital do contexto pelo teto do runner                         | Baixa | Claude | Planejado |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução
