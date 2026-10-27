@@ -125,7 +125,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "Negadas por regra do core — rate 30m",
-      "description": "Sinais barrados antes de virar ordem: REJECTED_CAPITAL (reserva), REJECTED_LOCK (lock concorrente), REJECTED_NO_POSITION (SELL sem posição), REJECTED_POLICY (política SINGLE).",
+      "description": "Sinais barrados antes de virar ordem: REJECTED_CAPITAL (reserva), REJECTED_LOCK (lock concorrente), REJECTED_NO_POSITION (SELL sem posição), REJECTED_QUANTITY (SELL acima do lote, T61), REJECTED_POLICY (política SINGLE).",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "datasource": { "uid": "prometheus" },
       "targets": [

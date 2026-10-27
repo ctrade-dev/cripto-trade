@@ -61,6 +61,12 @@ runner do mesmo portfolio (ou de outro portfolio).
 5. **Testnet.** A SELL presa do caos (`58968921-…`) e o lote travado são dado de testnet: limpar e
    recomeçar (dado descartável), sem remediação no código.
 
+## Decisão registrada (2026-10-27)
+
+- Sem teste E2E pela métrica: a regra está no `SellSignalHandler` (unitário cobre os casos), o
+  mapeamento para `REJECTED_QUANTITY` é um `switch` exaustivo e a trava no SQL tem teste de integração.
+  O caminho inteiro é validado na testnet com o fault `OVERSELL` do caos (critério 6).
+
 ## Fora do escopo
 
 - Venda parcial do lote: continua permitida (quantidade menor que o lote).

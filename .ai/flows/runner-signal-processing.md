@@ -74,9 +74,12 @@ Se a reserva for rejeitada, o sinal e descartado sem dispatch.
 
 1. `SellSignalHandler` resolve a posicao alvo por `targetLotId` ou por posicao
    aberta do runner/simbolo.
-2. A transacao SELL e persistida como `PENDING`.
-3. A posicao e travada com `tryLockPositionForSell`.
-4. A ordem e enviada por `OrderDispatchPort`.
+2. Lote de outro runner e descartado como sem posicao (`REJECTED_NO_POSITION`); quantidade
+   (normalizada) acima da do lote e descartada como `REJECTED_QUANTITY` — nada e persistido,
+   travado ou enviado (T61). O `tryLockPositionForSell` tambem recusa travar acima do lote.
+3. A transacao SELL e persistida como `PENDING`.
+4. A posicao e travada com `tryLockPositionForSell`.
+5. A ordem e enviada por `OrderDispatchPort`.
 
 Se nao houver posicao aberta, o sinal e descartado. Se outra venda travou a
 mesma posicao, o fluxo falha com `ConcurrentPositionLockException`.
@@ -188,7 +191,9 @@ As tags `decision` sao **outcomes mutuamente exclusivos**, nao a decisao bruta d
 - `CANCEL` — `SHOULD_CANCEL` roteado.
 - `REJECTED_CAPITAL` — BUY recusado na reserva de capital (engolido em `BuySignalHandler`).
 - `REJECTED_LOCK` — SELL perdeu o lock concorrente da posicao.
-- `REJECTED_NO_POSITION` — SELL sem posicao aberta para vender.
+- `REJECTED_NO_POSITION` — SELL sem posicao aberta do runner para vender (inclui `targetLotId` de
+  lote alheio, T61).
+- `REJECTED_QUANTITY` — SELL acima da quantidade do lote alvo (T61).
 - `REJECTED_POLICY` — sinal barrado pela guarda de execucao (sobretudo politica
   SINGLE com posicao/ordem ja aberta) antes do pipeline de trade.
 - `REJECTED_PRICE_DEVIATION` / `REJECTED_MAX_POSITIONS` / `REJECTED_MAX_PENDING` — limites de risco
