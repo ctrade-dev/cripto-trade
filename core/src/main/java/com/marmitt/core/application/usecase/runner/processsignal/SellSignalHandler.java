@@ -19,7 +19,13 @@ import java.util.UUID;
  * <p><b>Resolucao do lote alvo:</b> se o sinal informar um {@code targetLotId} explicito,
  * aquele lote especifico e usado. Caso contrario, o handler busca a posicao aberta mais
  * recente do runner para o simbolo (comportamento FIFO implicito). Se nenhuma posicao
- * aberta existir, o sinal e descartado — nao ha o que vender.
+ * aberta existir, o sinal e descartado — nao ha o que vender. Lote de outro runner conta como
+ * inexistente: a estrategia so vende o que e do proprio runner (T61).
+ *
+ * <p><b>Teto da venda:</b> a quantidade (ja normalizada) nao pode passar da quantidade do lote.
+ * O lock e exclusivo — lote travado nao chega aqui —, entao o disponivel de um lote {@code OPEN}
+ * e o lote inteiro, o mesmo {@code availableQuantity} que o contexto mostrou a estrategia (T61).
+ * Venda acima e descartada antes de persistir: nada e travado nem enviado.
  *
  * <p><b>Lock da posicao:</b> a posicao e bloqueada atomicamente junto com a criacao da
  * transacao SELL dentro da fronteira transacional. O lock impede que dois sinais SELL
@@ -49,7 +55,8 @@ class SellSignalHandler {
      * Se nenhuma posicao aberta existir, o sinal e descartado sem propagacao de excecao.
      *
      * @return {@link SellOutcome#DISPATCHED} quando a ordem foi enviada;
-     *         {@link SellOutcome#NO_OPEN_POSITION} quando nao havia posicao aberta para vender.
+     *         {@link SellOutcome#NO_OPEN_POSITION} quando nao havia posicao aberta do runner para vender;
+     *         {@link SellOutcome#REJECTED_QUANTITY} quando a venda passava da quantidade do lote.
      */
     public SellOutcome handle(StrategyRunner runner,
                               StrategyOutputDto signal,
@@ -63,8 +70,19 @@ class SellSignalHandler {
                     runner.getId(), runner.getSymbol());
             return SellOutcome.NO_OPEN_POSITION;
         }
+        Position position = targetPosition.get();
+        if (!position.getRunnerId().equals(runner.getId())) {
+            log.warn("processSellSignal: SELL signal discarded - lot={} belongs to runner={}, not runner={}",
+                    position.getId(), position.getRunnerId(), runner.getId());
+            return SellOutcome.NO_OPEN_POSITION;
+        }
+        if (transaction.getQuantity().compareTo(position.getQuantity()) > 0) {
+            log.warn("processSellSignal: SELL signal discarded - quantity={} above lot={} quantity={} runner={}",
+                    transaction.getQuantity(), position.getId(), position.getQuantity(), runner.getId());
+            return SellOutcome.REJECTED_QUANTITY;
+        }
 
-        persistenceAction.persist(transaction, targetPosition.get());
+        persistenceAction.persist(transaction, position);
 
         try {
             preDispatchGuard.check(runner.getId());
@@ -90,7 +108,8 @@ class SellSignalHandler {
      */
     public enum SellOutcome {
         DISPATCHED,
-        NO_OPEN_POSITION
+        NO_OPEN_POSITION,
+        REJECTED_QUANTITY
     }
 
     private Optional<Position> findTargetPosition(StrategyRunner runner, StrategyOutputDto signal) {

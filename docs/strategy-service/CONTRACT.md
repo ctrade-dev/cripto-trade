@@ -120,7 +120,7 @@ genérico: são dados que o ctrade **envia** já validados, não saída remota n
 |---|---|---|---|
 | `SHOULD_HOLD` | — | `quantity`, `confidence` | Nenhuma ação neste tick. |
 | `SHOULD_BUY` | `quantity > 0`, `confidence ∈ [0,1]` | — | `limitPrice` null ⇒ preço de mercado do tick. |
-| `SHOULD_SELL` | `quantity > 0`, `confidence ∈ [0,1]` | — | `targetLotId` null ⇒ FIFO. |
+| `SHOULD_SELL` | `quantity > 0`, `confidence ∈ [0,1]` | — | `targetLotId` null ⇒ FIFO. Acima do `availableQuantity` do lote ou lote de outro runner: descartado, sem ordem (T61). |
 | `SHOULD_CANCEL` | `targetTransactionId` | `quantity`, `confidence` | Cancela ordem em trânsito. |
 
 - `limitPrice` — quando informado, deve ser positivo; é o valor que persiste, reserva capital e vai à

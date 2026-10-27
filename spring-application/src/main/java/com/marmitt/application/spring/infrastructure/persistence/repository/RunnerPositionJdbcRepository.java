@@ -100,6 +100,7 @@ public interface RunnerPositionJdbcRepository extends CrudRepository<RunnerPosit
              WHERE id = :positionId
                AND status = 'OPEN'
                AND locked_by_transaction_id IS NULL
+               AND quantity >= :quantity
             """)
     int tryLockPositionForSell(
             @Param("positionId") UUID positionId,

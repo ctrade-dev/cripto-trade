@@ -179,6 +179,26 @@ class ConcurrentSellLockIntegrationTest extends AbstractIntegrationTest {
         assertEquals(1, countLockedPositions(position.getId()));
     }
 
+    @Test
+    void sellLockShouldRefuseQuantityAboveTheLot() {
+        // T61: defesa na persistencia — o lock nao trava mais que o lote, mesmo que a regra do core seja pulada.
+        UUID portfolioId = createPortfolio();
+        StrategyRunner runner = createAndActivateRunner(portfolioId);
+        Position position = createOpenPosition(runner, POSITION_QUANTITY);
+
+        BigDecimal aboveTheLot = POSITION_QUANTITY.multiply(BigDecimal.TWO);
+        Transaction oversell = newSellTransaction(runner, position.getId(), aboveTheLot);
+        Transaction wholeLot = newSellTransaction(runner, position.getId(), POSITION_QUANTITY);
+        strategyRunnerRepository.saveTransaction(oversell);
+        strategyRunnerRepository.saveTransaction(wholeLot);
+
+        assertFalse(strategyRunnerRepository.tryLockPositionForSell(position.getId(), oversell.getId(), aboveTheLot),
+                "SELL above the lot must not lock it");
+        assertEquals(0, countLockedPositions(position.getId()));
+        assertTrue(strategyRunnerRepository.tryLockPositionForSell(position.getId(), wholeLot.getId(), POSITION_QUANTITY),
+                "SELL of the whole lot still locks it");
+    }
+
     private LockResult attemptLockConcurrently(CountDownLatch readySignal,
                                                CountDownLatch startSignal,
                                                UUID positionId,

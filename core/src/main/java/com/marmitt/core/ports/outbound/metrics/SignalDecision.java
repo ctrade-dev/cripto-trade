@@ -16,6 +16,8 @@ public enum SignalDecision {
     REJECTED_CAPITAL,
     REJECTED_LOCK,
     REJECTED_NO_POSITION,
+    /** SELL acima da quantidade do lote alvo (T61). */
+    REJECTED_QUANTITY,
     REJECTED_POLICY,
     /** {@code limitPrice} a mais de 10% do preco do tick (T50). */
     REJECTED_PRICE_DEVIATION,
