@@ -16,10 +16,13 @@ O contrato diz à estratégia: "para o máximo que o runner pode gastar agora, u
 (`maxAllocationPercent`). A estratégia dimensiona acima do que pode reservar e o ctrade recusa na
 reserva (`RUNNER_LIMIT_EXCEEDED` → `REJECTED_CAPITAL`), tick após tick.
 
-Na rodada de 2026-10-27 (portfolio de 1000 USDT, runners com teto de 0,4): ~330 `REJECTED_CAPITAL` em
-20 minutos — a tendência pedia 50% de ~860 (430 > 400) a cada tick de sinal; o livro abriu 11 ordens em
-214 BUY pedidos. A recusa não conta no `ConsecutiveRejectionGuard` (só exchange conta), então nada para;
-a estratégia fica cega para o próprio teto e o log/métrica enche de recusas que não são de risco.
+**Correção (2026-10-27):** a primeira versão desta spec atribuía as ~1.230 `REJECTED_CAPITAL` da
+rodada a este problema. Errado: todas foram `RISK_VIOLATION` — o watchdog pôs o portfolio em Safe Mode
+`HALT` às 13:30 por causa da SELL presa da T61, e o Safe Mode recusa todo BUY (comportamento correto).
+Nenhum `RUNNER_LIMIT_EXCEEDED` foi registrado. O problema desta task vem da leitura do código, ainda não
+foi observado na testnet: uma estratégia que dimensione por `maxOperationAmount` com fração alta
+(ex.: tendência com 50% de ~860 = 430 > teto de 400) será recusada tick após tick, sem contar no
+`ConsecutiveRejectionGuard`.
 
 ## Contexto técnico
 
@@ -72,7 +75,7 @@ risco: precisa do ok do mantenedor (`development-manual.md` §11).
 2. Estratégia que dimensiona por `maxOperationAmount` não recebe `REJECTED_CAPITAL` por
    `RUNNER_LIMIT_EXCEEDED` sem corrida.
 3. Reserva e contexto usam a mesma função (teste cobre os dois pelo mesmo cenário).
-4. Rodada das apps da T60: `REJECTED_CAPITAL` só em corrida entre runners.
+4. Teste reproduz a recusa por `RUNNER_LIMIT_EXCEEDED` com `maxOperationAmount` atual e a ausência dela depois.
 
 ## Fontes
 
