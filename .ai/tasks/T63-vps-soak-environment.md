@@ -4,7 +4,7 @@
 **Responsável:** Claude (compose, scripts, runbook); mantenedor (contratar a VPS, chaves SSH e segredos)
 **Dependências:** T53 (decisão 2: rodadas acima de 12h numa VPS), T60 (apps de estratégia), T59 (relatório
 de rodada). Desbloqueia as fases 2 a 4 da T53.
-**Status:** Pendente — decisões registradas em 2026-10-27; aguardando a VPS para a validação.
+**Status:** Em andamento — VPS no ar (Oracle, 2026-10-28); compose, scripts e runbook em `deploy/vps`.
 
 ---
 
@@ -54,6 +54,14 @@ internet:
    versão fixa (tag ou commit). GHCR fica para quando houver deploy frequente.
 3. **Acesso:** só por **túnel SSH com chave**. Nenhuma porta além do SSH fica aberta para a internet.
    API, Grafana, Prometheus e Loki são alcançados pelo túnel, tanto pelo mantenedor quanto pelo Claude.
+4. **VPS escolhida (2026-10-28):** Oracle Cloud Always Free, Frankfurt, `VM.Standard.A1.Flex` com
+   2 OCPU / 12 GB, **ARM (aarch64)**, Ubuntu 26.04 LTS. Consequências:
+   - todas as imagens precisam de build para `arm64` (as escolhidas têm);
+   - 12 GB em vez de 8 GB: os limites de memória do compose somam ~5,5 GB;
+   - o firewall tem duas camadas, a Security List da VCN e o iptables da imagem, e as duas já liberam
+     só a 22;
+   - os repositórios do GitHub são privados e a VPS não tem credencial: o código chega por `git push`
+     via SSH para repositórios *bare* na VPS, sem deploy key.
 
 ## Solução proposta
 
@@ -115,7 +123,7 @@ Um arquivo `deploy/vps/docker-compose.yml`, separado do compose de desenvolvimen
 
 ### 5. Runbook
 
-Seção nova em `docs/OPERATIONS_RUNBOOK.md` (ou `deploy/vps/README.md` com link no runbook):
+`deploy/vps/README.md`, com link no `docs/OPERATIONS_RUNBOOK.md`:
 
 - preparar a VPS: Docker, usuário, firewall, chaves;
 - primeira subida, atualização de versão e volta para uma versão anterior;
@@ -129,6 +137,36 @@ O roteiro da T53 passa a apontar para esse procedimento nas fases 2 a 4.
 
 - `Dockerfile`: copiar os `build.gradle` de `adapter-strategy-remote` e `strategy-service-reference`
   (cache de dependências).
+
+## Validação na VPS (2026-10-28)
+
+Oracle A1 2 OCPU / 12 GB, Ubuntu 26.04, ctrade `efae6d5` (este branch), `ctrade-strategies` `23009ca`.
+
+- **Critério 1:** os dez serviços sobem com `up.sh`, todas as imagens em `linux/arm64`. Varredura TCP
+  de fora (portas 1–1024 e as do ambiente) com a pilha no ar: só a **22** aberta.
+- **Critério 2:** pelo túnel, `operational-state` `OK`; Grafana com os quatro painéis e as fontes Loki e
+  Prometheus; Loki recebendo os logs do ctrade (`app=ctrade`); alvo do Prometheus `up`. O mantenedor
+  abriu o Grafana pelo túnel com a própria chave.
+- **Critério 3:** `register-strategies.sh` deixa as cinco `VERIFIED`; repetido, mesmo resultado.
+- **Critério 4:** smoke de 1h (portfolio `vps-smoke-t63`, 12:41–13:42Z, tetos 0,4 × 4 e caos 0,2):
+  - idas e voltas `FILLED`: tendência 7, reversão 10, rompimento 4, livro 1 (primeira desde a
+    recalibração da T60);
+  - zero `ERROR` no Loki, estado operacional `OK` do início ao fim, sem Safe Mode nem halt automático;
+  - realizado −1,36 USDT; runners em `HALT` manual no fim.
+- **Critério 5:** `reset-testnet-db.sh` recusa com o `ctrade-app` no ar e limpa com ele parado
+  (0 portfolios).
+- **Critério 7:** `.env` só na VPS (permissão `600`), gerado lá; as chaves da Binance são as da testnet.
+- **Recursos no fim:** ctrade 326 MB de 2 GB, Loki 111 MB, Grafana 111 MB, cada app ~14 MB; máquina com
+  ~1,5 GB usados e 6,8 GB de disco.
+
+Achados corrigidos no PR:
+
+- `gradlew` sem o bit de execução no git: o `COPY . .` do `Dockerfile` o sobrescrevia com `644` e o build
+  falhava em Linux (no Docker Desktop do Windows não aparecia).
+- As cinco apps com a mesma tag de imagem falhavam no build em paralelo; agora uma imagem por serviço.
+
+Risco novo: com ~13% de memória usada, a VPS ociosa por 7 dias se enquadra na recolha do Always Free
+(runbook, "Oracle Always Free: cuidados").
 
 ## Fora do escopo
 
