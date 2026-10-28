@@ -1,4 +1,4 @@
-package com.marmitt.strategy.impl.scenario;
+package com.marmitt.application.spring.testsupport.strategy.scenario;
 
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
 import com.marmitt.core.enums.TradingAction;
@@ -8,10 +8,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-import static com.marmitt.strategy.impl.scenario.ScenarioTestFixtures.context;
-import static com.marmitt.strategy.impl.scenario.ScenarioTestFixtures.input;
-import static com.marmitt.strategy.impl.scenario.ScenarioTestFixtures.openLot;
-import static com.marmitt.strategy.impl.scenario.ScenarioTestFixtures.pending;
+import static com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioTestFixtures.context;
+import static com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioTestFixtures.input;
+import static com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioTestFixtures.openLot;
+import static com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioTestFixtures.pending;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

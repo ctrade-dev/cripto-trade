@@ -10,9 +10,9 @@ import com.marmitt.core.ports.inbound.runner.ManageRunnerLifecyclePort;
 import com.marmitt.core.ports.inbound.runner.RunnerOrderCommandPort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
-import com.marmitt.strategy.impl.scenario.FilledBuyRestingSellCancelStrategy;
-import com.marmitt.strategy.impl.scenario.RestingBuyCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ScenarioStrategyConfig;
+import com.marmitt.application.spring.testsupport.strategy.scenario.FilledBuyRestingSellCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.RestingBuyCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioStrategyConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 

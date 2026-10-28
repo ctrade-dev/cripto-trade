@@ -16,7 +16,7 @@ Before any implementation, review, refactor, architectural suggestion, or docume
 
 Every implementation, refactor, review, task spec, or architectural suggestion must follow
 `/.ai/development-manual.md`. Its core rule is **responsibility placement**: business decisions in
-`core`, pure decision math in `strategy`, provider knowledge in `adapter-*`, technical mechanics and
+`core`, decision math in external strategy apps (contract only), provider knowledge in `adapter-*`, technical mechanics and
 composition in `spring-application`. Its second rule is **one flow, one path** (section 1.3): few
 branches, no parallel near-duplicate functions; migrate callers and remove the old path. Use its
 decision table, rejected anti-patterns, delegated-work protocol, and pre-PR checklist.

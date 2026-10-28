@@ -29,7 +29,6 @@ dependencies {
     implementation project(':adapter-coinbase')
     implementation project(':adapter-mock')
     implementation project(':adapter-strategy-remote')
-    implementation project(':strategy')
     implementation project(':core')
 
     // T24: circuit breaker nas consultas REST a exchange, com metricas no Micrometer.

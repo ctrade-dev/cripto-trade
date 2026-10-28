@@ -2,8 +2,8 @@ package com.marmitt.application.spring.bootstrap;
 
 import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.dto.websocket.data.MarketDataDto;
-import com.marmitt.strategy.impl.scenario.RestingBuyCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ScenarioStrategyConfig;
+import com.marmitt.application.spring.testsupport.strategy.scenario.RestingBuyCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioStrategyConfig;
 import io.micrometer.core.instrument.search.MeterNotFoundException;
 import org.junit.jupiter.api.Test;
 

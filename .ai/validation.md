@@ -12,7 +12,6 @@ Usar o wrapper do repositorio para manter o cache local consistente:
 
 ```powershell
 ./scripts/gradle-run.ps1 -q :core:compileJava
-./scripts/gradle-run.ps1 -q :strategy:compileJava
 ./scripts/gradle-run.ps1 -q :spring-application:compileJava
 ./scripts/gradle-run.ps1 -q :adapter-mock:compileJava
 ./scripts/gradle-run.ps1 -q :adapter-binance:compileJava
@@ -22,7 +21,6 @@ Usar o wrapper do repositorio para manter o cache local consistente:
 ## Escopo por tipo de mudanca
 
 - Mudanca so no `core`: compilar `:core`
-- Mudanca so no `strategy`: compilar `:strategy`
 - Mudanca de wiring no `spring-application`: compilar `:spring-application`
 - Mudanca de adapter: compilar o adapter tocado e os modulos diretamente afetados
 - Mudanca em contrato compartilhado: compilar todos os consumidores

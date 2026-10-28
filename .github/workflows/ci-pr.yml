@@ -31,7 +31,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run build checks
-        run: ./gradlew --no-daemon :core:test :core:compileJava :strategy:compileJava :adapter-mock:compileJava :spring-application:compileJava
+        run: ./gradlew --no-daemon :core:test :core:compileJava :adapter-mock:compileJava :spring-application:compileJava
 
       - name: Run spring-application tests
         run: ./gradlew --no-daemon :spring-application:test

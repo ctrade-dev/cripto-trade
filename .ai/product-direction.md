@@ -28,8 +28,8 @@ estado, agir com seguranca e confirmar o efeito.
 
 - Cada estrategia e uma app independente, em **qualquer linguagem e arquitetura**, stateful ou
   stateless. O ctrade define **apenas o contrato e o protocolo** (`docs/strategy-service/CONTRACT.md`,
-  `openapi.yaml`); nunca como a app e construida. O `strategy-service-reference` e so exemplo de
-  conformidade.
+  `openapi.yaml`); nunca como a app e construida. O ctrade nao embute nenhuma estrategia (T65); as
+  apps de `ctrade-dev/ctrade-strategies` sao a referencia de conformidade.
 - A estrategia recebe o que precisa para decidir e responde a decisao. Protecoes **nao** passam pela
   estrategia: o core decide sozinho, inclusive com a estrategia fora do ar.
 - Capacidade nova para estrategias entra como **revisao do contrato** (como a T40), nunca como

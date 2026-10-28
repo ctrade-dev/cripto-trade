@@ -3,8 +3,6 @@ include 'adapter-binance'
 include 'adapter-coinbase'
 include 'adapter-mock'
 include 'adapter-strategy-remote'
-include 'strategy-service-reference'
-include 'strategy'
 include 'spring-application'
 include 'core'
 

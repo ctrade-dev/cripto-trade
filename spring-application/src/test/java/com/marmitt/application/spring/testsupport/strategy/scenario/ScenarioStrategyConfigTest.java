@@ -1,4 +1,4 @@
-package com.marmitt.strategy.impl.scenario;
+package com.marmitt.application.spring.testsupport.strategy.scenario;
 
 import org.junit.jupiter.api.Test;
 

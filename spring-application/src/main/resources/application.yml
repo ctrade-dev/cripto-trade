@@ -180,10 +180,6 @@ ctrade:
       interval-ms: 30000
       default-stream-type: TICKER
       stream-types: {}                   # por exchange, ex.: BINANCE: TICKER
-  scenario-strategies:
-    # Estrategias de cenario deterministicas p/ testes em testnet (T35). Default OFF: nunca
-    # registradas em producao. Ligar apenas em testnet/dev via CTRADE_SCENARIO_STRATEGIES_ENABLED=true.
-    enabled: ${CTRADE_SCENARIO_STRATEGIES_ENABLED:false}
   strategy:
     remote:
       # T41: estrategias fora do processo (docs/strategy-service/CONTRACT.md).

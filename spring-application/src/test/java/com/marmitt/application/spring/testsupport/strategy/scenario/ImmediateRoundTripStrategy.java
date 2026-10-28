@@ -1,4 +1,4 @@
-package com.marmitt.strategy.impl.scenario;
+package com.marmitt.application.spring.testsupport.strategy.scenario;
 
 import com.marmitt.core.dto.strategy.OpenLotDto;
 import com.marmitt.core.dto.strategy.StrategyContextDto;

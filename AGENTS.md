@@ -14,7 +14,7 @@ Antes de qualquer implementacao, review, refactor, sugestao arquitetural ou atua
 
 Toda implementacao, refactor, review, spec de task ou sugestao arquitetural deve seguir
 `/.ai/development-manual.md`. A regra central e a **disposicao de responsabilidades**: decisao de
-negocio no `core`, calculo de decisao puro no `strategy`, conhecimento de provider nos `adapter-*`,
+negocio no `core`, calculo de decisao nas apps de estrategia (fora do ctrade), conhecimento de provider nos `adapter-*`,
 mecanica tecnica e composicao no `spring-application`. A segunda regra e **um fluxo, um caminho**
 (secao 1.3): poucas bifurcacoes, sem funcoes paralelas que fazem quase a mesma coisa. Use a tabela
 de decisao, os anti-padroes rejeitados, o protocolo de trabalho delegado e o checklist pre-PR.

@@ -94,8 +94,8 @@ O agente deve responder, de forma explicita ou implicita na implementacao:
 
 1. Qual fluxo ou modulo e dono da mudanca?
 2. Quais flow maps ajudam a entender o comportamento existente?
-3. A mudanca pertence ao `core`, `strategy`, `spring-application` ou
-   `adapter-*`?
+3. A mudanca pertence ao `core`, `spring-application` ou `adapter-*`? (calculo de
+   estrategia nao entra no ctrade: e app externa)
 4. Alguma regra de negocio esta sendo empurrada para infraestrutura ou adapter?
 5. Qual e a menor validacao suficiente para o risco?
 6. A documentacao base precisa mudar?

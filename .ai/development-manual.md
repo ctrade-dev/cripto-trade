@@ -25,7 +25,8 @@ escrever qualquer linha, responda:
 
 1. **Isto e uma decisao de negocio?** (o que fazer, quando, quanto, se e permitido)
    -> `core`.
-2. **Isto e calculo de decisao de trade a partir de dados explicitos?** -> `strategy`.
+2. **Isto e calculo de decisao de trade a partir de dados explicitos?** -> fora do ctrade: uma app
+   de estrategia pelo contrato `docs/strategy-service/` (T65; o ctrade nao embute estrategia).
 3. **Isto e conhecimento de um provider especifico?** (payload, assinatura, endpoint,
    transporte preferido, filtros da exchange) -> `adapter-<provider>`.
 4. **Isto e mecanica tecnica generica?** (thread, retry, backoff, scheduler, HTTP,
@@ -52,7 +53,7 @@ mecanica (spring) e do provider (adapter), ligadas por um port.
 | Valor configuravel | `spring` le; `core` recebe por construtor | `@ConfigurationProperties` -> primitivo/record | `RunnerBootPhase3Properties` -> `RunnerBootRecoveryUseCase` |
 | Endpoint HTTP | `spring/controller` delega a port inbound | controller fino + `GlobalExceptionHandler` | `RunnerController` -> `QueryRunnerPort` |
 | Persistir agregado | `core` define port; `spring/infrastructure/persistence` implementa | `Jdbc*RepositoryAdapter` + entity + mapper | `JdbcGlobalBalanceRepositoryAdapter` |
-| Decidir BUY/SELL/HOLD/CANCEL | `strategy` | `TradingStrategy` pura | `SimpleMovingAverageStrategy` |
+| Decidir BUY/SELL/HOLD/CANCEL | app de estrategia, fora do ctrade | contrato `docs/strategy-service/openapi.yaml` | apps de `ctrade-dev/ctrade-strategies` |
 | Falar com estrategia fora do processo | `adapter-strategy-remote` (rede) + `core` (falha = HOLD, catalogo) | `StrategyEvaluationPort`, `RegisterRemoteStrategiesPort` | `RemoteStrategyClient` + `RegisterRemoteStrategiesUseCase` |
 | Marcar posicao a mercado / equity do portfolio | `core` | `LatestPricePort` (preco), `Position.getUnrealizedPnl` | `PortfolioMarkToMarket` (core) + `InMemoryLatestPriceRepository` (spring) |
 | Saida decidida pelo core sem a estrategia (stop do lote, liquidacao, fechar posicao) | `core` | `TradeIntentFactory.liquidationSignal` + ramo SELL normal; cancelamento por `CancelSignalHandler.cancelResting` | `PositionProtection` + `PositionProtectionHandler`, `SafeModeHandler` |
@@ -133,9 +134,10 @@ importam outro adapter nem o spring-application.
 | `dto/<area>` | Contratos estaveis de entrada/saida do core (`request`/`response`, `command`, contextos) | Records imutaveis; validacao no compact constructor |
 | `enums` | Vocabulario de dominio | Nunca enum de provider |
 
-### 2.2 `strategy` (`com.marmitt.strategy.impl.<estrategia>`)
+### 2.2 Estrategias (fora do ctrade)
 
-Uma pasta por estrategia com a classe `TradingStrategy` e seu record de config. Ver secao 8.
+O ctrade nao tem modulo de estrategia (T65). Cada estrategia e uma app separada que implementa o
+contrato; o ctrade so a cadastra (T54) e a chama. Ver secao 8.
 
 ### 2.3 `spring-application` (`com.marmitt.application.spring`)
 
@@ -172,8 +174,8 @@ em `spring-application/config/exchange` (exchanges) ou `config/strategy` (estrat
 `adapter-strategy-remote` (`com.marmitt.strategyservice`) e o adapter do contrato de estrategias fora
 do processo (T41): `wire` (formato de rede, mapeamento nos dois sentidos, validacao da decisao) e o
 cliente `RemoteStrategyClient`. Transporte HTTP pela propria porta `StrategyServiceHttpPort`,
-implementada com OkHttp no spring. `strategy-service-reference` e uma app separada (nao entra no
-classpath do ctrade) que serve estrategias pelo contrato usando o mesmo `wire`.
+implementada com OkHttp no spring. As apps de `ctrade-dev/ctrade-strategies` sao a referencia do
+contrato, com testes de conformidade contra a copia do `openapi.yaml`.
 
 ---
 
@@ -354,19 +356,18 @@ Antes de tocar dominio, conciliacao, portfolio, runner, boot ou ordem, leia
 
 ---
 
-## 8. Padroes do `strategy`
+## 8. Estrategias
 
-- Implementa `TradingStrategy`; `strategyId` (UUID fixo), nome e versao constantes.
-- Config em record proprio com `defaultConfig()`/factories; parametros por construtor.
-- Decisao e funcao de `(StrategyInputDto, StrategyContextDto)` + estado de warm-up.
-  Sem I/O, rede, persistencia, relogio externo alem do necessario ao calculo.
-- Estado de warm-up deve ser chaveado por runner (debito atual do SMA, ver T40).
-- Retorna sempre `StrategyOutputDto` via factories; entrada invalida = `IllegalArgumentException`
-  (normalizada para HOLD pelo `StrategySignalEvaluator`).
-- Registro de estrategias e responsabilidade do spring (`InMemoryStrategyRepository`);
-  estrategias de cenario so com `ctrade.scenario-strategies.enabled=true`.
-- Estrategia out-of-process segue `docs/strategy-service/CONTRACT.md`; o proxy remoto e
-  apenas mais uma `TradingStrategy` (T41).
+- O ctrade define o contrato (`docs/strategy-service/CONTRACT.md` e `openapi.yaml`), nunca a
+  implementacao. Estrategia nova e app nova (em `ctrade-dev/ctrade-strategies` ou outra), cadastrada
+  por `POST /api/admin/strategies` (T54).
+- Dentro do ctrade, a estrategia remota e uma `TradingStrategy` (`RemoteTradingStrategy`, T41)
+  registrada no `InMemoryStrategyRepository` pelo catalogo. Nenhuma outra entra em producao (T65).
+- Falha da estrategia (indisponivel, resposta invalida, excecao) vira HOLD no `StrategySignalEvaluator`.
+- Testes de integracao usam dubles in-process em
+  `spring-application/src/test/.../testsupport/strategy` (cenarios da T35 e a SMA de teste): cada teste
+  registra o seu no repositorio. Dubles seguem as mesmas regras da decisao: funcao de
+  `(StrategyInputDto, StrategyContextDto)` + warm-up chaveado por runner, sem I/O.
 
 ---
 

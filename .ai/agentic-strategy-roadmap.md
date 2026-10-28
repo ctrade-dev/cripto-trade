@@ -57,7 +57,7 @@ Um agente (Claude) opera o portfólio de estratégias como um gestor:
 | 9 | **Backtest rápido (nível 1)** | Nada | Ferramenta que reproduz candles históricos contra o **mesmo contrato HTTP** da estratégia, com fills simulados (preço do candle + taxa + slippage configuráveis). Só a estratégia, sem o ctrade: minutos para meses de dados, para filtrar ideias e testar muitas combinações de parâmetros |
 | 10 | **Diário de decisões do agente** | `operator_actions` (comando + motivo) | Registro da decisão (dados de entrada, regime, hipótese, resultado esperado) e da revisão posterior |
 | 11 | **Onde o agente roda** | Nada | VPS com execução agendada (horas, não minutos), acesso à API e ao diário |
-| 12 | **Esteira de apps de estratégia** | `strategy-service-reference` (SMA fixa) | Como o agente escreve, versiona, sobe e derruba uma app de estratégia na VPS, fora do ctrade |
+| 12 | **Esteira de apps de estratégia** | Cinco apps em `ctrade-dev/ctrade-strategies` (T60), build e subida manuais na VPS (T63) | Como o agente escreve, versiona, sobe e derruba uma app de estratégia na VPS, fora do ctrade |
 | 13 | **Relógio controlável** | O ctrade usa o relógio do sistema: 124 `Instant.now()` no core e 16 tarefas agendadas no Spring | Relógio injetado: o real em produção; no replay, o tempo dos dados, avançado pelo disparador. Inclui as tarefas agendadas (drawdown, conciliação, balanço, preço velho) disparando pelo tempo simulado. Mecânica técnica, não regra de negócio; também deixa os testes de integração mais rápidos e determinísticos |
 | 14 | **Replay pelo ctrade (nível 2)** | `adapter-mock` (exchange simulada no processo) | **Exchange de replay** como app externa, plugada no mesmo lugar da Binance e da Coinbase: dados históricos prontos antes, envio comandado por outra aplicação (o disparador), fills simulados. Testa a estratégia pelo **fluxo produtivo inteiro** (limites pré-trade, proteção do lote, Safe Mode, capital disputado, conciliação). Roda numa instância do ctrade com banco próprio e descartável, nunca junto da testnet ou da produção. Depende do bloco 13 para rodar acelerado. Absorve a ideia em espera "MOCK como app externo" |
 | 15 | **Envelope de autonomia (blindagem)** | Limites do runbook para o operador | Regras do core que recusam com código estável o que passa do permitido ao agente (capital de canário, realocação por dia, promoção sem aprovação). Definido no fim, com base no uso real (decisão 4) |
@@ -79,7 +79,7 @@ Cada marco entrega valor sozinho e destrava o seguinte.
 | **M8** | Blindagem | 15 | Envelope de autonomia no core; pré-requisito para o agente gerir capital em produção |
 
 Pré-requisitos de todos: a trilha do soak (T53) estável e **várias apps de estratégia** que
-implementem o contrato (hoje só existe a SMA de referência). M3 com uma estratégia só não tem o que
+implementem o contrato (hoje as cinco apps do soak, T60). M3 com uma estratégia só não tem o que
 regular.
 
 ## Decisões registradas (2026-10-21)
