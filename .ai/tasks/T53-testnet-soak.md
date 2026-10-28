@@ -246,6 +246,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 | 3 | 2026-10-21 | 1 (smoke) | ~8 min | cenários 1, 2 e 3 / BTCUSDT, máquina local, banco da rodada 2 | **Aprovada.** T57 validada: `EXCHANGE_BALANCE_DIVERGENCE` `OK` em 64 leituras durante a operação, com lotes abertos e ordens no livro; trades 100% iguais; DLQ vazia; zero `ERROR`. | F8 abaixo |
 | 4 | 2026-10-27 | 3 (apps T60) | ~42 min | 5 apps / BTCUSDT, máquina local | **Reprovada.** SELL acima do lote foi à exchange, ficou `SUBMITTED` e o watchdog pôs o portfolio em Safe Mode. | T61, T62; `baseUrl` em `127.0.0.1` (detalhes na T60) |
 | 5 | 2026-10-27 | 3 (apps T60) | ~1h55 | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; 30 idas e voltas (tendência, reversão, rompimento); zero `ERROR`; estado operacional `OK` o tempo todo. | Livro sem preenchimento: calibração da app (T60) |
+| 6 | 2026-10-28 | smoke VPS (T63) | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada.** 22 idas e voltas (tendência 7, reversão 10, rompimento 4, livro 1); zero `ERROR`; estado operacional `OK` o tempo todo; só a porta 22 aberta. | — |
 
 ### Rodada 1 — detalhes (2026-10-20)
 

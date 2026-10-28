@@ -129,7 +129,9 @@ Os volumes só somem com `docker compose down -v`, que apaga banco, métricas, l
 
 - Ficar em até 2 OCPU / 12 GB de A1 e 200 GB de disco somados. A documentação da Oracle fala em
   2/12 grátis; o aviso do console da conta ainda mostra 4/24.
-- A Oracle recolhe instâncias Always Free ociosas: CPU, rede e memória abaixo de 20% por 7 dias. Com a
-  pilha no ar, a memória fica acima disso mesmo entre rodadas.
+- A Oracle recolhe instâncias Always Free ociosas: CPU, rede e memória abaixo de 20% por 7 dias. A pilha
+  no ar usa só ~1,5 GB dos 12 GB (medido no smoke da T63), então **uma semana sem rodada pode levar à
+  recolha**. Evitar: rodar ao menos uma rodada por semana ou converter a conta para Pay As You Go
+  (mantendo 2/12, segue sem custo); as instâncias PAYG não entram nessa regra.
 - O IP é efêmero: continua o mesmo em stop/start, mas muda se a instância for recriada. Atualizar este
   README nesse caso.

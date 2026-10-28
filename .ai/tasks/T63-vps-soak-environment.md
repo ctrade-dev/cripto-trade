@@ -138,6 +138,36 @@ O roteiro da T53 passa a apontar para esse procedimento nas fases 2 a 4.
 - `Dockerfile`: copiar os `build.gradle` de `adapter-strategy-remote` e `strategy-service-reference`
   (cache de dependências).
 
+## Validação na VPS (2026-10-28)
+
+Oracle A1 2 OCPU / 12 GB, Ubuntu 26.04, ctrade `efae6d5` (este branch), `ctrade-strategies` `23009ca`.
+
+- **Critério 1:** os dez serviços sobem com `up.sh`, todas as imagens em `linux/arm64`. Varredura TCP
+  de fora (portas 1–1024 e as do ambiente) com a pilha no ar: só a **22** aberta.
+- **Critério 2:** pelo túnel, `operational-state` `OK`; Grafana com os quatro painéis e as fontes Loki e
+  Prometheus; Loki recebendo os logs do ctrade (`app=ctrade`); alvo do Prometheus `up`. O mantenedor
+  abriu o Grafana pelo túnel com a própria chave.
+- **Critério 3:** `register-strategies.sh` deixa as cinco `VERIFIED`; repetido, mesmo resultado.
+- **Critério 4:** smoke de 1h (portfolio `vps-smoke-t63`, 12:41–13:42Z, tetos 0,4 × 4 e caos 0,2):
+  - idas e voltas `FILLED`: tendência 7, reversão 10, rompimento 4, livro 1 (primeira desde a
+    recalibração da T60);
+  - zero `ERROR` no Loki, estado operacional `OK` do início ao fim, sem Safe Mode nem halt automático;
+  - realizado −1,36 USDT; runners em `HALT` manual no fim.
+- **Critério 5:** `reset-testnet-db.sh` recusa com o `ctrade-app` no ar e limpa com ele parado
+  (0 portfolios).
+- **Critério 7:** `.env` só na VPS (permissão `600`), gerado lá; as chaves da Binance são as da testnet.
+- **Recursos no fim:** ctrade 326 MB de 2 GB, Loki 111 MB, Grafana 111 MB, cada app ~14 MB; máquina com
+  ~1,5 GB usados e 6,8 GB de disco.
+
+Achados corrigidos no PR:
+
+- `gradlew` sem o bit de execução no git: o `COPY . .` do `Dockerfile` o sobrescrevia com `644` e o build
+  falhava em Linux (no Docker Desktop do Windows não aparecia).
+- As cinco apps com a mesma tag de imagem falhavam no build em paralelo; agora uma imagem por serviço.
+
+Risco novo: com ~13% de memória usada, a VPS ociosa por 7 dias se enquadra na recolha do Always Free
+(runbook, "Oracle Always Free: cuidados").
+
 ## Fora do escopo
 
 - Perfil `prod`, segredos de produção e chaves reais. A trilha de produção vem depois da testnet.
