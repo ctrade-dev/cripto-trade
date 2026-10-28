@@ -1,0 +1,170 @@
+# Ambiente de soak na VPS (T63): ctrade + Postgres + observabilidade + as cinco apps de estrategia da T60.
+# Separado do docker-compose.yml da raiz, que continua sendo o de desenvolvimento local.
+#
+# - Nenhuma porta em 0.0.0.0: API, Grafana, Prometheus e Loki so em 127.0.0.1, acessados por tunel SSH.
+#   Postgres e as apps nao publicam porta.
+# - Segredos vem do .env ao lado deste arquivo (modelo em .env.example). Subir com ./up.sh.
+# - Limites de memoria somam ~5,5 GB, abaixo dos 12 GB da VPS.
+name: ctrade-vps
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+x-strategy: &strategy
+  build: ${STRATEGIES_DIR:?defina STRATEGIES_DIR no .env}
+  image: ctrade-strategies:vps
+  restart: unless-stopped
+  mem_limit: 256m
+  logging: *logging
+  networks: [ctrade]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 1g
+    logging: *logging
+    networks: [ctrade]
+    environment:
+      POSTGRES_DB: ctrade
+      POSTGRES_USER: ctrade
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctrade -d ctrade"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ctrade-app:
+    build: ../..
+    image: ctrade-app:vps
+    restart: unless-stopped
+    # Teto conhecido para o criterio 7 da T53 (memoria estavel); o heap fica em 75% dele.
+    mem_limit: 2g
+    logging: *logging
+    networks: [ctrade]
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: testnet
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      DB_HOST: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      LOKI_URL: http://loki:3100
+      BINANCE_API_KEY: ${BINANCE_API_KEY:?defina BINANCE_API_KEY no .env}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET:?defina BINANCE_API_SECRET no .env}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?defina ADMIN_API_KEY no .env}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      GRAFANA_EXPLORE_URL_TEMPLATE: ${GRAFANA_EXPLORE_URL_TEMPLATE:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+  # Apps de estrategia (ctrade-dev/ctrade-strategies). O ctrade as cadastra em http://<servico>:8080/v1.
+  trend:
+    <<: *strategy
+    command: ["trend"]
+    environment:
+      STRATEGY_TOKEN: ${TREND_TOKEN:?defina TREND_TOKEN no .env}
+
+  reversion:
+    <<: *strategy
+    command: ["reversion"]
+    environment:
+      STRATEGY_TOKEN: ${REVERSION_TOKEN:?defina REVERSION_TOKEN no .env}
+
+  book:
+    <<: *strategy
+    command: ["book"]
+    environment:
+      STRATEGY_TOKEN: ${BOOK_TOKEN:?defina BOOK_TOKEN no .env}
+
+  breakout:
+    <<: *strategy
+    command: ["breakout"]
+    environment:
+      STRATEGY_TOKEN: ${BREAKOUT_TOKEN:?defina BREAKOUT_TOKEN no .env}
+
+  chaos:
+    <<: *strategy
+    command: ["chaos"]
+    environment:
+      STRATEGY_TOKEN: ${CHAOS_TOKEN:?defina CHAOS_TOKEN no .env}
+      CHAOS_HOLD_POSITION: ${CHAOS_HOLD_POSITION:-true}
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *logging
+    networks: [ctrade]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+
+  loki:
+    image: grafana/loki:2.9.0
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *logging
+    networks: [ctrade]
+    ports:
+      - "127.0.0.1:3100:3100"
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *logging
+    networks: [ctrade]
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD no .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+    volumes:
+      - ../../docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+networks:
+  ctrade:
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
