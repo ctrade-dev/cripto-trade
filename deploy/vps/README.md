@@ -104,7 +104,8 @@ migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando 
 2. Com o túnel aberto, seguir o roteiro da T53 a partir do portfolio e dos runners
    (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60", passo 3). As apps já estão
    cadastradas com `baseUrl` `http://<serviço>:8080/v1`.
-3. No fim: relatório da T59 com `./versions.sh` no cabeçalho. Estatísticas das apps (`/stats`), que não
+3. No fim: relatório da T59 com `./versions.sh` no cabeçalho. A coleta sai de
+   `python3 ~/ctrade/scripts/round_report.py --start <início> --env-file .env --portfolio <id>` (T64). Estatísticas das apps (`/stats`), que não
    têm porta publicada: `docker compose exec -T chaos python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/stats').read().decode())"`.
 4. Derrubar uma app para o teste de indisponibilidade: `docker compose stop chaos`.
 

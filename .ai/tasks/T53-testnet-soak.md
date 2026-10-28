@@ -97,8 +97,8 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
 - **A testnet não é o mercado real:** livro raso, preços que pulam e indisponibilidades da própria
   Binance. Fill estranho ou queda da testnet não é bug do ctrade, mas precisa ficar registrado.
 - **Reset periódico da testnet** apaga saldos e ordens; rodada que atravessar um reset é descartada.
-- **Ferramental de coleta:** hoje a verificação dos critérios é manual (endpoints, Grafana, SQL). Se
-  ficar trabalhosa, um relatório de rodada (endpoint ou script) pode virar task.
+- **Ferramental de coleta:** `scripts/round_report.py` (T64) junta as evidências dos critérios num
+  rascunho; a classificação e o veredito continuam manuais.
 
 ## Roteiro — Fase 1 (smoke de ramos, máquina local)
 
