@@ -13,9 +13,10 @@ x-logging: &logging
     max-size: "20m"
     max-file: "3"
 
+# Uma imagem por servico (ctrade-vps-<servico>), todas do mesmo build: as camadas sao compartilhadas.
+# Uma tag unica para as cinco falha no build em paralelo ("image already exists").
 x-strategy: &strategy
   build: ${STRATEGIES_DIR:?defina STRATEGIES_DIR no .env}
-  image: ctrade-strategies:vps
   restart: unless-stopped
   mem_limit: 256m
   logging: *logging
