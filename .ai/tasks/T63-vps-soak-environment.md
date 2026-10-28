@@ -4,7 +4,7 @@
 **Responsável:** Claude (compose, scripts, runbook); mantenedor (contratar a VPS, chaves SSH e segredos)
 **Dependências:** T53 (decisão 2: rodadas acima de 12h numa VPS), T60 (apps de estratégia), T59 (relatório
 de rodada). Desbloqueia as fases 2 a 4 da T53.
-**Status:** Pendente — decisões registradas em 2026-10-27; aguardando a VPS para a validação.
+**Status:** Em andamento — VPS no ar (Oracle, 2026-10-28); compose, scripts e runbook em `deploy/vps`.
 
 ---
 
@@ -54,6 +54,14 @@ internet:
    versão fixa (tag ou commit). GHCR fica para quando houver deploy frequente.
 3. **Acesso:** só por **túnel SSH com chave**. Nenhuma porta além do SSH fica aberta para a internet.
    API, Grafana, Prometheus e Loki são alcançados pelo túnel, tanto pelo mantenedor quanto pelo Claude.
+4. **VPS escolhida (2026-10-28):** Oracle Cloud Always Free, Frankfurt, `VM.Standard.A1.Flex` com
+   2 OCPU / 12 GB, **ARM (aarch64)**, Ubuntu 26.04 LTS. Consequências:
+   - todas as imagens precisam de build para `arm64` (as escolhidas têm);
+   - 12 GB em vez de 8 GB: os limites de memória do compose somam ~5,5 GB;
+   - o firewall tem duas camadas, a Security List da VCN e o iptables da imagem, e as duas já liberam
+     só a 22;
+   - os repositórios do GitHub são privados e a VPS não tem credencial: o código chega por `git push`
+     via SSH para repositórios *bare* na VPS, sem deploy key.
 
 ## Solução proposta
 
@@ -115,7 +123,7 @@ Um arquivo `deploy/vps/docker-compose.yml`, separado do compose de desenvolvimen
 
 ### 5. Runbook
 
-Seção nova em `docs/OPERATIONS_RUNBOOK.md` (ou `deploy/vps/README.md` com link no runbook):
+`deploy/vps/README.md`, com link no `docs/OPERATIONS_RUNBOOK.md`:
 
 - preparar a VPS: Docker, usuário, firewall, chaves;
 - primeira subida, atualização de versão e volta para uma versão anterior;

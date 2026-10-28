@@ -81,7 +81,8 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
 
 ## Pré-requisitos ainda abertos
 
-- **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4). Spec na **T63**.
+- **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4). Spec na **T63**;
+  procedimento em `deploy/vps/README.md` (subir, cadastrar as apps, limpar o banco, túnel).
 - **Apps de estratégia para o soak:** o ctrade só define o contrato; as estratégias são apps
   independentes, em qualquer linguagem. Para as rodadas pesadas é preciso ter várias apps que
   implementem o contrato (o `strategy-service-reference` serve só a SMA com parâmetros fixos). Spec na
@@ -195,8 +196,9 @@ cd ..\ctrade-strategies
 docker compose up -d --build     # trend 8091, reversion 8092, book 8093, breakout 8094, chaos 8095 (127.0.0.1)
 ```
 
-Na VPS: os serviços entram na rede do Compose do ctrade, sem `ports`, e o `baseUrl` passa a ser
-`http://<serviço>:8080/v1`. Token por estratégia em `TREND_TOKEN`/`CHAOS_TOKEN` (o mesmo vai no cadastro).
+Na VPS (T63) as apps sobem no mesmo Compose do ctrade, sem `ports`, com `baseUrl`
+`http://<serviço>:8080/v1` e token por estratégia: `deploy/vps/up.sh` sobe tudo e
+`deploy/vps/register-strategies.sh` faz o cadastro do passo 2 (`deploy/vps/README.md`).
 
 ### 2. Cadastrar (agente)
 

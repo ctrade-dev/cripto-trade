@@ -37,6 +37,8 @@ curl -s -X POST -H "X-Admin-Key: $KEY" -H "X-Reason: <motivo>" -H "X-Operator: <
   DLQ, boot) e o que o operador fez estão juntos, em ordem, em `GET /api/admin/events` (`since`, `until`,
   `portfolioId`, `limit`; T59). Para "o que aconteceu desde X", começar por ela.
 - Não existe endpoint de ordem direta na exchange: toda ordem nasce de um runner.
+- **Ambiente de soak na VPS (testnet, T63):** a API só é alcançada por túnel SSH, e a `KEY` é a da VPS.
+  Subir, atualizar, cadastrar as apps e limpar o banco: [`deploy/vps/README.md`](../deploy/vps/README.md).
 
 <a id="ciclo-de-verificacao"></a>
 ## Ciclo de verificação
