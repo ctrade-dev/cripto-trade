@@ -7,6 +7,17 @@ passo muda estado.
 Durante a rodada ninguém verifica o sistema: os automatismos do ctrade (Safe Mode, proteção do lote, halt
 por rejeições) reagem sozinhos, e tudo o que fizerem fica gravado. O relatório reconstrói a rodada no fim.
 
+## Coleta automática (T64)
+
+`scripts/round_report.py` faz os passos 1 a 4 de uma vez e devolve um rascunho em Markdown com a tabela
+dos critérios para preencher. Na VPS, depois do restart do fim da rodada:
+
+```bash
+python3 ~/ctrade/scripts/round_report.py --start <START> --env-file ~/ctrade/deploy/vps/.env     --portfolio <portfolioId> > ~/round.md
+```
+
+A classificação dos `ERROR`/`WARN` e o veredito de cada critério continuam manuais (passos 3 e 5).
+
 ## Entradas
 
 | O quê | Valor |
