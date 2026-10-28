@@ -91,7 +91,11 @@ migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando 
 
 ## Rodada da T53 na VPS
 
-1. Limpar o banco (dado de testnet é descartável):
+1. Limpar o banco (dado de testnet é descartável). Antes, **cancelar as ordens que descansam no livro**
+   (`GET /api/runners/<id>/transactions` → em voo → `POST .../orders/<tx>/cancel`): o `halt` não as
+   cancela, e depois da limpeza o ctrade não as conhece mais. Uma que preencha durante a rodada seguinte
+   aparece como trade só na exchange. Conferir com `GET /api/exchanges/BINANCE/balances?asset=BTC`
+   (`locked` = 0).
    ```bash
    docker compose stop ctrade-app
    ./reset-testnet-db.sh --force       # recusa com o ctrade no ar
