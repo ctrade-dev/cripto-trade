@@ -6,8 +6,8 @@ import com.marmitt.core.enums.SafeModeStatus;
 import com.marmitt.core.ports.inbound.portfolio.EvaluateDrawdownPort;
 import com.marmitt.core.ports.inbound.portfolio.ManageSafeModePort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
-import com.marmitt.strategy.impl.scenario.FilledBuyRestingSellCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ScenarioStrategyConfig;
+import com.marmitt.application.spring.testsupport.strategy.scenario.FilledBuyRestingSellCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioStrategyConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 

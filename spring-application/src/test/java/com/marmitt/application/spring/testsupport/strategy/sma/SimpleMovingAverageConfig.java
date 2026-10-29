@@ -1,4 +1,4 @@
-package com.marmitt.strategy.impl.simple_moving_avager;
+package com.marmitt.application.spring.testsupport.strategy.sma;
 
 import java.math.BigDecimal;
 
@@ -38,19 +38,6 @@ public record SimpleMovingAverageConfig(
         );
     }
 
-    /**
-     * Configuração para produção com thresholds mais conservadores
-     */
-    public static SimpleMovingAverageConfig productionConfig() {
-        return new SimpleMovingAverageConfig(
-                20,                                     // 20 períodos para média móvel
-                BigDecimal.valueOf(-0.02),              // -2% para comprar
-                BigDecimal.valueOf(0.02),               // +2% para vender
-                BigDecimal.valueOf(0.1),                // 10% do capital por operação
-                60                                      // 60 minutos de timeout
-        );
-    }
-    
     public static Builder builder() {
         return new Builder();
     }

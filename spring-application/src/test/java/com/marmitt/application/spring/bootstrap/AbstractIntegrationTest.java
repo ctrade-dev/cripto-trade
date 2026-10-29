@@ -1,7 +1,9 @@
 package com.marmitt.application.spring.bootstrap;
 
 import com.marmitt.application.spring.CTradeApplication;
+import com.marmitt.application.spring.testsupport.strategy.sma.SmaTestStrategyConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -10,6 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
         classes = CTradeApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE
 )
+@Import(SmaTestStrategyConfiguration.class)
 abstract class AbstractIntegrationTest {
 
     /** Chave da API nos testes de integração que chamam a borda HTTP (T55: toda a /api exige). */

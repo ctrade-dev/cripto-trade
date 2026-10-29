@@ -1,11 +1,12 @@
-package com.marmitt.strategy.impl.simple_moving_avager;
+package com.marmitt.application.spring.testsupport.strategy.sma;
 
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
 import com.marmitt.core.dto.strategy.OpenLotDto;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -17,8 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@Slf4j
+/**
+ * SMA de teste (T65): dublê in-process usado pelos testes de integração que precisam de uma estratégia
+ * que compre e venda com poucos ticks. Não existe em produção; as estratégias reais são apps remotas.
+ */
 public class SimpleMovingAverageStrategy implements TradingStrategy {
+
+    private static final Logger log = LoggerFactory.getLogger(SimpleMovingAverageStrategy.class);
 
     private static final String STRATEGY_NAME = "SimpleMovingAverageStrategy";
     private static final String STRATEGY_VERSION = "1.0.0";

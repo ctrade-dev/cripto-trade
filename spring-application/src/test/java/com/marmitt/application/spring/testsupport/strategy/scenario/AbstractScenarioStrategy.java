@@ -1,4 +1,4 @@
-package com.marmitt.strategy.impl.scenario;
+package com.marmitt.application.spring.testsupport.strategy.scenario;
 
 import com.marmitt.core.dto.strategy.PendingOrderDto;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * o estado {@code enabled} e helpers de preço/estado; cada subclasse implementa apenas a decisão
  * do seu cenário.
  *
- * <p>São puras decisões — sem infra, rede ou schema de exchange — como qualquer estratégia do
- * módulo. Ficam registradas apenas quando explicitamente habilitadas (flag no spring-application).
+ * <p>São puras decisões — sem infra, rede ou schema de exchange. Dublês de teste (T65): cada teste
+ * registra a sua no repositório de estratégias; o ctrade de produção não embute estratégia.
  */
 abstract class AbstractScenarioStrategy implements TradingStrategy {
 

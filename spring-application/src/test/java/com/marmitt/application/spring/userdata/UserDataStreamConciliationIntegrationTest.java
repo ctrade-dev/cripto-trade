@@ -1,5 +1,6 @@
 package com.marmitt.application.spring.userdata;
 
+import com.marmitt.application.spring.testsupport.strategy.sma.SmaTestStrategyConfiguration;
 import com.marmitt.core.domain.runner.RunnerStatusCause;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.application.spring.CTradeApplication;
@@ -65,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
 @SpringBootTest(classes = CTradeApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Import(UserDataStreamConciliationIntegrationTest.MockUserStreamConfig.class)
+@Import({UserDataStreamConciliationIntegrationTest.MockUserStreamConfig.class, SmaTestStrategyConfiguration.class})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class UserDataStreamConciliationIntegrationTest {
 

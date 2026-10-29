@@ -16,7 +16,7 @@ estrategias sao apps externas que so implementam um contrato. Isso orienta API, 
 runbook. Leia `/.ai/product-direction.md` antes de especificar task ou desenhar API.
 
 O desenho esperado segue clean architecture e arquitetura hexagonal: regra de
-negocio no `core`, calculo de estrategia no `strategy`, provider schemas nos
+negocio no `core`, calculo de estrategia nas apps externas (contrato), provider schemas nos
 `adapter-*`, e composicao/infraestrutura no `spring-application`.
 
 ## Mapa de Modulos

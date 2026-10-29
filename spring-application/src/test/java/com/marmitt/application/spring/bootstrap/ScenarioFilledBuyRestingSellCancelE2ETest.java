@@ -1,7 +1,7 @@
 package com.marmitt.application.spring.bootstrap;
 
-import com.marmitt.strategy.impl.scenario.FilledBuyRestingSellCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ScenarioStrategyConfig;
+import com.marmitt.application.spring.testsupport.strategy.scenario.FilledBuyRestingSellCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioStrategyConfig;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

@@ -8,10 +8,10 @@ import com.marmitt.core.enums.SafeModeOrigin;
 import com.marmitt.core.enums.SafeModeStatus;
 import com.marmitt.core.ports.inbound.portfolio.ManageSafeModePort;
 import com.marmitt.core.ports.inbound.runner.ManageRunnerLifecyclePort;
-import com.marmitt.strategy.impl.scenario.FilledBuyRestingSellCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ImmediateRoundTripStrategy;
-import com.marmitt.strategy.impl.scenario.RestingBuyCancelStrategy;
-import com.marmitt.strategy.impl.scenario.ScenarioStrategyConfig;
+import com.marmitt.application.spring.testsupport.strategy.scenario.FilledBuyRestingSellCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ImmediateRoundTripStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.RestingBuyCancelStrategy;
+import com.marmitt.application.spring.testsupport.strategy.scenario.ScenarioStrategyConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 

@@ -21,7 +21,7 @@ registro das execuções. Código só entra se uma rodada revelar lacuna — cad
 | Necessidade | Onde |
 |---|---|
 | Conectar na testnet | perfil `testnet` (`application-testnet.yml`), credenciais `binance.api-key/api-secret` (T2) |
-| Estratégias que exercitam cada ramo | estratégias de cenário com teto de ciclos, `CTRADE_SCENARIO_STRATEGIES_ENABLED=true` (T35) |
+| Estratégias que exercitam cada ramo | estratégias de cenário da T35, usadas na fase 1; desde a T65 só existem como dublês dos testes de integração |
 | Estratégia fora do processo | apps que implementam o contrato, cadastradas por `/api/admin/strategies` (T41, T54) |
 | Ciclo de vida do runner | `POST /api/admin/runners/{id}/start|resume|terminate`, `PATCH` de limites (T49) |
 | Conferência local × exchange | `GET /api/reconciliation?symbol=&from=&to=` → `binanceOnly`, `localOnly` (T18) |
@@ -101,6 +101,10 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
   rascunho; a classificação e o veredito continuam manuais.
 
 ## Roteiro — Fase 1 (smoke de ramos, máquina local)
+
+> **Histórico.** A fase 1 foi aprovada. Desde a T65 o ctrade não embute estratégia: as de cenário e a
+> flag `CTRADE_SCENARIO_STRATEGIES_ENABLED` saíram. Repetir esta fase exige portar os quatro cenários
+> para apps do `ctrade-strategies` e cadastrá-las por `/api/admin/strategies`.
 
 Objetivo: em 1–2h, provar contra a Binance testnet que cada ramo das estratégias de cenário funciona e
 que, no fim, o registro do ctrade bate com o da exchange. Divisão: **o mantenedor sobe a infra e a

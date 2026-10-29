@@ -57,7 +57,7 @@ Responsavel por:
 Nao deve conter:
 
 - regra de negocio que deveria estar no `core`
-- calculo de estrategia que deveria estar no `strategy`
+- calculo de estrategia (fica nas apps de estrategia, fora do ctrade)
 - DTOs mantidos como regra permanente da camada
 
 ### `adapter-*`
@@ -80,8 +80,8 @@ Nao deve conter:
 ## Regras de dependencia
 
 - `core` nao depende de `spring-application` nem de `adapter-*`
-- `strategy` nao depende de infraestrutura
-- `spring-application` pode compor `core`, `strategy` e adapters
+- `spring-application` pode compor `core` e adapters
+- estrategias nao sao modulo do ctrade: sao apps externas que implementam o contrato (T65)
 - `adapter-*` deve depender do contrato necessario, sem empurrar detalhes externos para dentro
 
 ## Sinais de violacao

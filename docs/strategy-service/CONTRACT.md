@@ -307,8 +307,9 @@ Camada 1 do desacoplamento de estratégias — **implementada na T41**:
 - **spring-application:** transporte OkHttp com timeout, métricas e o ciclo periódico de conferência.
   Desde a T54 o catálogo é persistido e administrado por `/api/admin/strategies` (cadastro sem restart,
   token por estratégia, histórico de mudanças).
-- **`strategy-service-reference`:** app de referência que serve o SMA por este contrato; o teste de
-  paridade in-process × remoto é o portão da migração.
+- **Apps de referência:** as de `ctrade-dev/ctrade-strategies` (T60), com testes de conformidade contra
+  a cópia deste contrato. O antigo `strategy-service-reference` (SMA em Java) saiu na T65, junto com as
+  estratégias embutidas no ctrade.
 
 Fora do escopo ainda: troca de versão em runtime, harness de backtest, gate de invariantes,
 shadow/canário e máquina de promoção (`REGISTERED → SHADOW → ACTIVE → DRAINING → RETIRED`).
