@@ -32,6 +32,8 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
             TransactionStatus.PENDING
     );
 
+    private static final int LAST_FAILURE_MAX_LENGTH = 200;
+
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
     private final RecoverTransactionStatusUseCase recoverTransactionStatusUseCase;
     private final AutomaticSafeModeTrigger safeModeTrigger;
@@ -103,12 +105,12 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
                 }
 
                 failed++;
-                recordFailure(candidate, failuresThisCycle);
+                recordFailure(candidate, failuresThisCycle, response.failureReason() + ": " + response.message());
                 log.warn("runtimeRecoveryBatch: failed transactionId={} reason={} failureReason={}",
                         response.transactionId(), response.message(), response.failureReason());
             } catch (RuntimeException e) {
                 failed++;
-                recordFailure(candidate, failuresThisCycle);
+                recordFailure(candidate, failuresThisCycle, e.getClass().getSimpleName() + ": " + e.getMessage());
                 log.error("runtimeRecoveryBatch: unexpected failure transactionId={}", candidate.getId(), e);
             }
         }
@@ -127,8 +129,11 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
     /**
      * Conta mais um ciclo sem resolver a transacao; no limite, aciona HALT do portfolio do runner (T25).
      * Transacao presa que nem a exchange esclarece deixa capital e posicao em estado incerto.
+     *
+     * <p>O motivo leva a ultima falha (T66): o evento do Safe Mode diz sozinho se foi exchange fora do
+     * ar, limite de peso ou outra coisa, sem depender do log.
      */
-    private void recordFailure(Transaction candidate, Map<UUID, Integer> failuresThisCycle) {
+    private void recordFailure(Transaction candidate, Map<UUID, Integer> failuresThisCycle, String lastFailure) {
         int cycles = consecutiveFailures.getOrDefault(candidate.getId(), 0) + 1;
         failuresThisCycle.put(candidate.getId(), cycles);
         if (cycles < maxStuckCycles) {
@@ -137,6 +142,11 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
         strategyRunnerRepository.findById(candidate.getRunnerId()).ifPresent(runner ->
                 safeModeTrigger.activate(runner.getPortfolioId(), SafeModeTrigger.WATCHDOG_STUCK,
                         "transactionId=" + candidate.getId() + " runnerId=" + runner.getId()
-                                + " status=" + candidate.getStatus() + " cycles=" + cycles));
+                                + " status=" + candidate.getStatus() + " cycles=" + cycles
+                                + " lastFailure=" + truncate(lastFailure)));
+    }
+
+    private static String truncate(String text) {
+        return text.length() <= LAST_FAILURE_MAX_LENGTH ? text : text.substring(0, LAST_FAILURE_MAX_LENGTH) + "...";
     }
 }

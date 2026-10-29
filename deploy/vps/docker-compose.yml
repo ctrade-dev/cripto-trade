@@ -13,6 +13,14 @@ x-logging: &logging
     max-size: "20m"
     max-file: "3"
 
+# T66: o log do container do ctrade e a reserva do Loki (na rodada 7 o Loki ficou 12h sem receber e os 3 x 20 MB
+# so guardavam ~1h30). 10 x 100 MB cobrem uma rodada de 72h com o nivel DEBUG padrao.
+x-logging-ctrade: &logging-ctrade
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "10"
+
 # Uma imagem por servico (ctrade-vps-<servico>), todas do mesmo build: as camadas sao compartilhadas.
 # Uma tag unica para as cinco falha no build em paralelo ("image already exists").
 x-strategy: &strategy
@@ -47,7 +55,7 @@ services:
     restart: unless-stopped
     # Teto conhecido para o criterio 7 da T53 (memoria estavel); o heap fica em 75% dele.
     mem_limit: 2g
-    logging: *logging
+    logging: *logging-ctrade
     networks: [ctrade]
     ports:
       - "127.0.0.1:8080:8080"

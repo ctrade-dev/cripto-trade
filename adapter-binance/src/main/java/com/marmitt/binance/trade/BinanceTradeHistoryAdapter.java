@@ -2,6 +2,7 @@ package com.marmitt.binance.trade;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marmitt.binance.rest.BinanceHttpErrors;
 import com.marmitt.binance.rest.BinanceRestRequestBuilder;
 import com.marmitt.binance.rest.HttpClientPort;
 import com.marmitt.binance.rest.RestRequest;
@@ -89,7 +90,7 @@ public class BinanceTradeHistoryAdapter implements TradeHistoryQueryPort {
         }
 
         if (!response.isSuccessful()) {
-            throw new ExchangeQueryException("BINANCE", errorTypeFor(response.statusCode()),
+            throw new ExchangeQueryException("BINANCE", BinanceHttpErrors.errorType(response.statusCode()),
                     "Binance myTrades returned HTTP " + response.statusCode() + ": " + response.body());
         }
 
@@ -122,15 +123,6 @@ public class BinanceTradeHistoryAdapter implements TradeHistoryQueryPort {
             throw new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.UNKNOWN,
                     "Failed to parse trade id for pagination cursor: " + rawId, e);
         }
-    }
-
-    private static ExchangeQueryException.ErrorType errorTypeFor(int statusCode) {
-        return switch (statusCode) {
-            case 400 -> ExchangeQueryException.ErrorType.INVALID_REQUEST;
-            case 401, 403 -> ExchangeQueryException.ErrorType.AUTH;
-            case 429 -> ExchangeQueryException.ErrorType.RATE_LIMIT;
-            default -> ExchangeQueryException.ErrorType.TEMPORARY;
-        };
     }
 
     private TradeExecutionDto parseTrade(JsonNode node) {

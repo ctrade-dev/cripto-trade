@@ -41,10 +41,12 @@ public class ExchangeCircuitBreakerConfiguration {
      */
     @Bean
     public ExchangeOrderQueryDecorator exchangeOrderQueryDecorator(CircuitBreakerRegistry exchangeCircuitBreakerRegistry,
-                                                                   ExchangeCircuitBreakerProperties properties) {
+                                                                   ExchangeCircuitBreakerProperties properties,
+                                                                   MeterRegistry meterRegistry) {
         return (exchangeId, delegate) -> properties.isEnabled()
                 ? new CircuitBreakerExchangeOrderQuery(exchangeId, delegate,
-                        exchangeCircuitBreakerRegistry.circuitBreaker(exchangeId.toLowerCase() + "-order-query"))
+                        exchangeCircuitBreakerRegistry.circuitBreaker(exchangeId.toLowerCase() + "-order-query"),
+                        meterRegistry)
                 : delegate;
     }
 

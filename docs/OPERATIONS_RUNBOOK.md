@@ -157,6 +157,9 @@ O watchdog consulta a exchange e resolve sozinho na maioria dos casos. `CRITICAL
   primeiro (o watchdog depende deles). `GET /api/runners/<runnerId>/transactions` para o histórico.
 - **Ação:** com a exchange acessível, aguardar 1 ciclo do watchdog (60s). Persistindo `CRITICAL`, o
   portfolio vai para HALT automático (`WATCHDOG_STUCK`). **Escalar** com o `clientOrderId`.
+- **Motivo do HALT (T66):** o motivo do `WATCHDOG_STUCK` termina em `lastFailure=<FailureReason>: <mensagem>`,
+  a última falha da consulta. `EXCHANGE_QUERY_RETRYABLE_FAILURE` com `circuit open` ou `HTTP 5xx` = exchange
+  instável; `HTTP 429`/`418` = limite de peso estourado pelo próprio ctrade (o IP fica banido por um tempo).
 - **Confirmar:** a transação sai de `PENDING` (terminal ou `SUBMITTED`) e a verificação em `OK`.
 
 <a id="position-lock-orphan"></a>
@@ -317,7 +320,9 @@ dos runners não arquivados, compara os fills locais com o histórico de trades 
 
 5 falhas de instabilidade abrem o circuito por 60s (T24). Boot recovery e watchdog ficam sem consultar.
 
-- **Diagnóstico:** status da Binance, credenciais, rate limit; logs `ExchangeQueryException`.
+- **Diagnóstico:** status da Binance, credenciais, rate limit; logs `ExchangeQueryException`. Por tipo,
+  sem depender do log (T66): `exchange_order_query_failures_total{errorType}` no Prometheus (`TEMPORARY` =
+  rede/5xx, `RATE_LIMIT` = 429/418, `CIRCUIT_OPEN` = chamada barrada pelo circuito).
 - **Ação:** nenhuma no ctrade: o circuito testa sozinho na próxima consulta após 60s. Persistindo
   mais de 10 min, **escalar**.
 - **Confirmar:** a verificação em `OK`.

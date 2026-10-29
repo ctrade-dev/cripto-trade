@@ -389,7 +389,9 @@ completada à mão onde o Loki não tinha dado.
   a ~13:05Z (12h), com o ctrade operando normalmente (sinais, ordens e scrapes do Prometheus contínuos) e
   sem erro no Loki. O appender (loki4j 1.5.2) descarta em silêncio. O log do container não serviu de
   reserva: com `TRACE` ligado, a rotação de 3 × 20 MB guarda só ~1h30. Os 4 `ERROR` da rodada se perderam,
-  e o `round_report.py` mostrou "ERROR: 0" porque só lê o Loki. → T66.
+  e o `round_report.py` mostrou "ERROR: 0" porque só lê o Loki. → T66. **Causa (T66):** o envio não
+  parou; o Loki da VPS (configuração da T63, índice TSDB + compactor) perdia o que saía da memória do
+  ingester, e na manhã seguinte não devolvia mais nada da rodada.
 - **F10 — Exchange (médio): consulta REST de ordens falhou por ~1h40 e acionou o HALT.** O circuito
   `binance-order-query` registrou falhas de 07:38Z a 09:21Z (83 minutos com falha, aberto ~100 min); antes
   e depois, ~200 consultas/h com sucesso. O envio de ordens pelo WebSocket seguiu normal. Com a consulta

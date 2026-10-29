@@ -5,6 +5,7 @@ import com.marmitt.core.exceptions.ExchangeQueryException;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderQueryPort;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,15 +21,21 @@ import java.util.function.Supplier;
  */
 public class CircuitBreakerExchangeOrderQuery implements ExchangeOrderQueryPort {
 
+    static final String FAILURES_METRIC = "exchange.order.query.failures";
+    static final String CIRCUIT_OPEN = "CIRCUIT_OPEN";
+    static final String UNEXPECTED = "UNEXPECTED";
+
     private final String exchangeId;
     private final ExchangeOrderQueryPort delegate;
     private final CircuitBreaker circuitBreaker;
+    private final MeterRegistry meterRegistry;
 
     public CircuitBreakerExchangeOrderQuery(String exchangeId, ExchangeOrderQueryPort delegate,
-                                            CircuitBreaker circuitBreaker) {
+                                            CircuitBreaker circuitBreaker, MeterRegistry meterRegistry) {
         this.exchangeId = exchangeId;
         this.delegate = delegate;
         this.circuitBreaker = circuitBreaker;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -55,8 +62,24 @@ public class CircuitBreakerExchangeOrderQuery implements ExchangeOrderQueryPort 
         try {
             return circuitBreaker.executeSupplier(query);
         } catch (CallNotPermittedException e) {
+            countFailure(CIRCUIT_OPEN);
             throw new ExchangeQueryException(exchangeId, ExchangeQueryException.ErrorType.TEMPORARY,
                     "Order query circuit open for " + exchangeId + " - exchange REST failing, retry later", e);
+        } catch (ExchangeQueryException e) {
+            countFailure(e.errorType().name());
+            throw e;
+        } catch (RuntimeException e) {
+            countFailure(UNEXPECTED);
+            throw e;
         }
+    }
+
+    /**
+     * T66: falhas por tipo ({@code exchange_order_query_failures_total{exchange,errorType}}), para
+     * separar exchange fora do ar ({@code TEMPORARY}) de limite de peso ({@code RATE_LIMIT}) depois do
+     * fato, sem depender do log.
+     */
+    private void countFailure(String errorType) {
+        meterRegistry.counter(FAILURES_METRIC, "exchange", exchangeId, "errorType", errorType).increment();
     }
 }

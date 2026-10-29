@@ -375,3 +375,41 @@ groups:
               conditions:
                 - evaluator: { type: gt, params: [0] }
               refId: C
+
+      - uid: ctrade-log-ingestion-gap
+        title: Logs do ctrade não chegam ao Loki
+        condition: C
+        for: 5m
+        labels:
+          channel: alerts-behavior
+          severity: critical
+        annotations:
+          summary: 'O ctrade registrou logs nos últimos 10 min que o Loki não recebeu (T66): os alertas por log estão cegos'
+        # Sem dado do Prometheus (ctrade fora do ar) não é buraco de log; Loki fora do ar (erro na consulta) é.
+        noDataState: OK
+        execErrState: Alerting
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              datasource: { type: loki, uid: loki }
+              # "or vector(0)": Loki sem linha devolve 0, não "sem dado"
+              expr: 'sum(count_over_time({app="ctrade"} [10m])) or vector(0)'
+              queryType: instant
+              refId: A
+          - refId: B
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'sum(increase(logback_events_total[10m]))'
+              instant: true
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              datasource: { type: __expr__, uid: __expr__ }
+              type: math
+              expression: '$B > 200 && $A < $B / 2'
+              refId: C

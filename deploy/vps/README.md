@@ -119,8 +119,10 @@ migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando 
 | `grafana` | 256 MB |
 | cada app de estratégia | 256 MB |
 
-Total ~5,5 GB de 12 GB. Retenção de 15 dias no Prometheus e no Loki; logs dos containers em rotação
-(3 × 20 MB por serviço).
+Total ~5,5 GB de 12 GB. Retenção de 15 dias no Prometheus. O Loki usa a configuração padrão da imagem,
+sem retenção automática (T66; detalhes no `loki.yml`). Logs dos containers em rotação: 3 × 20 MB por
+serviço, e 10 × 100 MB no `ctrade-app`, que guarda uma rodada de 72h e é a reserva do Loki
+(`docker compose logs --since <START> ctrade-app`).
 
 ```bash
 docker stats --no-stream                 # memória por container

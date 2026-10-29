@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 7, achados F9 e F10), T63 (VPS), T64 (`scripts/round_report.py`), T25 (watchdog).
-**Status:** A fazer
+**Status:** Em andamento
 
 ---
 
@@ -92,6 +92,22 @@ Sem isso a T53 não fecha: cada rodada pode ser reprovada por falta de evidênci
   task se o 418/429 aparecer.
 - Trocar ou atualizar o loki4j. Só entra se as métricas mostrarem defeito do appender.
 
+### Decisão registrada (2026-10-29): a causa do buraco era o Loki da VPS
+
+Investigação durante a implementação: o ctrade enviou os logs normalmente. O Loki da VPS é que perdia o
+que gravava. Os chunks ficaram no disco (75 arquivos, 52 MB), mas o índice não os achava, e as consultas
+só viam o que ainda estava na memória do ingester (~2h). Às 14:47Z o Loki ainda devolvia a rodada até
+00:45Z. Às 15:30Z já não devolvia nada da rodada, nem as horas de 13h e 14h que tinha mostrado antes. A
+configuração era a da T63 (índice TSDB + compactor com retenção, `tsdb_shipper.shared_store` vazio). O
+compose local, sem o problema, usa a configuração padrão da imagem (`boltdb-shipper`).
+
+- `deploy/vps/loki.yml` passa a ser a configuração padrão da imagem `grafana/loki:2.9.0` (a mesma do
+  local), só com a telemetria desligada. Fica sem retenção automática: o volume com `DEBUG` é pequeno para
+  o disco, e a limpeza entre rodadas está no próprio arquivo.
+- As métricas do loki4j continuam: provam, pelo Prometheus, que o envio não parou.
+- Validação na VPS: consultar dados com mais de 3h (fora da memória do ingester, `query_ingesters_within`)
+  depois da troca.
+
 ## Riscos
 
 - Com `DEBUG` no lugar de `TRACE`, some o rastro `[REPO]` de cada acesso ao banco. Nenhum alerta,
@@ -107,6 +123,7 @@ Sem isso a T53 não fecha: cada rodada pode ser reprovada por falta de evidênci
 - [ ] Volume de log do ctrade na VPS cai para menos da metade, sem `TRACE` por padrão.
 - [ ] `ctrade-app` na VPS guarda pelo menos 72h de log no container.
 - [ ] Métricas do loki4j no Prometheus.
+- [ ] Loki da VPS devolve logs com mais de 3h depois da troca da configuração.
 - [ ] `docker compose stop loki` por ~10 min na VPS dispara `ctrade-log-ingestion-gap`, e o
       `round_report.py` aponta o buraco.
 - [ ] `round_report.py` contra a rodada 7 mostra os 4 `ERROR` do Prometheus e as horas sem cobertura.

@@ -32,7 +32,7 @@ class CircuitBreakerExchangeOrderQueryTest {
     private final ExchangeCircuitBreakerConfiguration configuration = new ExchangeCircuitBreakerConfiguration();
     private final CircuitBreakerRegistry registry = configuration.exchangeCircuitBreakerRegistry(properties, meterRegistry);
     private final ExchangeOrderQueryPort query =
-            configuration.exchangeOrderQueryDecorator(registry, properties).decorate("BINANCE", delegate);
+            configuration.exchangeOrderQueryDecorator(registry, properties, meterRegistry).decorate("BINANCE", delegate);
 
     @Test
     void closedCircuitBehavesLikeTheAdapter() {
@@ -90,12 +90,38 @@ class CircuitBreakerExchangeOrderQueryTest {
     }
 
     @Test
+    void countsEachFailureByErrorTypeAndCircuitOpen() {
+        when(delegate.queryOrderByClientOrderId("BTCUSDT", "c1")).thenThrow(temporary());
+        when(delegate.queryOrderByClientOrderId("BTCUSDT", "banned"))
+                .thenThrow(new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.RATE_LIMIT, "418"));
+        when(delegate.listAllOpenOrders()).thenThrow(new IllegalStateException("boom"));
+
+        assertThrows(ExchangeQueryException.class, () -> query.queryOrderByClientOrderId("BTCUSDT", "banned"));
+        assertThrows(IllegalStateException.class, query::listAllOpenOrders);
+        for (int i = 0; i < 3; i++) {
+            assertThrows(ExchangeQueryException.class, () -> query.queryOrderByClientOrderId("BTCUSDT", "c1"));
+        }
+        assertEquals(CircuitBreaker.State.OPEN, circuit().getState());
+        assertThrows(ExchangeQueryException.class, () -> query.queryOrderByClientOrderId("BTCUSDT", "c1"));
+
+        assertEquals(1.0, failures("RATE_LIMIT"));
+        assertEquals(1.0, failures("UNEXPECTED"));
+        assertEquals(3.0, failures("TEMPORARY"));
+        assertEquals(1.0, failures("CIRCUIT_OPEN"), "Chamada barrada pelo circuito tambem conta");
+    }
+
+    @Test
     void disabledCircuitBreakerReturnsTheAdapterItself() {
         ExchangeCircuitBreakerProperties disabled = properties(200);
         disabled.setEnabled(false);
 
-        assertSame(delegate, configuration.exchangeOrderQueryDecorator(registry, disabled).decorate("BINANCE", delegate));
+        assertSame(delegate, configuration.exchangeOrderQueryDecorator(registry, disabled, meterRegistry).decorate("BINANCE", delegate));
         verify(delegate, never()).listAllOpenOrders();
+    }
+
+    private double failures(String errorType) {
+        return meterRegistry.get("exchange.order.query.failures")
+                .tags("exchange", "BINANCE", "errorType", errorType).counter().count();
     }
 
     private CircuitBreaker circuit() {
