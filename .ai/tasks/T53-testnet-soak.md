@@ -247,6 +247,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 | 4 | 2026-10-27 | 3 (apps T60) | ~42 min | 5 apps / BTCUSDT, máquina local | **Reprovada.** SELL acima do lote foi à exchange, ficou `SUBMITTED` e o watchdog pôs o portfolio em Safe Mode. | T61, T62; `baseUrl` em `127.0.0.1` (detalhes na T60) |
 | 5 | 2026-10-27 | 3 (apps T60) | ~1h55 | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; 30 idas e voltas (tendência, reversão, rompimento); zero `ERROR`; estado operacional `OK` o tempo todo. | Livro sem preenchimento: calibração da app (T60) |
 | 6 | 2026-10-28 | smoke VPS (T63) | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada.** 22 idas e voltas (tendência 7, reversão 10, rompimento 4, livro 1); zero `ERROR`; estado operacional `OK` o tempo todo; só a porta 22 aberta. | — |
+| 7 | 2026-10-28/29 | 3 (apps T60), 1ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critério 6). 349 fills, 348 iguais à exchange (o outro é a órfã de antes da rodada); Safe Mode `HALT` automático às 07:39Z por falha de ~1h40 na consulta REST de ordens da Binance; 4 `ERROR` perdidos num buraco de ~12h do Loki. Boot do restart `SUCCESS`; JVM estável. | F9, F10 abaixo → T66 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -348,6 +349,51 @@ Sem limpar o banco (estado da rodada 2: 4 portfolios, lote aberto de 0.001 BTC n
   lote aberto o portfolio fica sem drawdown até alguém ativar um runner do símbolo. Avaliar se o
   coordenador de demanda (T56) deve assinar símbolos com lote aberto. → T58, entregue e validada na
   testnet em 2026-10-21 (restart com runners parados: preço em 6s, nenhum aviso de drawdown).
+
+### Rodada 7 — detalhes (2026-10-28 14:41:43Z → 2026-10-29 14:41:43Z, VPS)
+
+Versões: ctrade `6fec21c`, ctrade-strategies `23009ca` (imagens `linux/arm64`, Loki 2.9.0, Prometheus
+3.5.0). Portfolio `a682d53c` (1000 USDT), um runner por app. Coleta com `scripts/round_report.py` (T64),
+completada à mão onde o Loki não tinha dado.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | `/api/reconciliation` na janela exata: 349 fills, 348 iguais, 0 divergentes, 0 só no ctrade, 1 só na exchange (`order-8113829`, SELL 0.00148, 17:56Z) | Explicado: ordem que descansava desde antes da limpeza do banco (prefixo de runner que não existe nesta rodada); a limpeza deixou passar uma ordem no livro (F6) |
+| 2 | DLQ | nenhuma entrada | OK |
+| 3 | Capital | `CAPITAL_*` `OK` no fim | OK |
+| 4 | Transação presa | `TRANSACTION_STUCK` `OK`; a SELL `68809bbb` ficou 16h no livro, legítima | OK |
+| 5 | Safe Mode / halt | 1 `HALT` automático (`WATCHDOG_STUCK`, 07:39:15Z) | Causa identificada (F10), mas a raiz da falha da exchange não |
+| 6 | `ERROR` | 4 no `logback_events_total` (06:37, 06:45, 07:40, 12:22Z); nenhum no Loki | **Reprovado**: conteúdo perdido (F9) |
+| 7 | Estabilidade | heap mínimo 43.6 → 46.5 MB, threads 50 → 51, avaliação média 10.9 → 10.7 ms; WebSocket só o corte de 24h | OK |
+| 8 | Saldo no restart | boot `SUCCESS` (3.2s), sem `FAIL_DEFICIT`; `EXCHANGE_*` `OK` depois | OK |
+
+- **Ordens:** tendência 53 idas e voltas, reversão 79, rompimento 19, livro 22 (436 SELLs canceladas pelo
+  `SHOULD_CANCEL` da app), caos 2 BUYs e 1 SELL. Resultado realizado −38.92 USDT.
+- **Caos:** `/stats` com ~400 falhas de cada tipo (`FAULT_SERVER_ERROR`, `TIMEOUT`, `DISCONNECT`,
+  `MALFORMED`, `INCOHERENT`); o ctrade tratou todas como `HOLD` (`WARN strategy unavailable`). Nenhuma
+  ordem saiu de resposta com falha.
+- **MAX_LOSS acima de 5%:** 5 saídas de proteção, 4 delas às 15:48:32Z com perda de ~10% do custo. Foi
+  um pavio da testnet: o BTC foi de ~80 600 a ~72 000 e voltou em 2s; as vendas a mercado executaram no
+  fundo do livro raso (médias 74 727 e 68 861). Às 18:51:28Z o mesmo, de ~78 900 a ~73 900. A proteção
+  agiu como desenhada; o tamanho da perda vem do livro da testnet. Sem task.
+- **Fim:** runners em `HALTED`; a SELL do livro que descansava cancelada pelo operador; `locked` BTC = 0
+  antes do restart. Safe Mode `HALT` continua ativo (baixar fica com o mantenedor).
+
+**Achados:**
+
+- **F9 — Observabilidade (alto): logs perdidos sem aviso.** O Loki não recebeu nada do ctrade de ~00:45Z
+  a ~13:05Z (12h), com o ctrade operando normalmente (sinais, ordens e scrapes do Prometheus contínuos) e
+  sem erro no Loki. O appender (loki4j 1.5.2) descarta em silêncio. O log do container não serviu de
+  reserva: com `TRACE` ligado, a rotação de 3 × 20 MB guarda só ~1h30. Os 4 `ERROR` da rodada se perderam,
+  e o `round_report.py` mostrou "ERROR: 0" porque só lê o Loki. → T66.
+- **F10 — Exchange (médio): consulta REST de ordens falhou por ~1h40 e acionou o HALT.** O circuito
+  `binance-order-query` registrou falhas de 07:38Z a 09:21Z (83 minutos com falha, aberto ~100 min); antes
+  e depois, ~200 consultas/h com sucesso. O envio de ordens pelo WebSocket seguiu normal. Com a consulta
+  falhando, o watchdog não conseguiu confirmar a SELL que descansava no livro por 3 ciclos (45s) e pôs o
+  portfolio em `HALT`, como desenhado na T25. Não dá para saber se foi queda da testnet ou bloqueio por
+  limite de peso (HTTP 418/429): não há métrica de status do cliente REST e os logs se perderam (F9).
+  → T66 (visibilidade). A sensibilidade do watchdog a falha da exchange (HALT em 45s de consulta
+  indisponível) é decisão de risco do mantenedor.
 
 ## Fontes
 
