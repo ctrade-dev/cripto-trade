@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T41 (estratégia fora do processo), T54 (catálogo por API), T60 (apps do soak).
-**Status:** Em andamento — PR aguardando as 2 rodadas limpas de 24h da T53 para o merge.
+**Status:** Em andamento
 
 ---
 
@@ -53,8 +53,9 @@ em produção não disparam, e nos testes protegem os dublês.
 
 ## Riscos
 
-- **Contagem de rodadas da T53:** a mudança altera o boot. O merge espera as 2 rodadas limpas de 24h,
-  ou a contagem recomeça.
+- **Contagem de rodadas da T53:** a mudança altera o boot. O merge esperaria as 2 rodadas limpas de
+  24h, mas a rodada 7 foi reprovada e a contagem voltou a zero. Decisão registrada (2026-10-29): merge
+  antes da próxima rodada, que já valida o boot sem as estratégias embutidas.
 - **Banco com runner apontando para a SMA** (`a1b2c3d4-e5f6-7890-abcd-ef1234567890`): o runner fica sem
   estratégia (check `RUNNER_ON_HOLD_STRATEGY_UNUSABLE`). Na testnet o banco é limpo a cada rodada; não há
   produção.
