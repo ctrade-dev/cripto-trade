@@ -22,23 +22,21 @@
     
     <!-- Loki appender — non-blocking batch push; fails silently when Loki is unreachable.
          metricsEnabled (T66): loki4j_send_errors_total, loki4j_drop_events_total e loki4j_unsent_events no
-         Prometheus, que nao depende do Loki para mostrar que o envio parou. -->
+         Prometheus, que nao depende do Loki para mostrar que o envio parou.
+         batchTimeoutMs (T66): o antigo <batch><timeoutMs> nao existe no loki4j 1.5 e era ignorado (lote a
+         cada 60s, o padrao). -->
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <metricsEnabled>true</metricsEnabled>
         <http>
             <url>${LOKI_URL:-http://loki:3100}/loki/api/v1/push</url>
         </http>
-        <batch>
-            <timeoutMs>5000</timeoutMs>
-        </batch>
+        <batchTimeoutMs>5000</batchTimeoutMs>
         <format>
             <label>
                 <pattern>app=ctrade,host=${HOSTNAME:-local},level=%level</pattern>
                 <readMarkers>true</readMarkers>
             </label>
-            <message class="com.github.loki4j.logback.JsonLayout">
-                <mdcPrefix></mdcPrefix>
-            </message>
+            <message class="com.github.loki4j.logback.JsonLayout"/>
         </format>
     </appender>
 
