@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 7, achados F9 e F10), T63 (VPS), T64 (`scripts/round_report.py`), T25 (watchdog).
-**Status:** Em andamento
+**Status:** Em revisão — PR #172; validada na VPS em 2026-10-29.
 
 ---
 
@@ -135,18 +135,25 @@ da imagem (TSDB, schema v13), devolveu as 30, achadas pelo querier no disco.
 
 ## Critérios de aceitação
 
-- [ ] Volume de log do ctrade na VPS cai para menos da metade, sem `TRACE` por padrão.
-- [ ] `ctrade-app` na VPS guarda pelo menos 72h de log no container.
-- [ ] Métricas do loki4j no Prometheus.
-- [ ] Loki da VPS devolve logs com mais de 3h depois da troca da configuração.
-- [ ] `docker compose stop loki` por ~10 min na VPS dispara `ctrade-log-ingestion-gap`, e o
-      `round_report.py` aponta o buraco.
-- [ ] `round_report.py` contra a rodada 7 mostra os 4 `ERROR` do Prometheus e as horas sem cobertura.
-- [ ] 418 e 429 viram `RATE_LIMIT`, com teste unitário do mapeamento.
-- [ ] `exchange_order_query_failures_total` conta por `errorType` e `CIRCUIT_OPEN`, com teste unitário.
-- [ ] Motivo do `WATCHDOG_STUCK` com a última falha, com teste unitário em
+- [x] Volume de log do ctrade na VPS cai para menos da metade, sem `TRACE` por padrão. *(~112 mil → ~26 mil
+      linhas por hora; o `TRACE` era 77%.)*
+- [x] `ctrade-app` na VPS guarda pelo menos 72h de log no container. *(10 × 100 MB; com `DEBUG`, ~10 MB/h,
+      cerca de 96h.)*
+- [x] Métricas do loki4j no Prometheus. *(`loki4j_send_batches_total`, `loki4j_send_errors_total{reason}`,
+      `loki4j_retry_errors_total`, `loki4j_drop_events_total`, `loki4j_unsent_events`.)*
+- [x] Loki da VPS devolve logs com mais de 3h depois da troca da configuração. *(Loki 3.4.2. Às 22:35Z, janelas
+      de 10 min entre 19:10Z e 21:30Z: Loki 1952/2264/2512/2808/2688 contra Prometheus
+      1913/2266/2528/2785/2694.)*
+- [x] `docker compose stop loki` por ~10 min na VPS dispara `ctrade-log-ingestion-gap`, e o
+      `round_report.py` aponta o buraco. *(Loki parado às 15:34:30Z: o alerta disparou às 15:36:30Z e
+      voltou ao normal 1 min depois do Loki subir. O loki4j guardou e reenviou as linhas (0 descartadas),
+      então esse teste não deixou buraco. O apontamento do buraco foi validado contra a rodada 7.)*
+- [x] `round_report.py` contra a rodada 7 mostra os 4 `ERROR` do Prometheus e as horas sem cobertura.
+- [x] 418 e 429 viram `RATE_LIMIT`, com teste unitário do mapeamento.
+- [x] `exchange_order_query_failures_total` conta por `errorType` e `CIRCUIT_OPEN`, com teste unitário.
+- [x] Motivo do `WATCHDOG_STUCK` com a última falha, com teste unitário em
       `RecoverStaleTransactionsStuckTriggerTest`.
-- [ ] `docs/monitoring/round-report.md`, `deploy/vps/README.md`, `docs/OPERATIONS_RUNBOOK.md` (seção do
+- [x] `docs/monitoring/round-report.md`, `deploy/vps/README.md`, `docs/OPERATIONS_RUNBOOK.md` (seção do
       Safe Mode) e a T53 atualizados.
 
 ## Fontes
