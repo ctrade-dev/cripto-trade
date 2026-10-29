@@ -98,15 +98,30 @@ Investigação durante a implementação: o ctrade enviou os logs normalmente. O
 que gravava. Os chunks ficaram no disco (75 arquivos, 52 MB), mas o índice não os achava, e as consultas
 só viam o que ainda estava na memória do ingester (~2h). Às 14:47Z o Loki ainda devolvia a rodada até
 00:45Z. Às 15:30Z já não devolvia nada da rodada, nem as horas de 13h e 14h que tinha mostrado antes. A
-configuração era a da T63 (índice TSDB + compactor com retenção, `tsdb_shipper.shared_store` vazio). O
-compose local, sem o problema, usa a configuração padrão da imagem (`boltdb-shipper`).
+configuração era a da T63 (índice TSDB + compactor com retenção, `tsdb_shipper.shared_store` vazio), no
+Loki 2.9.
 
-- `deploy/vps/loki.yml` passa a ser a configuração padrão da imagem `grafana/loki:2.9.0` (a mesma do
-  local), só com a telemetria desligada. Fica sem retenção automática: o volume com `DEBUG` é pequeno para
-  o disco, e a limpeza entre rodadas está no próprio arquivo.
 - As métricas do loki4j continuam: provam, pelo Prometheus, que o envio não parou.
 - Validação na VPS: consultar dados com mais de 3h (fora da memória do ingester, `query_ingesters_within`)
   depois da troca.
+
+**Primeira tentativa, reprovada:** `deploy/vps/loki.yml` com a configuração padrão do `grafana/loki:2.9.0`
+(`boltdb-shipper`, schema v11). Às 18:45Z o Loki não devolvia nada antes das 17:34Z, quando os primeiros
+chunks saíram do ingester (janelas de 10 min: 0 linhas no Loki contra ~2.500–2.900 no Prometheus). O
+índice e os chunks estavam no disco. O querier do 2.9 não os achava, e só o ingester respondia, até
+`query_store_max_look_back_period` (2h41m na VPS). O compose local tinha o mesmo defeito, sem ninguém notar,
+porque as consultas locais cobrem só as últimas horas.
+
+**Reprodução e correção:** dois Loki descartáveis na VPS, com tempos curtos (`chunk_idle_period: 1m`,
+`max_chunk_age: 2m`, `query_ingesters_within: 3m`) e 30 linhas de teste. Passada a janela do ingester
+(~43 min), o 2.9 (`boltdb-shipper`) devolveu 0 linhas. O `grafana/loki:3.4.2`, com a configuração padrão
+da imagem (TSDB, schema v13), devolveu as 30, achadas pelo querier no disco.
+
+- VPS e compose local passam ao `grafana/loki:3.4.2`. `deploy/vps/loki.yml` é a configuração padrão dessa
+  imagem, só com a telemetria desligada. O local usa a configuração da própria imagem.
+- Sem retenção automática: o volume com `DEBUG` é pequeno para o disco, e a limpeza entre rodadas está no
+  próprio arquivo.
+- O volume antigo do Loki fica ilegível com o schema novo e é descartado (dados de testnet).
 
 ## Riscos
 

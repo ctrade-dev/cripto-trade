@@ -87,7 +87,8 @@ Um arquivo `deploy/vps/docker-compose.yml`, separado do compose de desenvolvimen
     IPv6 do `localhost` visto na T60.
 - **Prometheus:** alvo `ctrade-app:8080`, em arquivo de configuração próprio da VPS. Retenção de 15 dias.
 - **Loki:** retenção de 15 dias, cobrindo uma rodada de 72h com folga. *(Substituído na T66: essa
-  configuração perdia os logs gravados; a VPS passou à configuração padrão da imagem, sem retenção.)*
+  configuração perdia os logs gravados; a VPS passou ao Loki 3.4.2 com a configuração padrão da imagem,
+  sem retenção.)*
 - **Grafana:** senha do admin vinda do `.env`, provisionamento reaproveitado de `docker/grafana`.
 - **Volumes nomeados** para Postgres, Prometheus, Loki e Grafana.
 - **Imagens de terceiros com versão fixa** (hoje `grafana/grafana:latest` e `prom/prometheus:latest`),

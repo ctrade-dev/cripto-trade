@@ -1,9 +1,10 @@
 # Loki de uma instancia, armazenamento em disco (volume loki_data).
 #
-# T66: mesma configuracao padrao da imagem grafana/loki:2.9.0 (a do compose local: boltdb-shipper,
-# schema v11), so com a telemetria desligada. A versao anterior (indice TSDB + compactor com retencao)
-# perdia os logs que saiam da memoria do ingester: na rodada 7 da T53 os chunks ficaram no disco, mas
-# o indice nao os achava, e as consultas so viam as ultimas ~2h.
+# T66: configuracao padrao da imagem grafana/loki:3.4.2 (indice TSDB, schema v13), so com a telemetria
+# desligada. O Loki 2.9 perdia os logs que saiam do ingester, com as duas configuracoes testadas (TSDB +
+# compactor da T63 e o boltdb-shipper padrao): os chunks e o indice ficavam no disco, mas o querier nao os
+# achava, e as consultas so viam as ultimas ~2h40 (o que o proprio ingester ainda respondia). Reproduzido
+# na VPS com um Loki descartavel e tempos curtos: o 2.9 devolveu 0 linhas, o 3.4.2 devolveu todas.
 #
 # Sem retencao automatica: com o nivel DEBUG o volume de uma rodada de 72h e pequeno perto dos ~37 GB
 # livres. Limpar entre rodadas, se precisar: docker compose down loki && docker volume rm ctrade-vps_loki_data.
@@ -13,6 +14,7 @@ server:
   http_listen_port: 3100
 
 common:
+  instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
     filesystem:
@@ -26,9 +28,9 @@ common:
 schema_config:
   configs:
     - from: 2020-10-24
-      store: boltdb-shipper
+      store: tsdb
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h

@@ -41,7 +41,7 @@ services:
       - "--web.enable-lifecycle"
 
   loki:
-    image: grafana/loki:2.9.0
+    image: grafana/loki:3.4.2
     container_name: ctrade-loki
     restart: unless-stopped
     profiles: [observability]

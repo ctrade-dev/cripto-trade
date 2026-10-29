@@ -131,7 +131,7 @@ services:
       - "--storage.tsdb.retention.time=15d"
 
   loki:
-    image: grafana/loki:2.9.0
+    image: grafana/loki:3.4.2
     restart: unless-stopped
     mem_limit: 512m
     logging: *logging
