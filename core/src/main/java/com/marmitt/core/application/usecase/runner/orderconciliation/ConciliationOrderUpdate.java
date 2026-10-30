@@ -53,13 +53,15 @@ public class ConciliationOrderUpdate {
         this.strategyRunnerRepository = strategyRunnerRepository;
         MarginReleaseBuilder marginReleaseBuilder = new MarginReleaseBuilder();
         FeeResolver feeResolver = new FeeResolver();
+        UnsellableRemainderWriteOff remainderWriteOff = new UnsellableRemainderWriteOff(
+                strategyRunnerRepository, new SellableQuantityPolicy(orderNormalizers));
         this.fillCalculator = new FillCalculator();
         this.buyFillHandler = new BuyFillHandler(
                 strategyRunnerRepository, eventPublisher, marginReleaseBuilder, feeResolver);
         this.sellFillHandler = new SellFillHandler(strategyRunnerRepository, eventPublisher, feeResolver,
-                new SellableQuantityPolicy(orderNormalizers));
+                remainderWriteOff);
         this.terminationHandler = new TerminationHandler(
-                strategyRunnerRepository, eventPublisher, marginReleaseBuilder);
+                strategyRunnerRepository, eventPublisher, marginReleaseBuilder, remainderWriteOff);
     }
 
     /**
@@ -103,18 +105,7 @@ public class ConciliationOrderUpdate {
                 }
                 case FILLED -> fillAction.apply(transaction, orderData, true);
                 case PARTIALLY_FILLED -> fillAction.apply(transaction, orderData, false);
-                case CANCELED -> {
-                    transaction.cancel();
-                    releaseAction.apply(transaction);
-                }
-                case EXPIRED -> {
-                    transaction.expire();
-                    releaseAction.apply(transaction);
-                }
-                case REJECTED -> {
-                    transaction.reject(orderData.rejectReason());
-                    releaseAction.apply(transaction);
-                }
+                case CANCELED, EXPIRED, REJECTED -> terminate(transaction, orderData, fillAction, releaseAction);
                 default -> log.warn("orderConciliation: unexpected status={} for clientOrderId={}",
                         orderData.status(), clientOrderId);
             }
@@ -125,6 +116,52 @@ public class ConciliationOrderUpdate {
         } finally {
             MDC.remove("transactionId");
         }
+    }
+
+    /**
+     * Encerra a transacao com o status terminal da exchange (T67).
+     *
+     * <ul>
+     *   <li><b>Repetido:</b> transacao ja final ignora o evento, como o FILLED repetido. O mesmo
+     *       encerramento chega pelo stream e pela consulta do watchdog.</li>
+     *   <li><b>Execucao que so chega no encerramento:</b> se a exchange informa mais quantidade executada
+     *       do que a transacao conhece (o watchdog leu por REST um fill que o stream perdeu), o incremento
+     *       e aplicado como fill parcial antes de encerrar. Sem isso o fill sumiria da contabilidade.</li>
+     *   <li><b>EXPIRED depois de execucao parcial:</b> a Binance expira o resto de uma ordem a mercado que
+     *       esgota o livro. Pela maquina de estados (IG 6.1.2), ordem interrompida depois de executar e
+     *       {@code CANCELED}: devolve so a reserva nao executada e destrava o resto do lote.
+     *       {@code EXPIRED} fica para ordem sem nenhuma execucao.</li>
+     * </ul>
+     */
+    private void terminate(Transaction transaction,
+                           OrderDataDto orderData,
+                           FillAction fillAction,
+                           ReleaseAction releaseAction) {
+        if (transaction.isFinal()) {
+            log.debug("orderConciliation: duplicate {} ignored transactionId={} status={}",
+                    orderData.status(), transaction.getId(), transaction.getStatus());
+            return;
+        }
+        BigDecimal incoming = orderData.executedQuantity();
+        BigDecimal current = transaction.getEffectiveExecutedQuantity();
+        if (incoming != null && incoming.compareTo(current) > 0) {
+            log.info("orderConciliation: execution reported with {} applied transactionId={} currentQty={} incomingQty={}",
+                    orderData.status(), transaction.getId(), current, incoming);
+            fillAction.apply(transaction, orderData, false);
+        }
+        switch (orderData.status()) {
+            case CANCELED -> transaction.cancel();
+            case EXPIRED -> {
+                if (transaction.getEffectiveExecutedQuantity().signum() > 0) {
+                    transaction.cancel();
+                } else {
+                    transaction.expire();
+                }
+            }
+            case REJECTED -> transaction.reject(orderData.rejectReason());
+            default -> throw new IllegalArgumentException("Not a terminal status: " + orderData.status());
+        }
+        releaseAction.apply(transaction);
     }
 
     /**

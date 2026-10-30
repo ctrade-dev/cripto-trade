@@ -16,6 +16,8 @@ public class ExchangeQueryException extends RuntimeException implements CodedErr
         AUTH,
         INVALID_REQUEST,
         NOT_SUPPORTED,
+        /** A exchange nao conhece a ordem (ex.: cancelamento de ordem que ja terminou, T67). */
+        ORDER_NOT_FOUND,
         UNKNOWN
     }
 

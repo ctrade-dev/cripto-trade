@@ -3,6 +3,7 @@ package com.marmitt.core.application.usecase.runner.processsignal;
 import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.enums.OrderType;
+import com.marmitt.core.exceptions.ExchangeQueryException;
 import com.marmitt.core.ports.outbound.exchange.OrderDispatchPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,10 @@ import java.util.UUID;
  * estar levemente defasado (a ordem pode ter enchido ou sumido nesse meio-tempo). Alvo
  * inexistente, de outro runner ou ja terminal e tratado como no-op logado — nunca excecao que
  * derrube o tick.
+ *
+ * <p><b>Ordem que a exchange ja nao conhece (T67):</b> o cancelamento pode chegar depois que a ordem
+ * terminou na exchange (preencheu ou expirou). E o mesmo contexto defasado, visto pela exchange: no-op
+ * logado, sem derrubar o tick. O status final chega pelo stream ou pelo watchdog.
  *
  * <p><b>Sem marcacao terminal otimista:</b> o handler nao altera o estado local. O {@code CANCELED}
  * real chega via stream e e conciliado pelo caminho idempotente, liberando capital quando aplicavel.
@@ -67,7 +72,9 @@ class CancelSignalHandler {
         // De-dup de reenvios (estrategia deterministica reemite SHOULD_CANCEL a cada tick enquanto o
         // CANCELED async nao chega) e tratado no OrderDispatchAdapter, que marca o cooldown apenas
         // apos um envio REAL (blocked/unsupported nao consomem a janela).
-        orderDispatch.cancel(intentFactory.buildCancelCommand(runner, transaction));
+        if (!sendCancel(runner, transaction)) {
+            return CancelOutcome.NOT_CANCELABLE;
+        }
 
         log.info("processCancelSignal: cancel dispatched transactionId={} clientOrderId={} runnerId={} reason={}",
                 targetTransactionId, transaction.getClientOrderId(), runner.getId(), reason);
@@ -86,13 +93,34 @@ class CancelSignalHandler {
             return false;
         }
         try {
-            orderDispatch.cancel(intentFactory.buildCancelCommand(runner, transaction));
+            if (!sendCancel(runner, transaction)) {
+                return false;
+            }
             log.info("cancelResting: cancel dispatched runnerId={} transactionId={} clientOrderId={} reason={}",
                     runner.getId(), transaction.getId(), transaction.getClientOrderId(), reason);
             return true;
         } catch (RuntimeException e) {
             log.warn("cancelResting: cancel failed runnerId={} transactionId={} - retried next tick: {}",
                     runner.getId(), transaction.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Envia o cancelamento.
+     *
+     * @return {@code false} quando a exchange ja nao conhece a ordem ({@code ORDER_NOT_FOUND})
+     */
+    private boolean sendCancel(StrategyRunner runner, Transaction transaction) {
+        try {
+            orderDispatch.cancel(intentFactory.buildCancelCommand(runner, transaction));
+            return true;
+        } catch (ExchangeQueryException e) {
+            if (e.errorType() != ExchangeQueryException.ErrorType.ORDER_NOT_FOUND) {
+                throw e;
+            }
+            log.warn("cancel: order unknown to the exchange runnerId={} transactionId={} status={} - awaiting its final status",
+                    runner.getId(), transaction.getId(), transaction.getStatus());
             return false;
         }
     }

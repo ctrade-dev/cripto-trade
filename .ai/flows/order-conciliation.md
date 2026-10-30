@@ -41,7 +41,14 @@ O mesmo executor atende o fluxo normal de eventos e os fluxos de boot/recovery.
   ignoradas quando a transacao ja saiu de `PENDING`.
 - `PARTIALLY_FILLED`: aplica apenas o delta ainda nao processado.
 - `FILLED`: aplica o delta final e finaliza a transacao.
-- `CANCELED`, `EXPIRED`, `REJECTED`: aplica transicao terminal e libera margem.
+- `CANCELED`, `EXPIRED`, `REJECTED`: aplica transicao terminal e libera margem (T67):
+  - transacao ja final ignora o evento (`duplicate <status> ignored`); o mesmo encerramento chega
+    pelo stream e pela consulta do watchdog;
+  - execucao informada no evento terminal e maior que a conhecida e aplicada antes, como fill
+    parcial (fill que o stream perdeu e o watchdog leu por REST);
+  - `EXPIRED` de transacao com execucao vira `CANCELED` (IG 6.1.2): a Binance expira o resto de uma
+    ordem a mercado que esgota o livro. Devolve so a reserva nao executada (BUY) ou destrava o resto
+    do lote (SELL).
 - `FILLED` de BUY tambem libera margem: o excedente da reserva sobre o custo executado (T36).
 
 Fills podem submeter uma transacao ainda `PENDING` quando a exchange envia fill
@@ -89,7 +96,8 @@ aplicando o incremento.
 6. No fill final, se sobrar quantidade que a exchange nao aceita vender (`SellableQuantityPolicy`,
    via `OrderQuantityNormalizerPort`), baixa o residuo como perda (`Position.writeOffDust`), fecha a
    posicao e publica um segundo `ExecutionConfirmedEvent` (custo do residuo, PnL = -custo,
-   `matchId` deterministico por posicao).
+   `matchId` deterministico por posicao). A baixa mora em `UnsellableRemainderWriteOff` e vale
+   tambem para a SELL interrompida depois de executar em parte (`TerminationHandler`, T67).
 
 Fee da SELL (T46): em quote entra no PnL; sem ativo, assumida em quote (legado); em base ou
 terceiro ativo fica no match como pendente de conversao, fora do PnL, com log ERROR.

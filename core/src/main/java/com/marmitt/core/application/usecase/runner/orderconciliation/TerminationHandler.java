@@ -1,8 +1,11 @@
 package com.marmitt.core.application.usecase.runner.orderconciliation;
 
+import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.domain.runner.Position;
 import com.marmitt.core.domain.runner.Transaction;
+import com.marmitt.core.dto.capital.ExecutionConfirmation;
 import com.marmitt.core.dto.capital.MarginRelease;
+import com.marmitt.core.dto.events.ExecutionConfirmedEvent;
 import com.marmitt.core.dto.events.MarginReleaseEvent;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
@@ -29,6 +32,10 @@ import java.util.Optional;
  *       capital que havia sido reservado no momento do BUY.</li>
  * </ol>
  *
+ * <p><b>Resto invendavel (T67):</b> uma SELL interrompida depois de executar em parte devolve ao lote
+ * so o que nao vendeu. Se esse resto e menor que o que a exchange aceita vender, o lote nao volta a
+ * {@code OPEN}: o resto e baixado como perda ({@link UnsellableRemainderWriteOff}), como no fill final.
+ *
  * <p>Transacoes SELL nao tem capital reservado proprio (o capital ja estava na posicao BUY):
  * o encerramento de uma SELL apenas desbloqueia a Position e <b>nao</b> emite liberacao de
  * margem (o {@link MarginReleaseBuilder} retorna vazio para SELL), pois subtrair do
@@ -42,13 +49,16 @@ class TerminationHandler {
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
     private final EventPublisherPort eventPublisher;
     private final MarginReleaseBuilder marginReleaseBuilder;
+    private final UnsellableRemainderWriteOff remainderWriteOff;
 
     public TerminationHandler(StrategyRunnerRepositoryPort strategyRunnerRepository,
                               EventPublisherPort eventPublisher,
-                              MarginReleaseBuilder marginReleaseBuilder) {
+                              MarginReleaseBuilder marginReleaseBuilder,
+                              UnsellableRemainderWriteOff remainderWriteOff) {
         this.strategyRunnerRepository = strategyRunnerRepository;
         this.eventPublisher = eventPublisher;
         this.marginReleaseBuilder = marginReleaseBuilder;
+        this.remainderWriteOff = remainderWriteOff;
     }
 
     /**
@@ -62,9 +72,15 @@ class TerminationHandler {
         log.debug("orderConciliation: processing transactionId={} status={}",
                 transaction.getId(), transaction.getStatus());
 
-        findAndUnlockPosition(transaction)
-                .ifPresent(strategyRunnerRepository::savePosition);
+        Optional<ExecutionConfirmation> dustWriteOff = findAndUnlockPosition(transaction)
+                .flatMap(position -> {
+                    Optional<ExecutionConfirmation> writeOff = remainderWriteOff.apply(
+                            transaction, position, Symbol.of(transaction.getSymbol()).getQuoteAsset());
+                    strategyRunnerRepository.savePosition(position);
+                    return writeOff;
+                });
         strategyRunnerRepository.saveTransaction(transaction);
+        dustWriteOff.ifPresent(writeOff -> eventPublisher.publishEvent(new ExecutionConfirmedEvent(writeOff)));
 
         marginReleaseBuilder.build(transaction)
                 .ifPresent(release -> publishMarginRelease(transaction, release));

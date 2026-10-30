@@ -6,6 +6,7 @@ import com.marmitt.core.dto.runner.OrderCancelCommand;
 import com.marmitt.core.enums.OrderType;
 import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.enums.TransactionType;
+import com.marmitt.core.exceptions.ExchangeQueryException;
 import com.marmitt.core.ports.outbound.exchange.OrderDispatchPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -88,6 +92,30 @@ class CancelSignalHandlerTest {
         assertEquals(CancelSignalHandler.CancelOutcome.NOT_CANCELABLE, handler.handle(runner(runnerId), tx.getId(), "x"));
 
         verify(orderDispatch, never()).cancel(any());
+    }
+
+    @Test
+    void orderUnknownToTheExchangeIsNotCancelableInsteadOfFailingTheTick() {
+        // T67: a ordem terminou na exchange antes do cancelamento chegar (-2011 na Binance).
+        Transaction tx = tx(runnerId, TransactionStatus.SUBMITTED);
+        when(repository.findTransactionById(tx.getId())).thenReturn(Optional.of(tx));
+        doThrow(new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.ORDER_NOT_FOUND, "unknown"))
+                .when(orderDispatch).cancel(any());
+
+        assertEquals(CancelSignalHandler.CancelOutcome.NOT_CANCELABLE,
+                handler.handle(runner(runnerId), tx.getId(), "x"));
+        assertFalse(handler.cancelResting(runner(runnerId), tx, "protection"));
+        assertEquals(TransactionStatus.SUBMITTED, tx.getStatus());
+    }
+
+    @Test
+    void otherCancelFailuresStillPropagateFromTheStrategyCancel() {
+        Transaction tx = tx(runnerId, TransactionStatus.SUBMITTED);
+        when(repository.findTransactionById(tx.getId())).thenReturn(Optional.of(tx));
+        doThrow(new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.TEMPORARY, "down"))
+                .when(orderDispatch).cancel(any());
+
+        assertThrows(ExchangeQueryException.class, () -> handler.handle(runner(runnerId), tx.getId(), "x"));
     }
 
     private StrategyRunner runner(UUID id) {

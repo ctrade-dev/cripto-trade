@@ -203,17 +203,22 @@ def section_logs(src, start, end, out):
     for level in ("ERROR", "WARN"):
         lines = src.loki_range(f'{{app=~".+", level="{level}"}}', start, end)
         groups = collections.Counter(log_pattern(line) for _, line in lines)
-        capped = " (limite da consulta atingido: há mais linhas)" if len(lines) >= LOKI_LIMIT else ""
+        capped = (f" (padrões das primeiras {LOKI_LIMIT} linhas: limite da consulta)"
+                  if len(lines) >= LOKI_LIMIT else "")
+        # T67: a contagem vem do proprio Loki (sem limite de linhas) e so do ctrade, a mesma origem do
+        # logback_events_total; as linhas devolvidas servem so para agrupar os padroes.
+        in_loki = round(first_value(src.loki_instant(
+            f'sum(count_over_time({{app="ctrade", level="{level}"}}[{seconds}s]))', end)) or 0)
         logged = first_value(src.prom(
             f'sum(increase(logback_events_total{{level="{level.lower()}"}}[{seconds}s]))', end)) or 0.0
-        out.append(f"**{level}: {len(lines)} linhas no Loki, {len(groups)} padrões{capped}; "
+        out.append(f"**{level}: {in_loki} linhas do ctrade no Loki, {len(groups)} padrões{capped}; "
                    f"o ctrade registrou {logged:.0f}.**\n")
-        if round(logged) > len(lines):
+        if round(logged) > in_loki:
             # Janela de 2 min de 1 em 1 min: um incremento entre duas coletas cai em pelo menos uma janela.
             ranges = minute_ranges(src.prom_series(
                 f'sum(increase(logback_events_total{{level="{level.lower()}"}}[2m]))', start, end, 60))
             shown = ", ".join(ranges[:12]) + (f" e mais {len(ranges) - 12} intervalos" if len(ranges) > 12 else "")
-            out.append(f"> **{round(logged) - len(lines)} {level} sem linha no Loki** (minutos aproximados: "
+            out.append(f"> **{round(logged) - in_loki} {level} sem linha no Loki** (minutos aproximados: "
                        f"{shown or '-'}). Buscar no log do container antes de fechar o critério.\n")
         out.extend(f"- {n}× `{pattern}`" for pattern, n in groups.most_common(15))
         out.append("")

@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,10 +48,8 @@ import java.util.UUID;
  * {@code reserved} vem do {@code costBasis} da posicao, nao de {@code quantidade x preco medio}.
  *
  * <p><b>Residuo invendavel (T46):</b> no fill final, se sobrar na posicao uma quantidade que a
- * exchange nao aceita vender ({@link SellableQuantityPolicy}), ela e baixada como perda
- * ({@link Position#writeOffDust()}) e a posicao fecha. O custo do residuo sai de {@code reserved}
- * por um {@link ExecutionConfirmedEvent} com PnL igual a menos o custo, com {@code matchId}
- * deterministico por posicao para idempotencia.
+ * exchange nao aceita vender, ela e baixada como perda ({@link UnsellableRemainderWriteOff}) e a
+ * posicao fecha.
  *
  * <p><b>Invariante estrito:</b> posicoes OPEN/CLOSING devem possuir
  * {@code openedByTransactionId}. Se esse vinculo nao existir, o fluxo falha
@@ -64,16 +61,16 @@ class SellFillHandler {
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
     private final EventPublisherPort eventPublisher;
     private final FeeResolver feeResolver;
-    private final SellableQuantityPolicy sellableQuantityPolicy;
+    private final UnsellableRemainderWriteOff remainderWriteOff;
 
     public SellFillHandler(StrategyRunnerRepositoryPort strategyRunnerRepository,
                            EventPublisherPort eventPublisher,
                            FeeResolver feeResolver,
-                           SellableQuantityPolicy sellableQuantityPolicy) {
+                           UnsellableRemainderWriteOff remainderWriteOff) {
         this.strategyRunnerRepository = strategyRunnerRepository;
         this.eventPublisher = eventPublisher;
         this.feeResolver = feeResolver;
-        this.sellableQuantityPolicy = sellableQuantityPolicy;
+        this.remainderWriteOff = remainderWriteOff;
     }
 
     /**
@@ -136,7 +133,7 @@ class SellFillHandler {
 
         strategyRunnerRepository.saveAtomicTransactionAndMatch(transaction, match);
         Optional<ExecutionConfirmation> dustWriteOff = isFinal
-                ? writeOffUnsellableRemainder(transaction, position, quoteAsset)
+                ? remainderWriteOff.apply(transaction, position, quoteAsset)
                 : Optional.empty();
         strategyRunnerRepository.savePosition(position);
         eventPublisher.publishEvent(new ExecutionConfirmedEvent(confirmation));
@@ -166,47 +163,6 @@ class SellFillHandler {
                         .findPositionLockedByTransactionIdForUpdate(transaction.getId()))
                 .or(() -> strategyRunnerRepository.findOpenPositionByRunnerIdAndSymbolForUpdate(
                         transaction.getRunnerId(), transaction.getSymbol()));
-    }
-
-    /**
-     * Baixa como perda a quantidade que sobrou na posicao e que a exchange nao aceita vender.
-     *
-     * @return confirmacao a publicar para tirar o custo do residuo de {@code reserved}, ou vazio
-     *         quando a posicao fechou ou o restante ainda e vendavel
-     */
-    private Optional<ExecutionConfirmation> writeOffUnsellableRemainder(Transaction transaction,
-                                                                       Position position,
-                                                                       String quoteAsset) {
-        BigDecimal remaining = position.getQuantity();
-        if (remaining.signum() <= 0 || position.isLocked()) {
-            return Optional.empty();
-        }
-        String exchangeId = strategyRunnerRepository.findById(transaction.getRunnerId())
-                .map(runner -> runner.getExchangeId())
-                .orElse(null);
-        if (sellableQuantityPolicy.isSellable(exchangeId, position.getSymbol(), remaining)) {
-            return Optional.empty();
-        }
-        BigDecimal averagePrice = position.getAveragePrice();
-        BigDecimal dustCost = position.writeOffDust().setScale(8, RoundingMode.HALF_UP);
-        log.info("orderConciliation: unsellable remainder written off positionId={} transactionId={} quantity={} cost={}",
-                position.getId(), transaction.getId(), remaining, dustCost);
-        if (dustCost.signum() <= 0) {
-            return Optional.empty();
-        }
-        UUID writeOffId = UUID.nameUUIDFromBytes(
-                ("dust-write-off:" + position.getId()).getBytes(StandardCharsets.UTF_8));
-        return Optional.of(new ExecutionConfirmation(
-                transaction.getId(),
-                transaction.getRunnerId(),
-                writeOffId,
-                remaining,
-                averagePrice,
-                Fee.zero(quoteAsset != null ? quoteAsset : "UNKNOWN"),
-                dustCost,
-                dustCost.negate(),
-                true
-        ));
     }
 
     private Fee buildFee(Transaction transaction, OrderDataDto orderData, String quoteAsset) {

@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -297,7 +296,8 @@ class ConciliationOrderUpdateIdempotencyTest {
     }
 
     @Test
-    void executeRejectsInvalidTransitionToCanceledFromFilled() {
+    void executeIgnoresCanceledForAlreadyFilledTransaction() {
+        // T67: terminal nunca muda; um encerramento atrasado ou repetido nao gera erro nem nova liberacao.
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
         ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
@@ -308,18 +308,19 @@ class ConciliationOrderUpdateIdempotencyTest {
         when(repository.findTransactionByClientOrderId(transaction.getClientOrderId()))
                 .thenReturn(Optional.of(transaction));
 
-        assertThrows(IllegalStateException.class, () ->
-                conciliation.execute(
-                        orderData(transaction.getClientOrderId(), OrderDataDto.OrderStatus.CANCELED,
-                                transaction.getExecutedQuantity(), transaction.getExecutedPrice()),
-                        tx -> {
-                        },
-                        (tx, od, finalFill) -> {
-                        },
-                        tx -> {
-                        }
-                )
+        AtomicInteger releaseCalls = new AtomicInteger();
+        conciliation.execute(
+                orderData(transaction.getClientOrderId(), OrderDataDto.OrderStatus.CANCELED,
+                        transaction.getExecutedQuantity(), transaction.getExecutedPrice()),
+                tx -> {
+                },
+                (tx, od, finalFill) -> {
+                },
+                tx -> releaseCalls.incrementAndGet()
         );
+
+        assertEquals(TransactionStatus.FILLED, transaction.getStatus());
+        assertEquals(0, releaseCalls.get());
     }
 
     @Test

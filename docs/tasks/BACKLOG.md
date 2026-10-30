@@ -72,7 +72,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T64 | Script de coleta do relatório de rodada (T59)                   | Baixa | Claude | Concluído    |
 | T65 | Remover estratégias embutidas (módulos strategy e reference)    | Média | Claude | Concluído    |
 | T66 | Cobertura de logs e causa de falha REST visíveis (T53 F9/F10)   | Média | Claude | Concluído    |
-| T67 | Ordem expirada após preenchimento parcial (T53 F11–F13)         | Média | Claude | A fazer      |
+| T67 | Ordem expirada após preenchimento parcial (T53 F11–F13)         | Média | Claude | Em andamento |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução

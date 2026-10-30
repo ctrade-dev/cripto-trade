@@ -1,5 +1,6 @@
 package com.marmitt.binance;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.binance.auth.BinanceCredentials;
 import com.marmitt.binance.auth.BinanceRequestSigner;
@@ -49,6 +50,9 @@ public class BinanceMarketStreamAdapter implements
         ExchangeBootReadinessPort {
 
     private static final int BINANCE_ORDER_NOT_FOUND = -2013;
+    /** Cancelamento recusado; com "Unknown order sent." a ordem ja terminou (ou nunca chegou) na exchange. */
+    private static final int BINANCE_CANCEL_REJECTED = -2011;
+    private static final String BINANCE_UNKNOWN_ORDER = "Unknown order sent.";
 
     private final BinanceReceivedMessageProcessor receivedMessageProcessor;
     private final BinanceSenderMessageProcessor senderMessageProcessor;
@@ -163,6 +167,12 @@ public class BinanceMarketStreamAdapter implements
             if (response.isSuccessful()) {
                 return orderMapper.fromJson(response.body());
             }
+            if (response.statusCode() == 400 && isBinanceUnknownOrderOnCancel(response.body())) {
+                // T67: a ordem terminou na exchange antes do cancelamento chegar; o status final vem
+                // pelo stream ou pelo watchdog.
+                throw new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.ORDER_NOT_FOUND,
+                        "Order cancellation: order unknown to the exchange " + response.body());
+            }
             throw queryException(response, "Order cancellation");
         } catch (IOException e) {
             throw new ExchangeQueryException("BINANCE", ExchangeQueryException.ErrorType.TEMPORARY,
@@ -252,10 +262,20 @@ public class BinanceMarketStreamAdapter implements
     }
 
     private boolean isBinanceOrderNotFound(String body) {
+        return binanceError(body).path("code").asInt(0) == BINANCE_ORDER_NOT_FOUND;
+    }
+
+    private boolean isBinanceUnknownOrderOnCancel(String body) {
+        JsonNode error = binanceError(body);
+        return error.path("code").asInt(0) == BINANCE_CANCEL_REJECTED
+                && BINANCE_UNKNOWN_ORDER.equals(error.path("msg").asText(""));
+    }
+
+    private JsonNode binanceError(String body) {
         try {
-            return objectMapper.readTree(body).path("code").asInt(0) == BINANCE_ORDER_NOT_FOUND;
+            return objectMapper.readTree(body);
         } catch (Exception e) {
-            return false;
+            return objectMapper.missingNode();
         }
     }
 
