@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T53 (rodada 8, achados F11, F12 e F13), T25 (watchdog), T44 (saída de proteção), T66
 (`round_report.py`).
-**Status:** Em andamento
+**Status:** Concluído — PR #173; falta só a validação na próxima rodada da T53 (último critério).
 
 ---
 
