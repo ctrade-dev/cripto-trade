@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T53 (rodada 8, achados F11, F12 e F13), T25 (watchdog), T44 (saída de proteção), T66
 (`round_report.py`).
-**Status:** A fazer
+**Status:** Em andamento
 
 ---
 
@@ -26,7 +26,8 @@ portfolio para até o operador intervir.
 ## Contexto técnico
 
 - `core/.../domain/runner/Transaction.java` (`expire()`, linha ~280): `PENDING | SUBMITTED → EXPIRED`.
-  `cancel()` já aceita `PARTIAL → CANCELED`.
+  `cancel()` já aceita `PARTIAL → CANCELED`. O IG 6.1.2 lista `PARTIAL → EXPIRED` entre as transições
+  inválidas ("já teve execução — usa CANCELED").
 - `core/.../orderconciliation/ConciliationOrderUpdate.java` (`execute`): `CANCELED`, `EXPIRED` e `REJECTED`
   chamam a transição do domínio e o `releaseAction` sem checar se a transação já é final. `FILLED` e
   `PARTIALLY_FILLED` repetidos já são ignorados (`duplicate ... ignored`).
@@ -52,20 +53,25 @@ portfolio para até o operador intervir.
 
 ### 1. `EXPIRED` depois de execução parcial (F11, core)
 
-- **Domínio:** `Transaction.expire()` passa a aceitar `PARTIAL → EXPIRED`, como o `cancel()`.
-- **Margem:** `EXPIRED` usa a mesma regra do `CANCELED` (`reservado − executado`; sem execução, é a reserva
-  inteira). Só o `REJECTED` continua com devolução total, porque nunca executa. É uma única fórmula para os
-  dois encerramentos que podem ter execução (um fluxo, um caminho).
-- **Lote:** sem código novo. O `TerminationHandler` destrava o lote com o resto, e ele volta a `OPEN` para a
-  próxima venda. O caminho é o mesmo do `CANCELED` parcial.
+- **Conciliação:** `EXPIRED` da exchange para uma transação com execução vira `CANCELED`. A máquina de estados
+  do IG (6.1.2) já define isso: `PARTIAL → EXPIRED` é inválida ("já teve execução — usa CANCELED"). O
+  `Transaction.expire()` não muda.
+- **Margem e lote:** sem regra nova, porque é o caminho do `CANCELED` parcial. A BUY devolve só
+  `reservado − executado`, e a SELL destrava o lote com o resto, que volta a `OPEN` para a próxima venda.
 - **Resto abaixo do mínimo da exchange:** hoje a baixa de resíduo (`Position.writeOffDust`, T46) só roda no
-  fill final da SELL. Um `CANCELED` ou `EXPIRED` parcial que deixa resto invendável reabriria um lote que
-  nunca mais vende. O encerramento parcial de SELL passa a usar a mesma `SellableQuantityPolicy`: resto
-  invendável é baixado como resíduo e o lote fecha. Isso vale para os dois status.
+  fill final da SELL. Um `CANCELED` parcial que deixa resto invendável reabriria um lote que nunca mais vende.
+  A baixa sai do `SellFillHandler` para um colaborador próprio (`UnsellableRemainderWriteOff`), usado também
+  pelo `TerminationHandler`: resto invendável é baixado como resíduo e o lote fecha.
 - **Execução que só chega no evento terminal:** se o `CANCELED`/`EXPIRED` trouxer quantidade executada maior
   que a conhecida (por exemplo, o watchdog leu por REST um fill que o stream perdeu), a conciliação aplica
   primeiro esse incremento pelo caminho de fill parcial e só depois encerra. Sem isso, o fill some da
   contabilidade e a conciliação com a exchange acusa a diferença.
+
+**Decisão registrada (2026-10-30): `CANCELED` em vez de `PARTIAL → EXPIRED`.** A primeira versão desta spec
+abria a transição `PARTIAL → EXPIRED` no domínio e mudava a regra de margem do `EXPIRED`. Na implementação,
+o IG 6.1.2 mostrou que a transição é inválida por desenho e que o `CANCELED` já cobre ordem interrompida
+depois de executar. Mapear na conciliação mantém a máquina de estados e a fórmula de margem como estão (um
+fluxo, um caminho). O `EXPIRED` continua significando "nenhuma execução", com devolução total da reserva.
 
 ### 2. Encerramento repetido (F11, core)
 
@@ -82,11 +88,14 @@ portfolio para até o operador intervir.
 
 ### 4. Runner sem fonte de market data (F12, core)
 
-- `CreateRunnerUseCase` recusa `allowedMarketDataSources` nulo ou vazio com `INVALID_REQUEST` e uma mensagem
-  que diz o que falta. Um runner sem fonte nunca recebe tick e nunca opera, então aceitar a criação só
-  adia o erro.
+- `CreateRunnerRequest` recusa `allowedMarketDataSources` nulo ou vazio com `IllegalArgumentException`, que
+  a API devolve como `400 INVALID_REQUEST` com a mensagem do que falta. A validação fica no compact
+  constructor, junto das de `symbol` e `exchangeName`. Um runner sem fonte nunca recebe tick e nunca opera,
+  então aceitar a criação só adia o erro.
 - Fica de fora usar a exchange do runner como fonte padrão: seria um segundo jeito de definir a fonte e
   esconderia a escolha.
+- **Decisão do mantenedor (2026-10-30):** obrigar. O runner nasce com a exchange de execução
+  (`exchangeName`, já obrigatória) e com a fonte de preço definidas, ou não nasce.
 
 ### 5. Contagem do relatório (F13, script)
 
@@ -102,33 +111,40 @@ portfolio para até o operador intervir.
 
 ## Riscos
 
-- `EXPIRED` também chega por ordem que nunca preencheu (por exemplo, a SELL da tendência na mesma rodada). Os
-  testes cobrem os dois casos: sem execução, o resultado é o de hoje (reserva inteira para BUY, lote
-  destravado para SELL).
-- Aplicar um fill a partir do evento terminal depende do preço médio executado na resposta. Sem preço positivo,
-  a conciliação mantém a regra atual de resposta inválida (`INVALID_EXCHANGE_RESPONSE`), em vez de inventar o
-  preço.
-- Recusar runner sem fonte quebra quem cria runner sem o campo. Os chamadores conhecidos são o roteiro da T53
-  e os testes; a implementação ajusta os dois.
+- `EXPIRED` também chega por ordem que nunca preencheu (por exemplo, a SELL da tendência na mesma rodada).
+  Sem execução, o resultado é o de hoje: `EXPIRED`, reserva inteira para BUY, lote destravado para SELL.
+- Aplicar um fill a partir do evento terminal depende do preço médio executado na resposta. Sem preço
+  positivo, a transição do domínio recusa o fill (como hoje para um `PARTIALLY_FILLED` sem preço), em vez
+  de inventar o preço.
+- Recusar runner sem fonte muda o contrato do `POST /api/portfolios/{id}/runners` (decisão do mantenedor).
+  Os chamadores conhecidos (roteiro da T53 e testes de integração) já mandam o campo.
+- O `CANCELED` repetido depois de `FILLED` deixa de lançar exceção e passa a ser ignorado. Terminal nunca
+  muda, e um encerramento atrasado não é erro.
 
 ## Critérios de aceitação
 
-- [ ] SELL `PARTIAL` que recebe `EXPIRED`: transação `EXPIRED`, executado preservado, lote com o resto em
-      `OPEN` e destravado. Teste de conciliação.
-- [ ] BUY `PARTIAL` que recebe `EXPIRED`: devolve `reservado − executado`, e o lote da parte executada
-      continua. Teste do `MarginReleaseBuilder` e de conciliação.
-- [ ] `EXPIRED` sem execução: comportamento de hoje, nos testes existentes sem mudança.
-- [ ] SELL `CANCELED`/`EXPIRED` parcial com resto invendável: resíduo baixado e lote fechado. Teste de
-      conciliação.
-- [ ] Evento terminal com execução maior que a conhecida aplica o incremento antes de encerrar, pelo stream e
-      pelo watchdog. Testes de conciliação e do `RecoverTransactionStatusUseCase`.
-- [ ] `CANCELED`/`EXPIRED`/`REJECTED` repetidos ignorados sem `ERROR`. Teste de conciliação.
-- [ ] `-2011` no cancelamento vira `ORDER_NOT_FOUND`, e o core registra `WARN` sem mexer na transação. Testes
-      no adapter e no core.
-- [ ] Criação de runner sem `allowedMarketDataSources` recusada com `INVALID_REQUEST`. Teste do use case e
-      do controller.
-- [ ] `round_report.py` conta ERROR/WARN pelo `count_over_time`; contra a rodada 8, não acusa WARN sem linha.
-- [ ] `docs/OPERATIONS_RUNBOOK.md` (`TRANSACTION_STUCK`), T53 (F11–F13) e o roteiro da VPS atualizados.
+- [x] SELL `PARTIAL` que recebe `EXPIRED`: transação `CANCELED`, executado preservado, lote com o resto em
+      `OPEN` e destravado (`TerminalAfterPartialFillConciliationTest`, números da rodada 8).
+- [x] BUY `PARTIAL` que recebe `EXPIRED`: transação `CANCELED`, devolve `reservado − executado`
+      (`TerminalAfterPartialFillConciliationTest`).
+- [x] `EXPIRED` sem execução: continua `EXPIRED`, com devolução total (teste novo; os existentes passam sem
+      mudança).
+- [x] SELL encerrada em parte com resto invendável: resíduo baixado e lote fechado
+      (`TerminalAfterPartialFillConciliationTest`).
+- [x] Evento terminal com execução maior que a conhecida aplica o incremento antes de encerrar
+      (`TerminalAfterPartialFillConciliationTest`). O watchdog entrega a resposta REST ao mesmo
+      `ConciliationOrderUpdate.execute`, então o teste cobre os dois caminhos.
+- [x] `CANCELED`/`EXPIRED`/`REJECTED` repetidos ignorados sem `ERROR` (`TerminalAfterPartialFillConciliationTest`,
+      `ConciliationOrderUpdateIdempotencyTest`).
+- [x] `-2011 Unknown order sent.` no cancelamento vira `ORDER_NOT_FOUND`; outros `-2011` seguem o mapa HTTP
+      (`BinanceMarketStreamAdapterTest`). O core registra `WARN` sem mexer na transação, nos dois caminhos de
+      cancelamento (`CancelSignalHandlerTest`).
+- [x] Criação de runner sem `allowedMarketDataSources` recusada (`CreateRunnerRequestTest`; a API devolve
+      `400 INVALID_REQUEST` pelo `GlobalExceptionHandler`).
+- [x] `round_report.py` conta ERROR/WARN pelo `count_over_time`. Contra a rodada 8: WARN 13 420 no Loki ×
+      13 414 no Prometheus, sem o falso "8414 WARN sem linha".
+- [x] `docs/OPERATIONS_RUNBOOK.md` (`TRANSACTION_STUCK`), IG 6.1.2, flow map da conciliação,
+      `docs/monitoring/round-report.md`, T53 e roteiro da VPS atualizados.
 - [ ] Próxima rodada da T53 sem `HALT` por esse motivo; se houver pavio com expiração parcial, a transação
       fecha e o lote volta a operar.
 

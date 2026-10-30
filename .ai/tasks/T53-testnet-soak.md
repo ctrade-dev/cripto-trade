@@ -223,7 +223,9 @@ de 250 ms (a estratégia fica `UNREACHABLE` depois que a conexão keep-alive cai
 
 ### 3. Portfolio e runners (agente; limites combinados com o mantenedor no início da rodada)
 
-- Um portfolio de soak (`initialCapitalAmount` 1000 USDT, decisão 3) com um runner por app em BTCUSDT.
+- Um portfolio de soak (`initialCapitalAmount` 1000 USDT, decisão 3) com um runner por app em BTCUSDT:
+  `{"strategyId":"<ref>","symbol":"BTCUSDT","exchangeName":"BINANCE","allowedMarketDataSources":["BINANCE"]}`.
+  Sem `allowedMarketDataSources` a criação é recusada (T67).
 - `maxAllocationPercent` dos runners somando mais que 100% de propósito, para haver disputa de capital
   (`PATCH /api/admin/runners/{id}`).
 - O runner do caos com capital pequeno. A guarda de rejeições consecutivas (5) pode parar esse runner;

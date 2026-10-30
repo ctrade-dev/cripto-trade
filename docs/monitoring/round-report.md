@@ -20,7 +20,8 @@ A classificação dos `ERROR`/`WARN` e o veredito de cada critério continuam ma
 
 O passo 3 do script compara, hora a hora, as linhas do Loki com as que o ctrade registrou
 (`logback_events_total`, no Prometheus) e avisa quando há `ERROR`/`WARN` contados que não estão no Loki,
-com os minutos aproximados (T66). Cobertura abaixo de 95% ou "sem linha no Loki" pede o log do container
+com os minutos aproximados (T66). A contagem do Loki é a do próprio Loki (`count_over_time`), sem o limite
+de 5000 linhas da consulta que agrupa os padrões (T67). Cobertura abaixo de 95% ou "sem linha no Loki" pede o log do container
 (`docker compose logs --since <START> ctrade-app`) antes de fechar o critério 6.
 
 ## Entradas

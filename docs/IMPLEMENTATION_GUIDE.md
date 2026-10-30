@@ -1268,7 +1268,8 @@ A Transaction segue uma máquina de estados linear e determinística. Cada trans
 - SUBMITTED → PENDING (rollback)
 - PARTIAL → SUBMITTED (rollback)
 - PARTIAL → REJECTED (já teve execução)
-- PARTIAL → EXPIRED (já teve execução — usa CANCELED)
+- PARTIAL → EXPIRED (já teve execução — usa CANCELED). Quando a exchange informa `EXPIRED` para uma
+  ordem com execução parcial (ex.: MARKET que esgota o livro), a conciliação aplica `CANCELED` (T67).
 
 #### 6.1.3 Implementação da Máquina de Estados
 

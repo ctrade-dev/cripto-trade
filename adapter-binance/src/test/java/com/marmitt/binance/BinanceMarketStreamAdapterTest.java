@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.binance.filters.OrderFilterViolationException;
 import com.marmitt.binance.filters.SymbolFilterCache;
 import com.marmitt.binance.rest.HttpClientPort;
+import com.marmitt.core.dto.websocket.request.SendCancelOrderRequest;
 import com.marmitt.core.dto.websocket.request.SendOrderRequest;
 import com.marmitt.core.enums.OrderSide;
 import com.marmitt.core.enums.OrderType;
+import com.marmitt.core.exceptions.ExchangeQueryException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,7 +70,35 @@ class BinanceMarketStreamAdapterTest {
                 () -> adapter.formatMessage(order("0.00001", "1.00")));
     }
 
-    private record StubHttpClient(String body) implements HttpClientPort {
+    @Test
+    void cancelOrder_unknownOrderIsOrderNotFound() {
+        // T67: cancelamento de ordem que ja terminou na exchange (-2011 "Unknown order sent.").
+        BinanceMarketStreamAdapter adapter = adapter(new StubHttpClient(EXCHANGE_INFO_BTCUSDT,
+                new HttpClientPort.HttpResponse(400, "{\"code\":-2011,\"msg\":\"Unknown order sent.\"}")));
+
+        ExchangeQueryException e = assertThrows(ExchangeQueryException.class,
+                () -> adapter.cancelOrder(new SendCancelOrderRequest("BINANCE", "client-1", "BTCUSDT")));
+
+        assertEquals(ExchangeQueryException.ErrorType.ORDER_NOT_FOUND, e.errorType());
+    }
+
+    @Test
+    void cancelOrder_otherCancelRejectionKeepsHttpMapping() {
+        BinanceMarketStreamAdapter adapter = adapter(new StubHttpClient(EXCHANGE_INFO_BTCUSDT,
+                new HttpClientPort.HttpResponse(400,
+                        "{\"code\":-2011,\"msg\":\"Order was not canceled due to cancel restrictions.\"}")));
+
+        ExchangeQueryException e = assertThrows(ExchangeQueryException.class,
+                () -> adapter.cancelOrder(new SendCancelOrderRequest("BINANCE", "client-1", "BTCUSDT")));
+
+        assertEquals(ExchangeQueryException.ErrorType.INVALID_REQUEST, e.errorType());
+    }
+
+    private record StubHttpClient(String body, HttpResponse deleteResponse) implements HttpClientPort {
+        StubHttpClient(String body) {
+            this(body, null);
+        }
+
         @Override
         public HttpResponse get(String url, Map<String, String> headers) {
             return new HttpResponse(200, body);
@@ -90,6 +121,9 @@ class BinanceMarketStreamAdapterTest {
 
         @Override
         public HttpResponse delete(String url, Map<String, String> headers) throws IOException {
+            if (deleteResponse != null) {
+                return deleteResponse;
+            }
             throw new IOException("unused");
         }
     }

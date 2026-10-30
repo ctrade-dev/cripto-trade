@@ -160,6 +160,9 @@ O watchdog consulta a exchange e resolve sozinho na maioria dos casos. `CRITICAL
 - **Motivo do HALT (T66):** o motivo do `WATCHDOG_STUCK` termina em `lastFailure=<FailureReason>: <mensagem>`,
   a última falha da consulta. `EXCHANGE_QUERY_RETRYABLE_FAILURE` com `circuit open` ou `HTTP 5xx` = exchange
   instável; `HTTP 429`/`418` = limite de peso estourado pelo próprio ctrade (o IP fica banido por um tempo).
+  `INVALID_EXCHANGE_RESPONSE` = a exchange respondeu, mas a conciliação recusou a resposta: é bug do
+  ctrade, não da exchange (ex.: `Cannot expire from status: PARTIAL`, corrigido na T67). **Escalar** com o
+  `clientOrderId` e a mensagem; baixar o HALT não resolve, a transação continua presa.
 - **Confirmar:** a transação sai de `PENDING` (terminal ou `SUBMITTED`) e a verificação em `OK`.
 
 <a id="position-lock-orphan"></a>
