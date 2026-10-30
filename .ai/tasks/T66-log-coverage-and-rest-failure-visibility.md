@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 7, achados F9 e F10), T63 (VPS), T64 (`scripts/round_report.py`), T25 (watchdog).
-**Status:** Em revisão — PR #172; validada na VPS em 2026-10-29.
+**Status:** Concluído — PR #172; validada na VPS em 2026-10-29 e na rodada 8 da T53 (cobertura de 100%).
 
 ---
 

@@ -252,6 +252,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 | 5 | 2026-10-27 | 3 (apps T60) | ~1h55 | 5 apps / BTCUSDT, máquina local, banco limpo | **Aprovada.** T61 e T62 validadas; 30 idas e voltas (tendência, reversão, rompimento); zero `ERROR`; estado operacional `OK` o tempo todo. | Livro sem preenchimento: calibração da app (T60) |
 | 6 | 2026-10-28 | smoke VPS (T63) | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada.** 22 idas e voltas (tendência 7, reversão 10, rompimento 4, livro 1); zero `ERROR`; estado operacional `OK` o tempo todo; só a porta 22 aberta. | — |
 | 7 | 2026-10-28/29 | 3 (apps T60), 1ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critério 6). 349 fills, 348 iguais à exchange (o outro é a órfã de antes da rodada); Safe Mode `HALT` automático às 07:39Z por falha de ~1h40 na consulta REST de ordens da Binance; 4 `ERROR` perdidos num buraco de ~12h do Loki. Boot do restart `SUCCESS`; JVM estável. | F9, F10 abaixo → T66 |
+| 8 | 2026-10-30 | 3 (apps T60), 2ª de 24h | ~12h (encerrada) | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 4, 5 e 6). Pavio às 01:20:45Z (dia seguinte ao ataque à Binance): SELL de proteção a mercado preencheu em parte e o resto voltou `EXPIRED`; o ctrade não aceita `PARTIAL → EXPIRED`, a transação ficou presa e o watchdog pôs o portfolio em `HALT` às 01:23:54Z; ~60 `ERROR`/h até o fim. 67 fills, 67 iguais à exchange. Loki com 100% de cobertura (T66 validada). | F11, F12, F13 abaixo → T67 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -400,6 +401,55 @@ completada à mão onde o Loki não tinha dado.
   limite de peso (HTTP 418/429): não há métrica de status do cliente REST e os logs se perderam (F9).
   → T66 (visibilidade). A sensibilidade do watchdog a falha da exchange (HALT em 45s de consulta
   indisponível) é decisão de risco do mantenedor.
+
+### Rodada 8 — detalhes (2026-10-30 00:27:52Z → 12:23:18Z, VPS, encerrada antes das 24h)
+
+Versões: ctrade `1a07986` (com a T66), ctrade-strategies `b0fb837` (imagens `linux/arm64`, Loki 3.4.2,
+Prometheus 3.5.0). Portfolio `5e80ed6b` (1000 USDT), um runner por app com os limites da rodada 7 (40% cada,
+caos 20%, `maxLossPercentPerLot` 5%). Coleta com `scripts/round_report.py`. Contexto: começou ~4h depois do
+ataque à Binance de 29/10 (20:05Z, ~US$ 6,3 bi; depósitos e saques suspensos), com o mercado em queda.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | `/api/reconciliation` na janela: 67 fills, 67 iguais, 0 divergentes | OK |
+| 2 | DLQ | nenhuma entrada | OK |
+| 3 | Capital | `CAPITAL_*` `OK` no fim | OK |
+| 4 | Transação presa | SELL `45baab11` (livro) em `PARTIAL` desde 01:20:45Z; na exchange já `EXPIRED` | **Reprovado** (F11) |
+| 5 | Safe Mode / halt | `HALT` automático `WATCHDOG_STUCK` às 01:23:54Z, motivo com `lastFailure` (T66) | **Reprovado**: bug do ctrade (F11) |
+| 6 | `ERROR` | 667 no Loki e no Prometheus: 663 da F11, 2 do `EXPIRED` repetido, 1 `Unknown order sent`, 1 do HALT | **Reprovado** (F11) |
+| 7 | Estabilidade | heap mínimo 48.5 → 40.4 MB, threads 49 → 49, avaliação média 9.2 → 7.0 ms | OK (12h) |
+| 8 | Saldo no restart | sem restart na rodada; boot inicial `SUCCESS` | — |
+
+- **Largada:** a primeira, às 00:23Z, saiu sem `allowedMarketDataSources` nos runners (F12);
+  `MARKET_DATA_STALE` acusou `CRITICAL` em 3 min, sem nenhuma ordem. Banco limpo de novo e largada às
+  00:27:52Z.
+- **Ordens:** tendência 12 idas e voltas, reversão 11, rompimento 5, livro 3 (16 SELLs canceladas pelo
+  `SHOULD_CANCEL`), caos 1. Resultado realizado −63.25 USDT, quase todo do pavio.
+- **Pavio às 01:20:45Z:** 5 saídas de proteção `MAX_LOSS` no mesmo segundo (perdas de 5% a 15% do
+  custo). A SELL a mercado do livro preencheu 0.00107 de 0.00154 BTC (média 63 998) e a Binance expirou o
+  resto por falta de liquidez. A da tendência expirou sem preencher, e o `EXPIRED` chegou duas vezes.
+- **Logs (T66):** cobertura de 100% hora a hora; ERROR 667 × 667, WARN 13 397 × 13 401. Os ERROR das
+  01:20Z voltaram do Loki 11h depois, com o stack trace.
+- **Fim:** encerrada às 12:23:18Z (o `HALT` bloqueava toda BUY desde 01:23Z). Runners `HALTED`; `locked`
+  BTC e USDT = 0. Ficam no banco: o lote do livro em `CLOSING` (0.00047 BTC, travado pela SELL presa) e
+  um lote do caos `OPEN` (0.00056 BTC). Safe Mode `HALT` ativo; a próxima limpeza do banco zera tudo.
+
+**Achados:**
+
+- **F11 — Bug (alto): `EXPIRED` depois de preenchimento parcial não é conciliado.** `Transaction.expire()`
+  só aceita `PENDING`/`SUBMITTED`; a Binance expira o resto de uma ordem a mercado que esgota o livro
+  (e `EXPIRED_IN_MATCH` cai no mesmo status). A transação fica em `PARTIAL`, o lote fica travado, o
+  watchdog tenta a cada ciclo e aciona o `HALT`. Junto: `EXPIRED` repetido gera `ERROR` (`Cannot expire
+  from status: EXPIRED`), o `MarginReleaseBuilder` devolveria a reserva inteira de uma BUY `EXPIRED` com
+  execução parcial, e o cancelamento de uma ordem que já terminou na exchange (`-2011 Unknown order
+  sent`) sobe como `ERROR`. → T67.
+- **F12 — Operação (baixo): runner criado sem fonte de market data.** `POST /api/portfolios/{id}/runners`
+  sem `allowedMarketDataSources` aceita o runner e o `start` também; o runner nunca recebe tick. O
+  `MARKET_DATA_STALE` pegou em 3 min. Erro meu de operação (o roteiro da fase 1 traz o campo). → T67
+  decide entre recusar na criação ou só documentar no roteiro da VPS.
+- **F13 — Ferramenta (baixo): `round_report.py` acusa WARN "sem linha no Loki" quando a consulta bate no
+  limite.** Com mais de 5000 WARN, compara o Prometheus com as linhas devolvidas (cortadas no limite) e
+  não com a contagem do Loki (`count_over_time`). Na rodada: "8414 WARN sem linha" falso. → T67.
 
 ## Fontes
 

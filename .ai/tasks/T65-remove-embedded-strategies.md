@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T41 (estratégia fora do processo), T54 (catálogo por API), T60 (apps do soak).
-**Status:** Em andamento
+**Status:** Concluído — PR #171.
 
 ---
 
