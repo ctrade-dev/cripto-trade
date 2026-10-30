@@ -65,6 +65,31 @@ class RecoverStaleTransactionsStuckTriggerTest {
     }
 
     @Test
+    void haltReasonCarriesTheLastFailure() {
+        failing();
+        useCase.execute(REQUEST);
+        useCase.execute(REQUEST);
+        useCase.execute(REQUEST);
+
+        verify(trigger).activate(PORTFOLIO, SafeModeTrigger.WATCHDOG_STUCK,
+                "transactionId=" + STUCK_ID + " runnerId=" + RUNNER + " status=SUBMITTED cycles=3"
+                        + " lastFailure=EXCHANGE_QUERY_RETRYABLE_FAILURE: circuit open");
+    }
+
+    @Test
+    void unexpectedExceptionIsTheLastFailureTooAndLongMessagesAreCut() {
+        when(recoverStatus.execute(any())).thenThrow(new IllegalStateException("x".repeat(500)));
+        useCase.execute(REQUEST);
+        useCase.execute(REQUEST);
+        useCase.execute(REQUEST);
+
+        String expected = "IllegalStateException: " + "x".repeat(500);
+        verify(trigger).activate(PORTFOLIO, SafeModeTrigger.WATCHDOG_STUCK,
+                "transactionId=" + STUCK_ID + " runnerId=" + RUNNER + " status=SUBMITTED cycles=3"
+                        + " lastFailure=" + expected.substring(0, 200) + "...");
+    }
+
+    @Test
     void cycleThatResolvesTheTransactionResetsTheCount() {
         failing();
         useCase.execute(REQUEST);

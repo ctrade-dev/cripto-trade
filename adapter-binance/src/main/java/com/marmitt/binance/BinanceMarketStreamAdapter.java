@@ -10,6 +10,7 @@ import com.marmitt.binance.filters.SymbolFilterCache;
 import com.marmitt.binance.processor.receive.BinanceReceivedMessageProcessor;
 import com.marmitt.binance.processor.send.BinanceSenderMessageProcessor;
 import com.marmitt.binance.rest.BinanceAccountMapper;
+import com.marmitt.binance.rest.BinanceHttpErrors;
 import com.marmitt.binance.rest.BinanceOrderMapper;
 import com.marmitt.binance.rest.BinanceRestRequestBuilder;
 import com.marmitt.binance.rest.RestRequest;
@@ -272,13 +273,7 @@ public class BinanceMarketStreamAdapter implements
     }
 
     private ExchangeQueryException queryException(HttpClientPort.HttpResponse response, String operation) {
-        ExchangeQueryException.ErrorType errorType = switch (response.statusCode()) {
-            case 400 -> ExchangeQueryException.ErrorType.INVALID_REQUEST;
-            case 401, 403 -> ExchangeQueryException.ErrorType.AUTH;
-            case 429 -> ExchangeQueryException.ErrorType.RATE_LIMIT;
-            default -> ExchangeQueryException.ErrorType.TEMPORARY;
-        };
-        return new ExchangeQueryException("BINANCE", errorType,
+        return new ExchangeQueryException("BINANCE", BinanceHttpErrors.errorType(response.statusCode()),
                 operation + " failed HTTP " + response.statusCode() + ": " + response.body());
     }
 }

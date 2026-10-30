@@ -18,6 +18,11 @@ python3 ~/ctrade/scripts/round_report.py --start <START> --env-file ~/ctrade/dep
 
 A classificação dos `ERROR`/`WARN` e o veredito de cada critério continuam manuais (passos 3 e 5).
 
+O passo 3 do script compara, hora a hora, as linhas do Loki com as que o ctrade registrou
+(`logback_events_total`, no Prometheus) e avisa quando há `ERROR`/`WARN` contados que não estão no Loki,
+com os minutos aproximados (T66). Cobertura abaixo de 95% ou "sem linha no Loki" pede o log do container
+(`docker compose logs --since <START> ctrade-app`) antes de fechar o critério 6.
+
 ## Entradas
 
 | O quê | Valor |

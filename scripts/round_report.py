@@ -64,8 +64,17 @@ class Sources:
             "limit": LOKI_LIMIT, "direction": "forward"})
         return [(labels["stream"], line) for labels in data["data"]["result"] for _, line in labels["values"]]
 
+    def loki_instant(self, query, at):
+        data = self._get(self.loki + "/loki/api/v1/query", {"query": query, "time": int(at.timestamp() * 1e9)})
+        return data["data"]["result"]
+
     def prom(self, query, at):
         data = self._get(self.prometheus + "/api/v1/query", {"query": query, "time": at.timestamp()})
+        return data["data"]["result"]
+
+    def prom_series(self, query, start, end, step):
+        data = self._get(self.prometheus + "/api/v1/query_range", {
+            "query": query, "start": start.timestamp(), "end": end.timestamp(), "step": step})
         return data["data"]["result"]
 
 
@@ -144,13 +153,68 @@ def log_pattern(line):
     return NUMBERS.sub("#", " ".join(line.split()))[:200]
 
 
+def minute_ranges(result):
+    """Minutos com incremento num query_range de 1 em 1 min, agrupados em intervalos."""
+    minutes = sorted({int(float(at)) // 60 for series in result for at, value in series["values"]
+                      if float(value) > 0.1})
+    ranges = []
+    for minute in minutes:
+        if ranges and minute == ranges[-1][1] + 1:
+            ranges[-1][1] = minute
+        else:
+            ranges.append([minute, minute])
+
+    def label(minute):
+        return datetime.fromtimestamp(minute * 60, timezone.utc).strftime("%m-%d %H:%M")
+    return [label(first) if first == last else f"{label(first)}–{label(last)[-5:]}" for first, last in ranges]
+
+
+def section_coverage(src, start, end, out):
+    """T66: linhas que o Loki tem contra as que o ctrade registrou (logback_events_total, Prometheus).
+
+    O Loki pode perder logs sem nenhum erro (rodada 7 da T53); sem esta conta, "ERROR: 0" no Loki parece
+    rodada limpa. Uma consulta instantânea por hora nas duas fontes, no mesmo instante.
+    """
+    hours = int((end - start).total_seconds() // 3600)
+    if hours < 1:
+        out.append("Cobertura do Loki: rodada com menos de 1h, sem comparação por hora.\n")
+        return
+    rows = []
+    for k in range(hours - 1, -1, -1):
+        at = datetime.fromtimestamp(end.timestamp() - k * 3600, timezone.utc)
+        got = first_value(src.loki_instant('sum(count_over_time({app="ctrade"}[1h]))', at)) or 0.0
+        expected = first_value(src.prom("sum(increase(logback_events_total[1h]))", at)) or 0.0
+        rows.append((at, got, expected))
+    gaps = [row for row in rows if row[2] >= 1 and row[1] < 0.95 * row[2]]
+    total = sum(row[2] for row in rows)
+    covered = min(1.0, sum(row[1] for row in rows) / total) if total else 1.0
+    out.append(f"**Cobertura do Loki: {covered:.0%} das linhas registradas pelo ctrade "
+               f"({hours} horas comparadas, {len(gaps)} abaixo de 95%).**\n")
+    if gaps:
+        out.append("| Hora (fim) | Loki | ctrade (Prometheus) |\n|---|---|---|")
+        out.extend(f"| {iso(at)} | {got:.0f} | {expected:.0f} |" for at, got, expected in gaps)
+        out.append("")
+
+
 def section_logs(src, start, end, out):
     out.append("## 4. Logs (Loki)\n")
+    section_coverage(src, start, end, out)
+    seconds = math.ceil((end - start).total_seconds())
     for level in ("ERROR", "WARN"):
         lines = src.loki_range(f'{{app=~".+", level="{level}"}}', start, end)
         groups = collections.Counter(log_pattern(line) for _, line in lines)
         capped = " (limite da consulta atingido: há mais linhas)" if len(lines) >= LOKI_LIMIT else ""
-        out.append(f"**{level}: {len(lines)} linhas, {len(groups)} padrões{capped}.**\n")
+        logged = first_value(src.prom(
+            f'sum(increase(logback_events_total{{level="{level.lower()}"}}[{seconds}s]))', end)) or 0.0
+        out.append(f"**{level}: {len(lines)} linhas no Loki, {len(groups)} padrões{capped}; "
+                   f"o ctrade registrou {logged:.0f}.**\n")
+        if round(logged) > len(lines):
+            # Janela de 2 min de 1 em 1 min: um incremento entre duas coletas cai em pelo menos uma janela.
+            ranges = minute_ranges(src.prom_series(
+                f'sum(increase(logback_events_total{{level="{level.lower()}"}}[2m]))', start, end, 60))
+            shown = ", ".join(ranges[:12]) + (f" e mais {len(ranges) - 12} intervalos" if len(ranges) > 12 else "")
+            out.append(f"> **{round(logged) - len(lines)} {level} sem linha no Loki** (minutos aproximados: "
+                       f"{shown or '-'}). Buscar no log do container antes de fechar o critério.\n")
         out.extend(f"- {n}× `{pattern}`" for pattern, n in groups.most_common(15))
         out.append("")
 

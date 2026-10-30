@@ -23,7 +23,9 @@ spring:
 
 logging:
   level:
-    com.marmitt: TRACE
+    # T66: DEBUG por padrao. TRACE (acesso ao banco a cada ciclo) era ~75% do volume e girava o log do
+    # container em ~1h30; quando precisar, LOGGING_LEVEL_COM_MARMITT=TRACE.
+    com.marmitt: DEBUG
     org.springframework: INFO
     org.apache: INFO
   pattern:
