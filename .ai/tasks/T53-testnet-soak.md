@@ -238,6 +238,10 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 
 ### 4. No fim da rodada (agente)
 
+Na VPS, `deploy/vps/round-start.sh` faz os passos 1 a 3 e `deploy/vps/round-close.sh` fecha a rodada
+sozinho no horário (halt, cancelamento das ordens em voo, `locked`, conciliação, `/stats` e rascunho do
+relatório); `deploy/vps/round-watch.sh` acusa anomalia durante a rodada (`deploy/vps/README.md`).
+
 - `GET http://localhost:8095/stats` (e o do trend): contagem por decisão e por falha (`FAULT_<tipo>`).
   Entra no relatório da rodada para separar as falhas de propósito das inesperadas.
 - Derrubar uma app (`docker compose stop chaos`) deve deixar só o runner dela em HOLD
