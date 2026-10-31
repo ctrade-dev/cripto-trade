@@ -255,6 +255,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 | 6 | 2026-10-28 | smoke VPS (T63) | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada.** 22 idas e voltas (tendência 7, reversão 10, rompimento 4, livro 1); zero `ERROR`; estado operacional `OK` o tempo todo; só a porta 22 aberta. | — |
 | 7 | 2026-10-28/29 | 3 (apps T60), 1ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critério 6). 349 fills, 348 iguais à exchange (o outro é a órfã de antes da rodada); Safe Mode `HALT` automático às 07:39Z por falha de ~1h40 na consulta REST de ordens da Binance; 4 `ERROR` perdidos num buraco de ~12h do Loki. Boot do restart `SUCCESS`; JVM estável. | F9, F10 abaixo → T66 |
 | 8 | 2026-10-30 | 3 (apps T60), 2ª de 24h | ~12h (encerrada) | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 4, 5 e 6). Pavio às 01:20:45Z (dia seguinte ao ataque à Binance): SELL de proteção a mercado preencheu em parte e o resto voltou `EXPIRED`; o ctrade não aceita `PARTIAL → EXPIRED`, a transação ficou presa e o watchdog pôs o portfolio em `HALT` às 01:23:54Z; ~60 `ERROR`/h até o fim. 67 fills, 67 iguais à exchange. Loki com 100% de cobertura (T66 validada). | F11, F12, F13 abaixo → T67 |
+| 9 | 2026-10-30/31 | 3 (apps T60), 3ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 24h limpa). T67 validada em operação: zero `ERROR`, nenhum `HALT`, estado operacional `OK` a rodada toda; 532 fills, 532 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. | F14 abaixo |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -452,6 +453,46 @@ ataque à Binance de 29/10 (20:05Z, ~US$ 6,3 bi; depósitos e saques suspensos),
 - **F13 — Ferramenta (baixo): `round_report.py` acusa WARN "sem linha no Loki" quando a consulta bate no
   limite.** Com mais de 5000 WARN, compara o Prometheus com as linhas devolvidas (cortadas no limite) e
   não com a contagem do Loki (`count_over_time`). Na rodada: "8414 WARN sem linha" falso. → T67.
+
+### Rodada 9 — detalhes (2026-10-30 13:11:20Z → 2026-10-31 13:11:20Z, VPS)
+
+Versões: ctrade `ed5ba59` (com a T67), ctrade-strategies `b0fb837` (imagens `linux/arm64`, Loki 3.4.2,
+Prometheus 3.5.0). Portfolio `9aea13ca` (1000 USDT), um runner por app com os limites da rodada 7. Coleta
+com `scripts/round_report.py` na janela exata. Monitor na VPS (`~/ctrade-watch.sh`) a cada 5 min, com
+checkpoint a cada 4h.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | `/api/reconciliation` da largada até o fechamento: 532 fills, 532 iguais, 0 divergentes, 0 só de um lado | OK |
+| 2 | DLQ | nenhuma entrada | OK |
+| 3 | Capital | `CAPITAL_*` `OK` no fim | OK |
+| 4 | Transação presa | `TRANSACTION_STUCK` `OK` em todos os checkpoints e no fim | OK |
+| 5 | Safe Mode / halt | nenhum evento automático; o portfolio ficou em `NORMAL` | OK |
+| 6 | `ERROR` | 0 no Loki e 0 no Prometheus | OK |
+| 7 | Estabilidade | heap mínimo 46.0 → 40.9 MB, threads 49 → 48, avaliação média 9.4 → 8.8 ms (máx. 420 → 391 ms) | OK |
+| 8 | Saldo no restart | sem restart na rodada; boot inicial `SUCCESS` | — |
+
+- **Largada:** a criação de runner sem `allowedMarketDataSources` devolveu `400` na VPS (T67).
+- **Ordens:** tendência 102 idas e voltas, reversão 107, rompimento 32, livro 24 (509 SELLs canceladas pelo
+  `SHOULD_CANCEL` da app), caos 1 BUY. Resultado realizado −1.78 USDT. BTC entre ~76 500 e ~78 100, sem
+  pavio; nenhuma saída de proteção e nenhuma expiração parcial (o caminho novo da T67 não foi exercido em
+  operação, só nos testes).
+- **WARN:** 2782 no Loki × 2782 no Prometheus. Todos do caos: ~400 de cada falha (`ERROR_RESPONSE`,
+  `TIMEOUT`, `DISCONNECT`, `MALFORMED`, `INCOHERENT`); o ctrade tratou como `HOLD`, descartou a SELL acima
+  do lote e ignorou o cancelamento de transação que não existe.
+- **Fim:** o monitor caiu junto com a sessão do agente pouco antes do fim, e o fechamento só rodou às
+  16:28Z (runners seguiram `ACTIVE` ~3h17 além da janela, sem incidente: 0 `ERROR`, conciliação 532/532
+  até 16:35Z). Runners em `HALTED`; 3 LIMIT no livro canceladas pelo operador; `locked` BTC e USDT = 0.
+  Ficam lotes `OPEN` do livro (0.00154 BTC) e do caos (0.00051 BTC); a próxima limpeza do banco zera tudo.
+
+**Achados:**
+
+- **F14 — Estratégia (baixo): LIMIT longe do preço deixa o runner parado por horas.** Com
+  `maxPendingOrders` 1, a BUY da tendência (76 828) e da reversão (76 962) ficaram no livro de 14:38Z a
+  ~17:30Z depois que o preço subiu, e a saída do rompimento (*trailing stop* como SELL LIMIT a 78 029)
+  ficou acima do preço depois que ele caiu. As apps não reposicionam nem cancelam ordem velha. É
+  comportamento das apps de estratégia (decisão delas, fora do ctrade); não reprova a rodada. Registrar
+  para a calibração das apps (T60).
 
 ## Fontes
 

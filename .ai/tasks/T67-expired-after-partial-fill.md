@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T53 (rodada 8, achados F11, F12 e F13), T25 (watchdog), T44 (saída de proteção), T66
 (`round_report.py`).
-**Status:** Concluído — PR #173; falta só a validação na próxima rodada da T53 (último critério).
+**Status:** Concluído — PR #173; validada na rodada 9 da T53 (2026-10-31).
 
 ---
 
@@ -145,8 +145,9 @@ fluxo, um caminho). O `EXPIRED` continua significando "nenhuma execução", com 
       13 414 no Prometheus, sem o falso "8414 WARN sem linha".
 - [x] `docs/OPERATIONS_RUNBOOK.md` (`TRANSACTION_STUCK`), IG 6.1.2, flow map da conciliação,
       `docs/monitoring/round-report.md`, T53 e roteiro da VPS atualizados.
-- [ ] Próxima rodada da T53 sem `HALT` por esse motivo; se houver pavio com expiração parcial, a transação
-      fecha e o lote volta a operar.
+- [x] Próxima rodada da T53 sem `HALT` por esse motivo; se houver pavio com expiração parcial, a transação
+      fecha e o lote volta a operar. Rodada 9 (24h): zero `ERROR`, nenhum `HALT`, 532 fills iguais à exchange.
+      Não houve pavio nem expiração parcial; o caminho novo fica coberto pelos testes.
 
 ## Fontes
 
