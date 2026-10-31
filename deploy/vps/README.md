@@ -91,23 +91,24 @@ migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando 
 
 ## Rodada da T53 na VPS
 
-1. Limpar o banco (dado de testnet é descartável). Antes, **cancelar as ordens que descansam no livro**
-   (`GET /api/runners/<id>/transactions` → em voo → `POST .../orders/<tx>/cancel`): o `halt` não as
-   cancela, e depois da limpeza o ctrade não as conhece mais. Uma que preencha durante a rodada seguinte
-   aparece como trade só na exchange. Conferir com `GET /api/exchanges/BINANCE/balances?asset=BTC`
-   (`locked` = 0).
-   ```bash
-   docker compose stop ctrade-app
-   ./reset-testnet-db.sh --force       # recusa com o ctrade no ar
-   ./up.sh && ./register-strategies.sh
-   ```
-2. Com o túnel aberto, seguir o roteiro da T53 a partir do portfolio e dos runners
-   (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60", passo 3). As apps já estão
-   cadastradas com `baseUrl` `http://<serviço>:8080/v1`. O runner é criado com a fonte de preço
-   (`"allowedMarketDataSources":["BINANCE"]`); sem ela a criação é recusada (T67).
-3. No fim: relatório da T59 com `./versions.sh` no cabeçalho. A coleta sai de
-   `python3 ~/ctrade/scripts/round_report.py --start <início> --env-file .env --portfolio <id>` (T64). Estatísticas das apps (`/stats`), que não
-   têm porta publicada: `docker compose exec -T chaos python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/stats').read().decode())"`.
+A rodada é largada e fechada por scripts, sem depender da sessão de quem opera. Estado da rodada em
+`~/round/` (`ROUND_DIR`): `round.env` (número, início, fim, portfolio, runners), `close.log`, `report.md`,
+`stats-<app>.json` e `CLOSED` quando terminou.
+
+1. **Largada:** `./round-start.sh <número> <horas>`. Recusa se houver rodada sem `CLOSED` ou saldo
+   `locked` na exchange (ordem no livro de antes da limpeza vira trade só na exchange). Para o ctrade,
+   limpa o banco (`./reset-testnet-db.sh`, só testnet), sobe tudo, cadastra as apps, cria o portfolio de
+   1000 USDT e um runner por app em BTCUSDT com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
+   1 ordem pendente, perda máxima de 5% por lote) e liga os runners. Os limites e o roteiro completo
+   estão na T53 (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60").
+2. **Durante:** `./round-watch.sh [segundos]` imprime a cada 5 min estado operacional, `ERROR` desde a
+   largada, fills e status dos runners. Sai com 2 na primeira anomalia (estado fora de `OK`, algum
+   `ERROR`, runner fora de `ACTIVE`) e com `CHECKPOINT` ao fim do lote (padrão 4h).
+3. **Fechamento:** a largada deixa `./round-close.sh` dormindo até o fim, desacoplado (`setsid nohup`).
+   Ele para os runners, cancela as ordens dos runners da rodada que ainda estão em voo (o `halt` não
+   cancela), confere `locked` e a conciliação, lê o `/stats` das apps e gera o rascunho da T59 com
+   `scripts/round_report.py` (T64). Classificar e assinar a rodada fica com quem opera, com `./versions.sh`
+   no cabeçalho. Rodado à mão depois do fim, fecha na hora.
 4. Derrubar uma app para o teste de indisponibilidade: `docker compose stop chaos`.
 
 ## Memória e disco
