@@ -260,6 +260,7 @@ relatório); `deploy/vps/round-watch.sh` acusa anomalia durante a rodada (`deplo
 | 7 | 2026-10-28/29 | 3 (apps T60), 1ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critério 6). 349 fills, 348 iguais à exchange (o outro é a órfã de antes da rodada); Safe Mode `HALT` automático às 07:39Z por falha de ~1h40 na consulta REST de ordens da Binance; 4 `ERROR` perdidos num buraco de ~12h do Loki. Boot do restart `SUCCESS`; JVM estável. | F9, F10 abaixo → T66 |
 | 8 | 2026-10-30 | 3 (apps T60), 2ª de 24h | ~12h (encerrada) | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 4, 5 e 6). Pavio às 01:20:45Z (dia seguinte ao ataque à Binance): SELL de proteção a mercado preencheu em parte e o resto voltou `EXPIRED`; o ctrade não aceita `PARTIAL → EXPIRED`, a transação ficou presa e o watchdog pôs o portfolio em `HALT` às 01:23:54Z; ~60 `ERROR`/h até o fim. 67 fills, 67 iguais à exchange. Loki com 100% de cobertura (T66 validada). | F11, F12, F13 abaixo → T67 |
 | 9 | 2026-10-30/31 | 3 (apps T60), 3ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 24h limpa). T67 validada em operação: zero `ERROR`, nenhum `HALT`, estado operacional `OK` a rodada toda; 532 fills, 532 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. | F14 abaixo |
+| 10 | 2026-10-31/11-01 | 3 (apps T60), 4ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (2ª de 24h limpa seguida). Zero `ERROR`, nenhum evento automático, estado operacional `OK` a rodada toda; 168 fills, 168 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. Largada e fechamento pelos scripts da VPS (PR #174), fechamento no horário. | F14 de novo (rompimento) |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -497,6 +498,36 @@ checkpoint a cada 4h.
   ficou acima do preço depois que ele caiu. As apps não reposicionam nem cancelam ordem velha. É
   comportamento das apps de estratégia (decisão delas, fora do ctrade); não reprova a rodada. Registrar
   para a calibração das apps (T60).
+
+### Rodada 10 — detalhes (2026-10-31 16:43:06Z → 2026-11-01 16:43:06Z, VPS)
+
+Versões: ctrade `ed5ba59`, ctrade-strategies `b0fb837` (as da rodada 9). Portfolio `61ca4c8d` (1000 USDT),
+limites da rodada 7. Largada pela primeira versão de `round-start.sh` e fechamento por `round-close.sh`,
+que acordou às 16:43:06Z sem a sessão do agente; monitor `round-watch.sh` a cada 5 min enquanto a máquina
+do mantenedor estava ligada (desligada à noite: a conferência da noite foi feita de uma vez de manhã, pelas
+métricas, eventos e conciliação).
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | `/api/reconciliation` na janela exata: 168 fills, 168 iguais, 0 divergentes, 0 só de um lado | OK |
+| 2 | DLQ | nenhuma entrada | OK |
+| 3 | Capital | `CAPITAL_*` `OK` no fim | OK |
+| 4 | Transação presa | `TRANSACTION_STUCK` `OK` em todas as conferências e no fim | OK |
+| 5 | Safe Mode / halt | nenhum evento automático na rodada; portfolio em `NORMAL` | OK |
+| 6 | `ERROR` | 0 no Loki e 0 no Prometheus | OK |
+| 7 | Estabilidade | heap mínimo 45.1 → 41.1 MB, threads 49 → 48, avaliação média 9.1 → 8.4 ms (máx. 370 → 261 ms); sem restart do container | OK |
+| 8 | Saldo no restart | sem restart na rodada; boot inicial `SUCCESS` | — |
+
+- **Ordens:** tendência 36 idas e voltas, reversão 23, livro 17 (488 SELLs canceladas pelo `SHOULD_CANCEL`),
+  rompimento 7, caos 1 BUY. Resultado realizado +1.28 USDT. Mercado parado (BTC ~77 500–77 800, faixa de
+  100–200 USDT por hora na noite de sábado), por isso menos fills que na rodada 9.
+- **WARN:** 2939 no Loki × 2939 no Prometheus, todos do caos (falhas de propósito tratadas como `HOLD`,
+  SELL acima do lote descartada, cancelamento de transação que não existe ignorado) e 1 SELL sem lote.
+- **Linha do tempo:** só ações do operador. As 2 "fim da rodada 0" às 17:07Z são o teste do
+  `round-close.sh` com runners fictícios (halt 404), sem efeito na rodada.
+- **Fim:** runners `HALTED` às 16:43:06Z; 4 LIMIT canceladas (202); em voo 0; `locked` BTC e USDT = 0.
+  Ficam lotes `OPEN` do livro (0.00153 BTC) e do caos (0.00051 BTC).
+- **F14 de novo:** a SELL do rompimento ficou acima do preço de 18:47Z em diante, no mercado parado.
 
 ## Fontes
 
