@@ -103,6 +103,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
     private final BuySignalHandler buySignalHandler;
     private final SellSignalHandler sellSignalHandler;
     private final CancelSignalHandler cancelSignalHandler;
+    private final OrderDispatchPort orderDispatch;
     private final SafeModeHandler safeModeHandler;
     private final PositionProtectionHandler protectionHandler;
     private final ErrorNotificationPort notification;
@@ -143,6 +144,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         this.buySignalHandler = new BuySignalHandler(this.tradeIntentFactory, orderDispatch);
         this.sellSignalHandler = new SellSignalHandler(strategyRunnerRepository, this.tradeIntentFactory, orderDispatch);
         this.cancelSignalHandler = new CancelSignalHandler(strategyRunnerRepository, this.tradeIntentFactory, orderDispatch);
+        this.orderDispatch = orderDispatch;
         this.safeModeHandler = new SafeModeHandler(strategyRunnerRepository, this.tradeIntentFactory,
                 this.cancelSignalHandler);
         this.protectionHandler = new PositionProtectionHandler(strategyRunnerRepository, this.tradeIntentFactory,
@@ -428,6 +430,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
     @Override
     public void cancelOrder(UUID runnerId, UUID transactionId) {
         StrategyRunner runner = loadRunner(runnerId);
+        requireDispatchOpen(runner);
         switch (cancelSignalHandler.handle(runner, transactionId, "admin FORCE_CANCEL")) {
             case DISPATCHED, NOT_CANCELABLE -> { }
             case NOT_FOUND -> throw new RunnerOperationException("ORDER_NOT_FOUND",
@@ -464,6 +467,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                     + runner.getStatus() + (runner.isReconciling() ? " (reconciling)" : "")
                     + " cannot sell - resume it first");
         }
+        requireDispatchOpen(runner);
         BigDecimal referencePrice = latestPrices.find(runner.getSymbol())
                 .orElseThrow(() -> new RunnerOperationException("NO_MARKET_PRICE",
                         "No market price yet for " + runner.getSymbol() + " - wait for the first tick"));
@@ -472,6 +476,14 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         processTradeSignal(runner,
                 tradeIntentFactory.liquidationSignal(ADMIN_SOURCE, position, "admin FORCE_CLOSE_POSITION"),
                 referencePrice, tradeIntentFactory.liquidationOrderType());
+    }
+
+    /** O operador precisa saber que nada foi enviado; a estrategia e o Safe Mode tentam de novo no tick seguinte. */
+    private void requireDispatchOpen(StrategyRunner runner) {
+        if (orderDispatch.isBlocked(runner.getExchangeId())) {
+            throw new RunnerOperationException("EXCHANGE_UNAVAILABLE", "Order dispatch to " + runner.getExchangeId()
+                    + " is blocked by a lost connection - nothing was sent");
+        }
     }
 
     private StrategyRunner loadRunner(UUID runnerId) {

@@ -74,6 +74,19 @@ public class WebSocketConnectionManager {
         return currentConnectionResult;
     }
 
+    /**
+     * O evento veio de uma conexao que ja foi substituida (close ou falha tardia de um socket antigo)?
+     * Esse evento nao diz nada sobre a conexao atual.
+     */
+    public boolean isSupersededBy(UUID eventConnectionId) {
+        ConnectionStatus status = currentConnectionResult.status();
+        if (status != ConnectionStatus.RECONNECTING && status != ConnectionStatus.CONNECTED) {
+            return false;
+        }
+        UUID current = currentConnectionResult.connectionId();
+        return current != null && !current.equals(eventConnectionId);
+    }
+
     public void onMessageReceived() {
         currentConnectionStats.recordMessage();
     }

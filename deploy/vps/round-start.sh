@@ -51,4 +51,5 @@ PORTFOLIO=$PID
 RUNNERS="${RUNNERS# }"
 ENV
 ROUND_DIR=$ROUND_DIR setsid nohup ./round-close.sh > "$ROUND_DIR/close.log" 2>&1 < /dev/null &
+ROUND_DIR=$ROUND_DIR setsid nohup ./round-watch.sh > "$ROUND_DIR/watch.log" 2>&1 < /dev/null &
 cat "$ROUND_DIR/round.env"

@@ -92,7 +92,7 @@ migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando 
 ## Rodada da T53 na VPS
 
 A rodada é largada e fechada por scripts, sem depender da sessão de quem opera. Estado da rodada em
-`~/round/` (`ROUND_DIR`): `round.env` (número, início, fim, portfolio, runners), `close.log`, `report.md`,
+`~/round/` (`ROUND_DIR`): `round.env` (número, início, fim, portfolio, runners), `watch.log`, `ANOMALY`, `close.log`, `report.md`,
 `stats-<app>.json` e `CLOSED` quando terminou.
 
 1. **Largada:** `./round-start.sh <número> <horas>`. Recusa se houver rodada sem `CLOSED` ou saldo
@@ -101,9 +101,10 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
    1000 USDT e um runner por app em BTCUSDT com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
    1 ordem pendente, perda máxima de 5% por lote) e liga os runners. Os limites e o roteiro completo
    estão na T53 (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60").
-2. **Durante:** `./round-watch.sh [segundos]` imprime a cada 5 min estado operacional, `ERROR` desde a
-   largada, fills e status dos runners. Sai com 2 na primeira anomalia (estado fora de `OK`, algum
-   `ERROR`, runner fora de `ACTIVE`) e com `CHECKPOINT` ao fim do lote (padrão 4h).
+2. **Durante:** a largada deixa `./round-watch.sh` rodando até o fim, desacoplado. A cada 5 min ele grava em
+   `watch.log` o estado operacional, `ERROR` desde a largada, fills e status dos runners. Cada mudança nas
+   anomalias (estado fora de `OK`, algum `ERROR`, runner fora de `ACTIVE`) vai para o arquivo `ANOMALY` e para o
+   Discord (`DISCORD_WEBHOOK_URL`). Para conferir: `tail ~/round/watch.log; cat ~/round/ANOMALY`.
 3. **Fechamento:** a largada deixa `./round-close.sh` dormindo até o fim, desacoplado (`setsid nohup`).
    Ele para os runners, cancela as ordens dos runners da rodada que ainda estão em voo (o `halt` não
    cancela), confere `locked` e a conciliação, lê o `/stats` das apps e gera o rascunho da T59 com

@@ -28,6 +28,12 @@ public class ConnectionFailedHandler implements ConnectionFailedPort {
         try {
             ConnectionKey key = new ConnectionKey(event.exchange(), event.channel());
             WebSocketConnectionManager manager = connectionRepository.getConnection(key);
+            if (manager.isSupersededBy(event.connectionId())) {
+                log.debug("Ignoring stale failed event for old connection={} (manager is {} with connection={})",
+                        event.connectionId(), manager.getConnectionResult().status(),
+                        manager.getConnectionResult().connectionId());
+                return;
+            }
 
             ConnectionResultDto failure = event.cause() != null
                     ? ConnectionResultDto.failure(event.reason(), event.connectionId(), event.cause())

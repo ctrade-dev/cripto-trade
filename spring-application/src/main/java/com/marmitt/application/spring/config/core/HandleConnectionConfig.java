@@ -93,7 +93,8 @@ public class HandleConnectionConfig {
 
     @Bean
     public ConnectionLostOrderDispatchGuard connectionLostOrderDispatchGuard(
-            ExchangeAdapterRepositoryPort adapterRepository) {
-        return new ConnectionLostOrderDispatchGuard(adapterRepository);
+            ExchangeAdapterRepositoryPort adapterRepository,
+            WebSocketConnectionRepositoryPort connectionRepository) {
+        return new ConnectionLostOrderDispatchGuard(adapterRepository, connectionRepository);
     }
 }

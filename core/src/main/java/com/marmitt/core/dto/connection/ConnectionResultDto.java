@@ -90,28 +90,18 @@ public record ConnectionResultDto(
     }
 
     public static ConnectionResultDto failure(String reason, Throwable cause) {
-        Map<String, Object> metadata = Map.of(
-                "error", reason,
-                "errorMessage", cause.getMessage(),
-                "errorType", cause.getClass().getSimpleName()
-        );
-        
-        return new ConnectionResultDto(
-                ConnectionStatus.ERROR,
-                reason,
-                Instant.now(),
-                null,
-                metadata
-        );
+        return failure(reason, null, cause);
     }
 
+    /** {@code cause} pode vir sem mensagem (ex.: {@code EOFException} de conexao cortada, T68). */
     public static ConnectionResultDto failure(String reason, UUID connectionId, Throwable cause) {
+        String errorType = cause.getClass().getSimpleName();
         Map<String, Object> metadata = Map.of(
                 "error", reason,
-                "errorMessage", cause.getMessage(),
-                "errorType", cause.getClass().getSimpleName()
+                "errorMessage", cause.getMessage() != null ? cause.getMessage() : errorType,
+                "errorType", errorType
         );
-        
+
         return new ConnectionResultDto(
                 ConnectionStatus.ERROR,
                 reason,

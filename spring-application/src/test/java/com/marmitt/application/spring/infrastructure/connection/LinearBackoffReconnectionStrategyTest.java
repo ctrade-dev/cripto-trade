@@ -56,6 +56,42 @@ class LinearBackoffReconnectionStrategyTest {
         assertEquals(List.of(EXCHANGE), reconnected);
     }
 
+    /** O coordenador de market data chegou antes: a tarefa nao abre outro socket nem escala para falha critica (T68). */
+    @Test
+    void scheduledAttemptDoesNothingWhenTheConnectionIsAlreadyBack() throws InterruptedException {
+        List<String> reconnected = new ArrayList<>();
+        List<Object> published = new ArrayList<>();
+        ConnectMarketStreamPort marketPort = (name, req) -> {
+            reconnected.add(name);
+            return null;
+        };
+        ConnectUserStreamPort userPort = name -> {
+            reconnected.add(name);
+            return Optional.empty();
+        };
+        WebSocketConnectionManager manager = WebSocketConnectionManager.forExchange(EXCHANGE);
+        manager.addRequestToHistory(new StreamSubscriptionRequest(EXCHANGE, List.of(), StreamAction.SUBSCRIBE));
+        manager.setConnectionResult(ConnectionResultDto.connecting());
+        manager.setConnectionResult(ConnectionResultDto.connected("up", UUID.randomUUID()));
+        StubConnectionRepository connectionRepo = new StubConnectionRepository(null) {
+            @Override
+            public WebSocketConnectionManager getConnection(ConnectionKey key) {
+                return manager;
+            }
+        };
+
+        LinearBackoffReconnectionStrategy strategy = new LinearBackoffReconnectionStrategy(
+                connectionRepo, new StubAdapterRepo(), new StubWebSocketRegistry(),
+                marketPort, userPort, published::add, 0, 10);
+
+        strategy.scheduleReconnect(EXCHANGE, StreamChannel.MARKET, UUID.randomUUID(), 1);
+        strategy.scheduleReconnect(EXCHANGE, StreamChannel.USER_DATA, UUID.randomUUID(), 1);
+        Thread.sleep(200);
+
+        assertTrue(reconnected.isEmpty());
+        assertTrue(published.isEmpty());
+    }
+
     @Test
     void scheduleReconnect_publishesCriticalEvent_whenMaxAttemptsExceeded() throws InterruptedException {
         List<Object> publishedEvents = new ArrayList<>();

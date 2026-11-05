@@ -145,6 +145,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         checks.add(strategyVerificationFailed());
         checks.add(marketDataStale(active, runners, now));
         checks.add(streamDisconnected(active));
+        checks.add(orderDispatchBlocked(active));
         checks.add(restCircuitOpen());
         if (exchange.enabled()) {
             checks.add(exchangeBalanceDivergence());
@@ -438,6 +439,25 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         }
         return check("STREAM_DISCONNECTED", OperationalSeverity.CRITICAL,
                 subjects.size() + " stream(s) needed by ACTIVE runners not connected", subjects, null);
+    }
+
+    /**
+     * Envio de ordens bloqueado por conexao perdida (T68). E um fato a parte do status das conexoes: mesmo
+     * que o status minta, as ordens desses runners estao sendo recusadas aqui dentro.
+     */
+    private OperationalCheck orderDispatchBlocked(List<StrategyRunner> active) {
+        Set<String> exchanges = new TreeSet<>();
+        for (StrategyRunner runner : active) {
+            if (exchangeAdapters.isDispatchBlocked(runner.getExchangeId())) {
+                exchanges.add(runner.getExchangeId());
+            }
+        }
+        if (exchanges.isEmpty()) {
+            return ok("ORDER_DISPATCH_BLOCKED", "order dispatch open for every exchange with ACTIVE runners");
+        }
+        return check("ORDER_DISPATCH_BLOCKED", OperationalSeverity.CRITICAL,
+                exchanges.size() + " exchange(s) with ACTIVE runners and order dispatch blocked by a lost connection",
+                exchanges.stream().map(exchange -> subject("exchange", exchange)).toList(), null);
     }
 
     private OperationalCheck restCircuitOpen() {

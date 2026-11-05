@@ -27,7 +27,7 @@ public class ConnectionClosedHandler implements ConnectionClosedPort {
         try {
             ConnectionKey key = new ConnectionKey(event.exchange(), event.channel());
             WebSocketConnectionManager manager = connectionManagerPort.getConnection(key);
-            if (isStaleEvent(manager, event.connectionId())) {
+            if (manager.isSupersededBy(event.connectionId())) {
                 log.debug("Ignoring stale closed event for old connection={} (manager is {} with connection={})",
                         event.connectionId(), manager.getConnectionResult().status(), manager.getConnectionResult().connectionId());
                 return;
@@ -46,15 +46,5 @@ public class ConnectionClosedHandler implements ConnectionClosedPort {
             log.error("Failed to process connection closed event - exchange={} channel={}", event.exchange(), event.channel(), e);
             throw new RuntimeException("Error processing connection closed event", e);
         }
-    }
-
-    private boolean isStaleEvent(WebSocketConnectionManager manager, java.util.UUID eventConnectionId) {
-        com.marmitt.core.enums.ConnectionStatus status = manager.getConnectionResult().status();
-        if (status != com.marmitt.core.enums.ConnectionStatus.RECONNECTING
-                && status != com.marmitt.core.enums.ConnectionStatus.CONNECTED) {
-            return false;
-        }
-        java.util.UUID managerConnectionId = manager.getConnectionResult().connectionId();
-        return managerConnectionId != null && !managerConnectionId.equals(eventConnectionId);
     }
 }

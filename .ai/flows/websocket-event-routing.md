@@ -105,7 +105,9 @@ Eventos de conexao sao publicados pelo listener convertido:
 
 `ConnectionStateEventListener` delega para handlers do core. Falhas podem
 acionar reconnect por `ConnectionFailedHandler`, usando historico de request para
-market stream e nova sessao para user data stream.
+market stream e nova sessao para user data stream. Evento de conexao ja substituida e ignorado
+no handler e no guard de envio (`isSupersededBy`), e a tarefa de reconexao nao age se o coordenador
+(T56) ja recuperou a conexao (T68).
 
 O mesmo listener atualiza o gauge `websocket.connection.state{exchange,channel}` via
 `WebSocketConnectionStateGauge` (T23 G1): `1` em `WebSocketConnectedEvent`, `0` em

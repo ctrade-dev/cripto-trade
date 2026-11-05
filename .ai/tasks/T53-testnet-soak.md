@@ -240,7 +240,7 @@ métrica de decisões, fáceis de confundir com o teto do runner.
 
 Na VPS, `deploy/vps/round-start.sh` faz os passos 1 a 3 e `deploy/vps/round-close.sh` fecha a rodada
 sozinho no horário (halt, cancelamento das ordens em voo, `locked`, conciliação, `/stats` e rascunho do
-relatório); `deploy/vps/round-watch.sh` acusa anomalia durante a rodada (`deploy/vps/README.md`).
+relatório); `deploy/vps/round-watch.sh`, iniciado pela largada, acusa anomalia durante a rodada em `~/round/ANOMALY` e no Discord (`deploy/vps/README.md`).
 
 - `GET http://localhost:8095/stats` (e o do trend): contagem por decisão e por falha (`FAULT_<tipo>`).
   Entra no relatório da rodada para separar as falhas de propósito das inesperadas.

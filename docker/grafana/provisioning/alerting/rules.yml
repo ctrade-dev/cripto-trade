@@ -346,6 +346,36 @@ groups:
                 - evaluator: { type: gt, params: [0.8] }
               refId: C
 
+      - uid: ctrade-websocket-stream-down
+        title: Stream WebSocket caido
+        condition: C
+        for: 2m
+        labels:
+          channel: alerts-behavior
+          severity: critical
+        annotations:
+          summary: 'Canal MARKET ou USER_DATA desconectado ha mais de 2 min: envio de ordens bloqueado (T68)'
+        noDataState: OK
+        execErrState: OK
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              datasource: { type: prometheus, uid: prometheus }
+              expr: 'min(websocket_connection_state)'
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              datasource: { type: __expr__, uid: __expr__ }
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+              refId: C
+
       - uid: ctrade-exchange-circuit-open
         title: Circuit breaker da exchange aberto
         condition: C
