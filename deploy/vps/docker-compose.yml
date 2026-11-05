@@ -82,7 +82,7 @@ services:
       loki:
         condition: service_healthy
 
-  # Apps de estrategia (ctrade-dev/ctrade-strategies). O ctrade as cadastra em http://<servico>:8080/v1.
+  # Apps de estrategia (ctrade-dev/ctrade-strategies). O ctrade as cadastra em http://<servico>:8080/v2.
   trend:
     <<: *strategy
     command: ["trend"]
