@@ -25,6 +25,8 @@ public enum SignalDecision {
     REJECTED_MAX_POSITIONS,
     /** BUY com o runner no limite {@code maxPendingOrders} de ordens em voo (T50). */
     REJECTED_MAX_PENDING,
+    /** Envio a exchange bloqueado por conexao perdida: nenhuma ordem e criada, o tick seguinte decide de novo (T68). */
+    DISPATCH_BLOCKED,
     /** Tick conduzido pelo Safe Mode (CANCEL_ALL/PANIC_SELL): a estrategia nao foi consultada (T45). */
     SAFE_MODE,
     /** A estrategia nao produziu decisao utilizavel (falha, indisponivel, resposta invalida, velha) — T41. */

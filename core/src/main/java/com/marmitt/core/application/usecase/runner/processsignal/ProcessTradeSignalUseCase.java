@@ -538,6 +538,14 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
      */
     private SignalDecision processTradeSignal(StrategyRunner runner, StrategyOutputDto signal, BigDecimal currentPrice,
                                               OrderType orderType) {
+        // T68: sem conexao nao ha ordem. Criar a transacao so para rejeita-la aqui dentro geraria uma por
+        // tick e contaria para o HALT de rejeicoes consecutivas (T25), que existe para recusas da exchange.
+        if (orderDispatch.isBlocked(runner.getExchangeId())) {
+            log.debug("priceUpdate: order dispatch blocked runner={} exchange={} - signal dropped, next tick decides again",
+                    runner.getId(), runner.getExchangeId());
+            signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.DISPATCH_BLOCKED);
+            return SignalDecision.DISPATCH_BLOCKED;
+        }
         RunnerExposureService.ExposureSnapshot exposureSnapshot = signalPolicy.requiresExposureSnapshot(signal)
                 ? runnerExposureService.loadSnapshot(runner)
                 : null;

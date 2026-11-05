@@ -90,6 +90,27 @@ class RunnerLifecycleE2ETest extends ScenarioStrategyE2ETestSupport {
         assertEquals(0, balance(portfolioId).reserved().signum());
     }
 
+    /** Com o envio bloqueado nao nasce ordem nenhuma: nada a rejeitar, nada conta para o HALT (T68). */
+    @Test
+    void signalsWhileDispatchIsBlockedCreateNoOrderAndDoNotHaltTheRunner() {
+        UUID runnerId = activateScenario(new RestingBuyCancelStrategy(ScenarioStrategyConfig.boundedConfig(1)));
+        String exchange = strategyRunnerRepository.findById(runnerId).orElseThrow().getExchangeId();
+
+        exchangeAdapters.blockDispatch(exchange);
+        try {
+            for (int tick = 0; tick < 8; tick++) {
+                publishTick(MARKET_PRICE);
+                sleep(100);
+            }
+            awaitCondition(() -> signalEvaluatedCount(runnerId, "DISPATCH_BLOCKED") > 0, WAIT_TIMEOUT,
+                    "sinal descartado pelo bloqueio", runnerId);
+            assertTrue(transactions(runnerId).isEmpty(), "nenhuma ordem durante o bloqueio");
+            assertEquals(RunnerStatus.ACTIVE, strategyRunnerRepository.findById(runnerId).orElseThrow().getStatus());
+        } finally {
+            exchangeAdapters.unblockDispatch(exchange);
+        }
+    }
+
     /** T53 rodada 11: com o envio bloqueado o comando respondia 202 e a ordem seguia na exchange. */
     @Test
     void operatorCancelIsRefusedWhileDispatchIsBlockedAndWorksAfterwards() {
