@@ -79,6 +79,20 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
    de eventos e produz o relatório. Desenho na **T59** (eventos persistidos, `GET /api/admin/events`,
    procedimento do relatório).
 
+## Decisão registrada (2026-11-05): rodada única com checkpoints
+
+Substitui a sequência de rodadas de 24h e a validação só no fim (decisões 1 e 7 acima) a partir da próxima rodada.
+
+- **Rodada única:** implementar antes as correções conhecidas e largar sempre uma rodada de **72h**, sem rodadas
+  longas separadas para validar um item.
+- **Checkpoints em 3h, 8h e 24h:** os 8 critérios são avaliados em cada um, além do fim. Os dados são coletados na VPS,
+  sem depender do computador do mantenedor.
+- **Aprovação:** chegar a 72h sem reprovação conclui os testes. Reprovou em qualquer ponto, encerra, corrige e
+  recomeça do zero.
+- **O que reprova:** um critério descumprido. Rejeição provocada de propósito pelo `SoakChaos` não reprova, e
+  `ANOMALY` é um aviso a analisar, não uma reprovação automática.
+- **Rodadas curtas** continuam valendo para validar uma correção específica antes de largar.
+
 ## Pré-requisitos ainda abertos
 
 - **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4). Spec na **T63**;

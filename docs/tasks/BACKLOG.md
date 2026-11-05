@@ -74,6 +74,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T66 | Cobertura de logs e causa de falha REST visíveis (T53 F9/F10)   | Média | Claude | Concluído    |
 | T67 | Ordem expirada após preenchimento parcial (T53 F11–F13)         | Média | Claude | Concluído    |
 | T68 | Falha abrupta do WebSocket não reconecta (T53 F15–F18)          | Média | Claude | Em andamento |
+| T69 | Apps de estratégia stateless (contrato 2.0)                     | Alta  | Claude | Spec         |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução
