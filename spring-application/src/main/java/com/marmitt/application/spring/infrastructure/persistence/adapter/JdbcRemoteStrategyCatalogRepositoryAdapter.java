@@ -39,6 +39,7 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
             rs.getString("last_error"),
             instant(rs.getTimestamp("last_verification_at")),
             rs.getString("served_contract_version"),
+            rs.getObject("price_history_ticks", Integer.class),
             instant(rs.getTimestamp("created_at")),
             instant(rs.getTimestamp("updated_at")));
 
@@ -70,9 +71,9 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
         jdbcTemplate.update("""
                 INSERT INTO remote_strategies (strategy_ref, name, version, base_url, token, status, verification,
                                                last_error, last_verification_at, served_contract_version,
-                                               created_at, updated_at)
+                                               price_history_ticks, created_at, updated_at)
                 VALUES (:ref, :name, :version, :baseUrl, :token, :status, :verification, :lastError,
-                        :lastVerificationAt, :servedContractVersion, :createdAt, :updatedAt)
+                        :lastVerificationAt, :servedContractVersion, :priceHistoryTicks, :createdAt, :updatedAt)
                 ON CONFLICT (strategy_ref) DO UPDATE SET
                     base_url = EXCLUDED.base_url,
                     token = EXCLUDED.token,
@@ -81,6 +82,7 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
                     last_error = EXCLUDED.last_error,
                     last_verification_at = EXCLUDED.last_verification_at,
                     served_contract_version = EXCLUDED.served_contract_version,
+                    price_history_ticks = EXCLUDED.price_history_ticks,
                     updated_at = EXCLUDED.updated_at
                 """,
                 new MapSqlParameterSource()
@@ -94,6 +96,7 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
                         .addValue("lastError", strategy.getLastError())
                         .addValue("lastVerificationAt", timestamp(strategy.getLastVerificationAt()))
                         .addValue("servedContractVersion", strategy.getServedContractVersion())
+                        .addValue("priceHistoryTicks", strategy.getPriceHistoryTicks())
                         .addValue("createdAt", timestamp(strategy.getCreatedAt()))
                         .addValue("updatedAt", timestamp(strategy.getUpdatedAt())));
         for (RemoteStrategyEvent event : events) {

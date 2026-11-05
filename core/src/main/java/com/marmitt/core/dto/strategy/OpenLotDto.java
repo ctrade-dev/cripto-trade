@@ -17,7 +17,8 @@ public record OpenLotDto(
         BigDecimal availableQuantity,
         BigDecimal entryPrice,
         BigDecimal currentPnlPercent,
-        Instant openedAt
+        Instant openedAt,
+        BigDecimal peakPrice
 ) {
     public OpenLotDto {
         Objects.requireNonNull(lotId, "Lot ID cannot be null");
@@ -26,5 +27,6 @@ public record OpenLotDto(
         Objects.requireNonNull(entryPrice, "Entry price cannot be null");
         Objects.requireNonNull(currentPnlPercent, "Current PnL percent cannot be null");
         Objects.requireNonNull(openedAt, "Opened at cannot be null");
+        Objects.requireNonNull(peakPrice, "Peak price cannot be null");
     }
 }

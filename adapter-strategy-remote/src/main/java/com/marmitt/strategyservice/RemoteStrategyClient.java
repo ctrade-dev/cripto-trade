@@ -20,26 +20,19 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Cliente do contrato do strategy service (T41, contrato 1.1). O endereco e o token chegam do catalogo a
+ * Cliente do contrato do strategy service (T41, contrato 2.0). O endereco e o token chegam do catalogo a
  * cada chamada (T54); o cliente nao guarda lista de estrategias.
  *
  * <ul>
  *   <li><b>Sem retry</b> (T40): qualquer falha vira {@link StrategyUnavailableException} e o tick é
  *       HOLD; o próximo tick segue normalmente.</li>
- *   <li><b>{@code tickId}/{@code sequence} por runner:</b> {@code sequence} cresce a cada chamada do
- *       runner e parte do relogio em microssegundos ({@code max(anterior + 1, agora em µs)}): continua
- *       crescente depois de um restart do ctrade sem precisar persistir o contador — um servico que
- *       guarda o ultimo valor visto nao rejeita os ticks novos. {@code tickId} = runner + instante do
- *       tick + sequence.</li>
+ *   <li><b>{@code tickId}</b> = runner + instante do tick, so para rastreio: a app e stateless (T69).</li>
  *   <li><b>Resposta validada</b> contra o contrato antes de virar decisão ({@link DecisionValidator}).</li>
  *   <li><b>Decisão velha</b> ({@code agora − input.timestamp > maxDecisionAge}) é descartada.</li>
  * </ul>
@@ -51,7 +44,6 @@ public class RemoteStrategyClient implements StrategyEvaluationPort {
     private final ObjectMapper objectMapper;
     private final Duration maxDecisionAge;
     private final Clock clock;
-    private final Map<UUID, AtomicLong> sequenceByRunner = new ConcurrentHashMap<>();
 
     public RemoteStrategyClient(StrategyServiceHttpPort http, ObjectMapper objectMapper, Duration maxDecisionAge,
                                 Clock clock) {
@@ -64,9 +56,8 @@ public class RemoteStrategyClient implements StrategyEvaluationPort {
     @Override
     public StrategyOutputDto evaluate(UUID strategyRef, StrategyEndpoint endpoint, StrategyInputDto input,
                                       StrategyContextDto context) {
-        long sequence = nextSequence(context.runnerId());
-        String tickId = context.runnerId() + ":" + input.timestamp().toEpochMilli() + ":" + sequence;
-        String body = write(StrategyContractMapper.toRequest(strategyRef, tickId, sequence, input, context));
+        String tickId = context.runnerId() + ":" + input.timestamp().toEpochMilli();
+        String body = write(StrategyContractMapper.toRequest(strategyRef, tickId, input, context));
 
         StrategyServiceHttpPort.Response response = call(() -> http.postJson(endpoint.baseUrl() + "/evaluate",
                 headers(endpoint), body), strategyRef);
@@ -105,17 +96,6 @@ public class RemoteStrategyClient implements StrategyEvaluationPort {
         return strict;
     }
 
-    /**
-     * Proximo {@code sequence} do runner: estritamente crescente na vida do cliente e ancorado no
-     * relogio, para que um restart do ctrade (contador zerado em memoria) nao volte abaixo do ultimo
-     * valor que o servico viu. Nao precisa ser contiguo.
-     */
-    private long nextSequence(UUID runnerId) {
-        long nowMicros = ChronoUnit.MICROS.between(Instant.EPOCH, Instant.now(clock));
-        return sequenceByRunner.computeIfAbsent(runnerId, id -> new AtomicLong())
-                .updateAndGet(previous -> Math.max(previous + 1, nowMicros));
-    }
-
     @Override
     public RemoteStrategyIdentity describe(UUID strategyRef, StrategyEndpoint endpoint) {
         StrategyServiceHttpPort.Response response = call(() -> http.get(
@@ -127,10 +107,19 @@ public class RemoteStrategyClient implements StrategyEvaluationPort {
         return Arrays.stream(served)
                 .filter(meta -> meta != null && strategyRef.toString().equalsIgnoreCase(meta.strategyId()))
                 .findFirst()
-                .map(meta -> new RemoteStrategyIdentity(UUID.fromString(meta.strategyId()), meta.name(),
-                        meta.version(), meta.contractVersion()))
+                .map(meta -> identity(meta, strategyRef))
                 .orElseThrow(() -> new StrategyUnavailableException(Reason.INVALID_RESPONSE,
                         "service at " + endpoint.baseUrl() + " does not serve " + strategyRef));
+    }
+
+    private static RemoteStrategyIdentity identity(WireTypes.Meta meta, UUID strategyRef) {
+        try {
+            return new RemoteStrategyIdentity(UUID.fromString(meta.strategyId()), meta.name(), meta.version(),
+                    meta.contractVersion(), StrategyContractMapper.priceHistoryTicks(meta.requirements()));
+        } catch (IllegalArgumentException e) {
+            throw new StrategyUnavailableException(Reason.INVALID_RESPONSE,
+                    "/meta outside the contract for " + strategyRef + ": " + e.getMessage(), e);
+        }
     }
 
     private static Map<String, String> headers(StrategyEndpoint endpoint) {

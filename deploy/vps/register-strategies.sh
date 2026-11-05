@@ -24,7 +24,7 @@ apps=(
 failed=0
 for app in "${apps[@]}"; do
   IFS='|' read -r service ref name token_var <<< "$app"
-  body="$(printf '{"strategyRef":"%s","name":"%s","version":"1.0.0","baseUrl":"http://%s:8080/v1","token":"%s"}' \
+  body="$(printf '{"strategyRef":"%s","name":"%s","version":"1.0.0","baseUrl":"http://%s:8080/v2","token":"%s"}' \
     "$ref" "$name" "$service" "$(env_value "$token_var")")"
   response="$(curl -sS -X POST "$api" \
     -H 'Content-Type: application/json' \

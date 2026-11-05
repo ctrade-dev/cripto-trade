@@ -49,7 +49,7 @@ public class StrategyCatalogController {
 
     @PostMapping
     @Operation(summary = "Register a remote strategy", description = """
-            Registers and verifies on the spot via the service's /v1/meta. A service that is down does not
+            Registers and verifies on the spot via the service's /v2/meta. A service that is down does not
             block registration: the strategy stays verification=FAILED (see lastError) and is retried
             periodically; runners pointing to it stay on HOLD until it is usable=true. Registering the same
             definition again returns the existing entry; a different definition for the same strategyRef is

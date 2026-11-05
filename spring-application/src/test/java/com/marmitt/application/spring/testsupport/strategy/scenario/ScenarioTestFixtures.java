@@ -75,6 +75,7 @@ final class ScenarioTestFixtures {
                 .entryPrice(new BigDecimal("65000"))
                 .currentPnlPercent(BigDecimal.ZERO)
                 .openedAt(Instant.now())
+                .peakPrice(new BigDecimal("65000"))
                 .build();
     }
 

@@ -9,24 +9,32 @@ O ctrade é o cliente; a app da estratégia é o servidor.
 - **Espelho interno em Java:** `core/src/main/java/com/marmitt/core/dto/strategy/*`. Se divergir do
   spec, o spec prevalece **na fronteira de rede** — o core continua dono do contrato de domínio.
 
-> Status: **proposta de contrato** para o desacoplamento out-of-process das estratégias (Fase 2 do
-> roadmap de decoupling). Ainda não há adapter consumindo isto; ver "Onde isto se encaixa".
+> **Versão 2.0 (T69, 2026-11-05):** apps stateless e caminho unilateral; `requirements` em `/meta`,
+> `input.priceHistory` e `openLots[].peakPrice`; sai `sequence` e o estado de warm-up; rotas em `/v2`.
 >
-> **Revisão 1.1 (T40, 2026-10-19):** estado de warm-up chaveado por `(strategyRef, runnerId)`;
-> `tickId`/`sequence` no request com deduplicação e **sem retry** do ctrade; descarte por idade da
-> decisão do lado do ctrade; campos de PnL do contexto marcados a mercado (T43) e `totalCapital`
-> documentado. Como não há consumidor, a revisão fica em `/v1`.
+> **Revisão 1.1 (T40, 2026-10-19):** sem retry do ctrade; descarte por idade da decisão do lado do ctrade;
+> campos de PnL do contexto marcados a mercado (T43) e `totalCapital` documentado.
+
+---
+
+## Regras da app de estratégia
+
+1. **Stateless.** A decisão é função só do request e da configuração da app. A app não guarda nada entre
+   interações que influencie a decisão. Contadores de telemetria fora do contrato são permitidos.
+2. **Caminho unilateral.** O ctrade chama a app; a app nunca chama o ctrade. Nada de I/O externo, rede ou
+   persistência na decisão. Se faltar dado, expande-se este contrato, e o ctrade o entrega.
+3. **Uma decisão vale só para o tick dela.** Ver "A decisão pode não virar ordem".
+4. **Identidade imutável.** Ver "Versionamento e identidade".
+5. **Uma configuração, uma app.** Os parâmetros são da app, fixados ao subir o processo, e o ctrade não os
+   conhece. Outra configuração é outra app, com outro `strategyId`, para outro runner.
 
 ---
 
 ## Por que este contrato existe
 
-Hoje as estratégias são classes Java linkadas no classpath e registradas no boot
-(`InMemoryStrategyRepository`), então propor/melhorar uma estratégia exige recompilar e reiniciar a
-aplicação. Empurrando a execução para trás de um contrato de rede, a linguagem atrás do endpoint
-deixa de importar: o core permanece Java puro e o ecossistema de estratégias pode ser poliglota e de
-iteração rápida — pré-condição para um ciclo autônomo de melhoria (IA propõe → valida → promove) sem
-reiniciar o ctrade.
+Empurrando a execução das estratégias para trás de um contrato de rede, a linguagem atrás do endpoint deixa
+de importar: o core permanece Java puro e o ecossistema de estratégias pode ser poliglota e de iteração
+rápida, sem reiniciar o ctrade.
 
 ---
 
@@ -34,10 +42,10 @@ reiniciar o ctrade.
 
 | Método | Caminho | Papel |
 |---|---|---|
-| `POST` | `/v1/evaluate` | Uma decisão pura por tick. É a chamada quente. |
-| `GET`  | `/v1/health`   | Liveness + **readiness agregada** (todas as versões prontas). |
-| `GET`  | `/v1/health/{strategyRef}` | **Readiness escopada** de uma versão; ecoa `strategyRef` (obrigatório). |
-| `GET`  | `/v1/meta`     | **Lista** das versões servidas (`strategyId`, `name`, `version`) para popular/verificar o catálogo; filtrável por `strategyRef`. |
+| `POST` | `/v2/evaluate` | Uma decisão pura por tick. É a chamada quente. |
+| `GET`  | `/v2/health`   | A app está no ar e pronta para responder. |
+| `GET`  | `/v2/health/{strategyRef}` | O mesmo para uma versão servida; ecoa `strategyRef` (obrigatório). |
+| `GET`  | `/v2/meta`     | **Lista** das versões servidas (`strategyId`, `name`, `version`, `contractVersion`, `requirements`), para verificar o catálogo; filtrável por `strategyRef`. |
 
 ---
 
@@ -77,16 +85,15 @@ Strings `date-time` (`2026-07-03T14:22:05.123Z`). Sem epoch, sem timezone local.
 ### Request (`EvaluateRequest`)
 
 - `strategyRef` — identidade da versão alvo (== `strategyId` de `/meta`). Permite que uma única app
-  sirva múltiplas versões. Junto com `context.runnerId`, forma a **chave do estado de warm-up**
-  (ver "Estado, warm-up e readiness").
-- `tickId` — identificador opaco do tick (string), único por runner. Mesma `tickId` ⇒ mesma decisão
-  (ver "Entrega e idempotência").
-- `sequence` — inteiro monotônico crescente por runner, **não contíguo**. A app só acrescenta ao
-  warm-up um tick com `sequence` maior que o último visto daquele runner. O ctrade o ancora no relógio
-  (microssegundos), então ele continua crescente depois de um restart do ctrade sem estado persistido.
+  sirva múltiplas versões.
+- `tickId` — identificador opaco do tick, só para rastreio.
 - `input` (`MarketInput`) — dados do tick. `currentPrice` é obrigatório e positivo; os demais preços
   são opcionais. A validação semântica rica (spread, faixa diária, idade do dado) é do ctrade — a app
   recebe o dado já aceito.
+- `input.priceHistory` — `[{price, timestamp}]`, do mais antigo para o mais novo, terminando no tick
+  atual, sempre com exatamente os `ticks` declarados em `requirements` (vazio se nenhum). A série tem todos
+  os ticks recebidos, mesmo os que o runner não avaliou. Pode ter um buraco no tempo depois de uma queda do
+  stream de mercado: quem depende de tempo confere `timestamp`.
 - `context` (`StrategyContext`) — estado operacional **read-only**: capital, posição agregada, lotes
   abertos e ordens em trânsito. `availableQuantity` de cada lote é o teto de SELL daquele lote.
 
@@ -97,6 +104,9 @@ Strings `date-time` (`2026-07-03T14:22:05.123Z`). Sem epoch, sem timezone local.
   cobrada no ativo base, T46); `openLots[].currentPnlPercent` é a variação de `currentPrice` sobre o
   `entryPrice` do lote. São confiáveis para decisão. `context.unrealizedPnl` repete o da posição do
   símbolo do runner.
+- **`openLots[].peakPrice`** é o maior preço visto desde a abertura do lote, incluindo o tick atual. Depois de
+  um restart do ctrade recomeça em `max(entryPrice, preço atual)`.
+- **`pendingOrders[].requestedAt`** é o instante da ordem: a idade dela é `input.timestamp − requestedAt`.
 - **`totalCapital`** é `available + reserved` do portfolio, exposto para **dimensionar** a ordem (ex.:
   "alocar X% do capital"). Não é um limite: o teto de exposição do runner (`maxAllocationPercent`) e
   o saldo disponível são aplicados pelo ctrade na reserva, e uma ordem acima deles é recusada. Para o
@@ -135,57 +145,48 @@ genérico: são dados que o ctrade **envia** já validados, não saída remota n
 
 ---
 
-## Estado, warm-up e readiness
+## Requisitos
 
-A app **pode** manter estado de warm-up (ex.: janela de histórico de uma média móvel) chaveado por
-**`(strategyRef, context.runnerId)`**. Esse é o único efeito colateral admitido — nada de I/O externo,
-rede ou persistência na decisão. A decisão deve ser função de `(input, context)` + estado de warm-up
-acumulado **daquele runner**.
+A app declara em `/meta` o que precisa em cada interação:
 
-Chavear só por `strategyRef` misturaria o histórico de dois runners que usam a mesma versão em
-símbolos diferentes (BTCUSDT e ETHUSDT) — a média móvel de um contaminaria o outro.
+```json
+{ "requirements": { "priceHistory": { "ticks": 20 } } }
+```
 
-`GET /health` reporta `ready`:
+- `requirements` é obrigatório; `{}` significa que a estratégia não precisa de nada além do básico.
+- `priceHistory.ticks` vai de 0 a 1000.
+- O ctrade grava os requisitos no catálogo na primeira conferência. Requisito desconhecido, acima do teto ou
+  diferente do gravado falha a conferência, e a estratégia não é usada: mudar um requisito exige novo
+  `strategyId`.
+- A conferência roda ao cadastrar, reabilitar, trocar o endereço e no boot do ctrade. Trocar a app no ar sem
+  uma dessas ações não é detectado na hora.
+- **Enquanto não tiver o histórico declarado, o ctrade não chama a app**: o tick conta como
+  `WAITING_HISTORY`. A app não precisa tratar histórico curto, e pode responder `400` a um request incompleto.
 
-- `ready=false` — app viva, mas ainda aquecendo (ex.: `"warming up: 12/20 ticks"`). Responde `503`.
-- `ready=true` — warm-up concluído; a versão pode ir para `ACTIVE`.
-
-**Readiness é escopada por versão.** Como o warm-up é chaveado por `strategyRef`, a readiness também
-é: numa app que serve V1 e V2, a V1 pode estar `ready=true` enquanto a V2 ainda aquece. Há dois
-endpoints, com **schemas de resposta distintos**:
-
-- `GET /health` — readiness **agregada** (`Health`): `ready=true` só se **todas** as versões servidas
-  estão prontas. Serve como probe de liveness e para apps de versão única. Não ecoa `strategyRef`.
-- `GET /health/{strategyRef}` — readiness **escopada** (`ScopedHealth`): `ready` fala pela versão do
-  path e a resposta **ecoa `strategyRef` (obrigatório e não-nulo)**. Com `?runnerId=`, `ready` fala
-  pelo warm-up **daquele runner** naquela versão e a resposta ecoa também o `runnerId`; sem ele,
-  `ready=true` só quando todos os runners vistos pela versão terminaram o warm-up.
-
-A separação é o que dá **prova de schema**: uma resposta agregada não pode se passar por escopada
-(faltaria o `strategyRef` obrigatório), então o portão de promoção não corre o risco de tomar um
-`ready` app-wide como se fosse da V2 e promover uma versão fria.
-
-**O portão de promoção do ctrade consulta `GET /health/{strategyRef}?runnerId=` da versão alvo para o
-runner que vai trocar e não vira o ponteiro dele para uma versão com `ready=false`.** Isso é o que torna o deploy-ao-lado seguro: a
-V2 sobe e aquece em paralelo enquanto a V1 opera, e a troca só ocorre quando a V2 se declara pronta —
-sem janela cega.
+`GET /health` e `GET /health/{strategyRef}` dizem só se a app está pronta para responder. Sem estado, não há
+warm-up: reiniciar a app não muda a decisão seguinte.
 
 ---
 
-## Entrega e idempotência
+## A decisão pode não virar ordem
 
-Cada chamada a `/evaluate` acrescenta o tick ao warm-up — por isso ela **não é segura de repetir**
-cegamente. As regras:
+**Uma decisão vale só para o tick dela.** Se não for executada, é descartada, e a estratégia é consultada de
+novo no tick seguinte, com o estado atual. O ctrade não guarda decisão para depois, e a app não é avisada.
+Motivos de descarte, além dos limites de risco:
 
-- **O ctrade não faz retry de `/evaluate`.** Falha de transporte, timeout ou `5xx` viram HOLD
-  implícito naquele tick (ver "Falha e timeout"); o próximo tick segue normalmente.
-- **`tickId` deduplica a decisão.** Se a mesma `tickId` chegar de novo para o mesmo runner (ex.:
-  retry de uma camada de transporte), a app devolve a decisão já calculada, sem recalcular.
-- **`sequence` protege o warm-up.** A app só acrescenta ao histórico um tick com `sequence` maior que
-  o último aceito daquele `(strategyRef, runnerId)`; um `sequence` menor ou igual é avaliado sem mexer
-  no warm-up (ou respondido do cache, se a `tickId` já foi vista).
+- envio de ordens bloqueado por conexão perdida com a exchange (`DISPATCH_BLOCKED`), inclusive `SHOULD_CANCEL`;
+- decisão velha (ver "Falha e timeout");
+- corrida com um lock de venda ou com o runner parando.
 
-Assim, nem retry de transporte nem reordenação contam o mesmo tick duas vezes.
+A app **não presume** que o sinal virou ordem. Quem quer cancelar repete `SHOULD_CANCEL` enquanto a ordem estiver
+em `pendingOrders`; o ctrade suprime as repetições de um envio recente.
+
+---
+
+## Entrega
+
+**O ctrade não faz retry de `/evaluate`.** Falha de transporte, timeout ou `5xx` viram HOLD implícito naquele
+tick; o próximo tick segue normalmente. Como a app é stateless, repetir um request é seguro.
 
 ## Falha e timeout
 
@@ -214,25 +215,22 @@ estratégia não é avisada além do que já vê no contexto (o lote some de `op
 ## Versionamento e identidade
 
 - **Uma versão = um `strategyId` (UUID) próprio.** V2 não reusa o UUID da V1.
-- Durante a coexistência V1/V2, o runner deve resolver por **`strategyId` explícito**, não por nome
-  (o fallback por nome fica ambíguo com duas versões de mesmo nome no ar).
-- Como uma app pode servir múltiplas versões, `/meta` retorna a **lista** das versões servidas e
-  `/health/{strategyRef}` reporta a readiness **daquela** versão — o catálogo e o portão de promoção
-  operam por `strategyId`, nunca por um estado app-wide único.
+- **Mudou metadado (nome, versão ou requisitos), é outra estratégia:** novo `strategyId` e novo runner.
+- O runner resolve a estratégia por **`strategyId` explícito**, não por nome.
+- Como uma app pode servir múltiplas versões, `/meta` retorna a **lista** das versões servidas.
 - `contractVersion` (em `/meta`) declara a versão **deste contrato** que a app implementa, separada da
-  `version` da estratégia. O caminho é versionado (`/v1`); mudança incompatível de contrato ⇒ `/v2`.
+  `version` da estratégia. O caminho é versionado (`/v2`); mudança incompatível de contrato ⇒ `/v2`.
 
 ---
 
 ## Exemplo
 
-**Request** `POST /v1/evaluate`
+**Request** `POST /v2/evaluate`
 
 ```json
 {
   "strategyRef": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "tickId": "11111111-1111-1111-1111-111111111111:1751552525123:4182",
-  "sequence": 4182,
+  "tickId": "11111111-1111-1111-1111-111111111111:1751552525123",
   "input": {
     "symbol": "BTCUSDT",
     "currentPrice": "64150.75000000",
@@ -242,7 +240,11 @@ estratégia não é avisada além do que já vê no contexto (o lote some de `op
     "volume": "1832.44000000",
     "high24h": "64980.00000000",
     "low24h": "63110.00000000",
-    "timestamp": "2026-07-03T14:22:05.123Z"
+    "timestamp": "2026-07-03T14:22:05.123Z",
+    "priceHistory": [
+      { "price": "64020.10000000", "timestamp": "2026-07-03T14:22:03.611Z" },
+      { "price": "64150.75000000", "timestamp": "2026-07-03T14:22:05.123Z" }
+    ]
   },
   "context": {
     "runnerId": "11111111-1111-1111-1111-111111111111",
@@ -301,9 +303,9 @@ Camada 1 do desacoplamento de estratégias — **implementada na T41**:
 
 - **Core:** `StrategyEvaluationPort` + `RemoteTradingStrategy` (proxy que delega `executeStrategy`);
   falha vira HOLD com o desfecho `STRATEGY_UNAVAILABLE`. O catálogo (`RemoteStrategyCatalogUseCase`,
-  T54) confere `/v1/meta` antes de colocar a estratégia em uso.
+  T54) confere `/v2/meta` antes de colocar a estratégia em uso.
 - **`adapter-strategy-remote`:** formato de rede deste contrato, validação da decisão e cliente (sem
-  retry, `tickId`/`sequence` por runner, descarte por idade).
+  retry, descarte por idade).
 - **spring-application:** transporte OkHttp com timeout, métricas e o ciclo periódico de conferência.
   Desde a T54 o catálogo é persistido e administrado por `/api/admin/strategies` (cadastro sem restart,
   token por estratégia, histórico de mudanças).

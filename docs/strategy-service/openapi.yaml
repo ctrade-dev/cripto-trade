@@ -1,7 +1,7 @@
 openapi: 3.0.3
 
 # =============================================================================
-# Strategy Service Contract (v1)
+# Strategy Service Contract (v2)
 #
 # Contrato neutro de linguagem para estrategias executadas fora do processo do
 # ctrade. Cada versao de estrategia sobe como uma app independente (Java, Node,
@@ -21,14 +21,15 @@ openapi: 3.0.3
 
 info:
   title: CTrade Strategy Service Contract
-  version: 1.1.0
+  version: 2.0.0
   description: >
     Superficie de rede de uma app de estrategia. Uma decisao pura por tick:
     dado market data (input) e contexto operacional consolidado (context),
-    a app devolve uma decisao de trade. Sem I/O externo, sem efeito colateral
-    alem do warm-up de estado interno chaveado por (strategyRef, runnerId).
-    1.1 (T40): tickId/sequence com deduplicacao, sem retry do ctrade, idade
-    maxima da decisao validada pelo ctrade, PnL do contexto marcado a mercado.
+    a app devolve uma decisao de trade. A app e stateless (sem estado entre
+    interacoes que influencie a decisao) e o caminho e unilateral (o ctrade
+    chama a app, a app nunca chama o ctrade). Regras em CONTRACT.md.
+    2.0 (T69): requirements em /meta, input.priceHistory, openLots[].peakPrice;
+    sai sequence e o warm-up na app.
 
 # Token de servico opcional: `{}` permite chamada sem credencial; com token, Bearer.
 security:
@@ -36,7 +37,7 @@ security:
   - bearerAuth: []
 
 servers:
-  - url: http://{host}:{port}/v1
+  - url: http://{host}:{port}/v2
     variables:
       host: { default: localhost }
       port: { default: "8080" }
@@ -51,8 +52,8 @@ paths:
         sempre uma decisao valida. Falha de transporte, timeout ou erro 5xx sao
         tratados pelo ctrade como HOLD implicito (ver CONTRACT.md); ainda assim
         a app deve preferir devolver HOLD explicito a estourar erro. O ctrade
-        NAO faz retry desta chamada; a mesma tickId deve devolver a mesma
-        decisao e sequence <= ultimo visto nao altera o warm-up.
+        NAO faz retry desta chamada. A decisao vale so para este tick: pode nao
+        virar ordem (ver CONTRACT.md) e a app nao presume que virou.
       requestBody:
         required: true
         content:
@@ -73,13 +74,7 @@ paths:
   /health:
     get:
       operationId: health
-      summary: Liveness e readiness AGREGADA da app
-      description: >
-        Liveness + readiness agregada: ready=true somente se TODAS as versoes
-        servidas terminaram o warm-up. Serve como probe de liveness e para apps
-        de versao unica. Para a decisao de promocao de UMA versao especifica use
-        GET /health/{strategyRef} — la a resposta comprova, no schema, a que
-        versao o `ready` se refere.
+      summary: A app esta no ar e pronta para responder
       responses:
         '200':
           description: App viva
@@ -87,7 +82,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
         '503':
-          description: App viva porem nao pronta (ao menos uma versao aquecendo)
+          description: App viva porem nao pronta para responder
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
@@ -95,30 +90,12 @@ paths:
   /health/{strategyRef}:
     get:
       operationId: healthScoped
-      summary: Readiness de UMA versao (escopada)
-      description: >
-        readiness da versao strategyRef. O warm-up e chaveado por strategyRef
-        (ver /evaluate), entao numa app que serve V1+V2 a V1 pode estar pronta
-        enquanto a V2 aquece. A resposta ecoa strategyRef (obrigatorio e nao-nulo,
-        ver ScopedHealth): o portao de promocao tem prova, no schema, de que
-        `ready` pertence a versao alvo — sem isso, uma resposta agregada poderia
-        se passar por escopada e promover uma versao fria. O portao NAO vira o
-        ponteiro do runner para strategyRef com ready=false.
+      summary: A versao strategyRef esta no ar e pronta para responder
       parameters:
         - name: strategyRef
           in: path
           required: true
           description: Versao alvo (== strategyId de /meta).
-          schema:
-            type: string
-            format: uuid
-        - name: runnerId
-          in: query
-          required: false
-          description: >
-            Runner cujo warm-up interessa. Informado, `ready` fala pelo estado
-            (strategyRef, runnerId) e a resposta ecoa runnerId; omitido, `ready`
-            so e true quando todos os runners vistos pela versao estao prontos.
           schema:
             type: string
             format: uuid
@@ -134,7 +111,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '503':
-          description: Versao viva porem aquecendo
+          description: Versao viva porem nao pronta para responder
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ScopedHealth' }
@@ -144,15 +121,10 @@ paths:
       operationId: meta
       summary: Identidade das versoes de estrategia servidas por esta app
       description: >
-        Usado pelo ctrade para popular/verificar o catalogo (strategy_catalog).
-        strategyId e imutavel por versao — V2 tem UUID proprio, distinto da V1.
-
-        Retorna a LISTA das versoes servidas: como uma app pode servir V1 e V2
-        (o warm-up e a avaliacao sao chaveados por strategyRef), um `/meta`
-        singular so reportaria uma identidade e o catalogo nao conseguiria
-        descobrir/verificar a versao alvo no endpoint compartilhado. Apps de
-        versao unica retornam um array de um elemento. Opcionalmente filtravel
-        por strategyRef.
+        Usado pelo ctrade para verificar o catalogo. strategyId e imutavel por
+        versao: mudou nome, versao ou requirements, e outra estrategia com outro
+        strategyId. Retorna a LISTA das versoes servidas, pois uma app pode servir
+        mais de uma; apps de versao unica retornam um array de um elemento.
       parameters:
         - name: strategyRef
           in: query
@@ -258,30 +230,18 @@ components:
 
     EvaluateRequest:
       type: object
-      required: [strategyRef, tickId, sequence, input, context]
+      required: [strategyRef, tickId, input, context]
       properties:
         strategyRef:
           type: string
           format: uuid
           description: >
             Identidade da estrategia/versao alvo (== strategyId de /meta).
-            Permite uma unica app servir multiplas versoes. Com context.runnerId,
-            chaveia o estado de warm-up interno.
+            Permite uma unica app servir multiplas versoes.
         tickId:
           type: string
           minLength: 1
-          description: >
-            Identificador opaco do tick, unico por runner. A mesma tickId para o
-            mesmo runner deve receber a mesma decisao (cache), sem recalcular.
-        sequence:
-          type: integer
-          format: int64
-          minimum: 0
-          description: >
-            Contador monotonico crescente por runner, nao contiguo (o ctrade o
-            ancora no relogio em microssegundos para sobreviver a restart). So um
-            sequence maior que o ultimo aceito daquele (strategyRef, runnerId)
-            entra no warm-up.
+          description: Identificador opaco do tick, so para rastreio.
         input: { $ref: '#/components/schemas/MarketInput' }
         context: { $ref: '#/components/schemas/StrategyContext' }
 
@@ -289,7 +249,7 @@ components:
 
     MarketInput:
       type: object
-      required: [symbol, currentPrice, timestamp]
+      required: [symbol, currentPrice, timestamp, priceHistory]
       description: >
         Dados de mercado do tick. currentPrice e obrigatorio e positivo; os
         demais precos sao opcionais. A validacao semantica rica (spread, faixa
@@ -308,6 +268,13 @@ components:
           type: string
           format: date-time
           description: Instante do tick, ISO-8601 UTC.
+        priceHistory:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/PricePoint' }
+          description: >
+            Do mais antigo para o mais novo, terminando no tick atual, com exatamente
+            os ticks declarados em requirements.priceHistory.ticks (vazio se nenhum).
         additionalData:
           type: object
           additionalProperties: true
@@ -315,6 +282,15 @@ components:
           description: Extensao livre; chaves/valores opcionais fora do contrato tipado.
 
     # ---- Contexto operacional (espelha StrategyContextDto) -----------------
+
+    PricePoint:
+      type: object
+      required: [price, timestamp]
+      properties:
+        price: { $ref: '#/components/schemas/Decimal' }
+        timestamp:
+          type: string
+          format: date-time
 
     StrategyContext:
       type: object
@@ -390,7 +366,7 @@ components:
 
     OpenLot:
       type: object
-      required: [lotId, quantity, availableQuantity, entryPrice, currentPnlPercent, openedAt]
+      required: [lotId, quantity, availableQuantity, entryPrice, currentPnlPercent, openedAt, peakPrice]
       description: Lote de compra aberto. availableQuantity e o teto de SELL para este lote.
       properties:
         lotId: { type: string, format: uuid }
@@ -403,6 +379,11 @@ components:
         openedAt:
           type: string
           format: date-time
+        peakPrice:
+          allOf: [{ $ref: '#/components/schemas/Decimal' }]
+          description: >
+            Maior preco visto desde a abertura do lote, incluindo o tick atual. Apos
+            restart do ctrade recomeca em max(entryPrice, preco atual).
 
     PendingOrder:
       type: object
@@ -558,9 +539,6 @@ components:
     # ---- Operacional --------------------------------------------------------
 
     Health:
-      # Readiness AGREGADA da app (GET /health). Sem strategyRef: `ready` fala
-      # pela app inteira (todas as versoes prontas), nunca por uma versao — por
-      # isso o eco nao existe aqui. Prova por-versao vem de ScopedHealth.
       type: object
       required: [status, ready]
       properties:
@@ -569,19 +547,12 @@ components:
           enum: [UP, DOWN]
         ready:
           type: boolean
-          description: >
-            Agregado: true somente quando TODAS as versoes servidas terminaram o
-            warm-up e a app pode ir para ACTIVE. Readiness por versao: ScopedHealth.
+          description: A app esta pronta para responder.
         detail:
           type: string
           nullable: true
-          description: 'Ex.: "warming up 12/20 ticks".'
 
     ScopedHealth:
-      # Readiness de UMA versao (GET /health/{strategyRef}). strategyRef e
-      # OBRIGATORIO e nao-nulo: e a prova, no schema, de que `ready` pertence a
-      # versao consultada. Sem isso uma resposta agregada se passaria por
-      # escopada e o portao de promocao poderia promover uma versao fria.
       allOf:
         - $ref: '#/components/schemas/Health'
         - type: object
@@ -590,20 +561,11 @@ components:
             strategyRef:
               type: string
               format: uuid
-              description: >
-                Versao a que `ready` se refere (eco do path). Obrigatorio e
-                nao-nulo; aqui `ready` e escopado a esta versao, nao agregado.
-            runnerId:
-              type: string
-              format: uuid
-              nullable: true
-              description: >
-                Eco do query param runnerId quando informado: `ready` fala pelo
-                warm-up deste runner nesta versao.
+              description: Versao a que `ready` se refere (eco do path).
 
     Meta:
       type: object
-      required: [strategyId, name, version, contractVersion]
+      required: [strategyId, name, version, contractVersion, requirements]
       properties:
         strategyId:
           type: string
@@ -616,7 +578,26 @@ components:
           description: Versao semantica da estrategia, ex. "2.0.0".
         contractVersion:
           type: string
-          description: Versao do contrato implementada, ex. "1.0.0".
+          description: Versao do contrato implementada, ex. "2.0.0".
+        requirements: { $ref: '#/components/schemas/Requirements' }
+
+    Requirements:
+      type: object
+      additionalProperties: false
+      description: >
+        O que a estrategia precisa em cada interacao. Sem os ticks declarados o
+        ctrade nao a chama. Requisito desconhecido, acima do teto ou diferente do
+        gravado no catalogo falha a conferencia.
+      properties:
+        priceHistory:
+          type: object
+          additionalProperties: false
+          required: [ticks]
+          properties:
+            ticks:
+              type: integer
+              minimum: 0
+              maximum: 1000
 
     Error:
       type: object

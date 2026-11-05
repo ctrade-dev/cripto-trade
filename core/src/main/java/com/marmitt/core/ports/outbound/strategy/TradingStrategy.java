@@ -23,6 +23,13 @@ public interface TradingStrategy {
 
     String getStrategyVersion();
 
+    /**
+     * Ticks que {@link StrategyInputDto#priceHistory()} precisa trazer; sem eles a estrategia nao e consultada.
+     */
+    default int requiredPriceHistoryTicks() {
+        return 0;
+    }
+
     boolean isEnabled();
 
     void setEnabled(boolean enabled);

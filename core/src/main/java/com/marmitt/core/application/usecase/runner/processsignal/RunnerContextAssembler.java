@@ -41,6 +41,7 @@ class RunnerContextAssembler {
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
     private final RunnerExposureService exposureService;
     private final BigDecimal minimumOperationAmount;
+    private final LotPeakTracker lotPeaks = new LotPeakTracker();
 
     public RunnerContextAssembler(GlobalBalanceRepositoryPort globalBalanceRepository,
                                   StrategyRunnerRepositoryPort strategyRunnerRepository,
@@ -72,7 +73,7 @@ class RunnerContextAssembler {
         runnerPositionOpt.ifPresent(position -> position.updateCurrentPrice(marketPrice));
 
         List<OpenLotDto> openLots = runnerPositionOpt
-                .map(this::buildOpenLot)
+                .map(position -> buildOpenLot(runner, position))
                 .map(List::of)
                 .orElse(List.of());
 
@@ -113,7 +114,7 @@ class RunnerContextAssembler {
                 .build();
     }
 
-    private OpenLotDto buildOpenLot(Position pos) {
+    private OpenLotDto buildOpenLot(StrategyRunner runner, Position pos) {
         BigDecimal lockedQty = pos.getLockedQuantity() != null
                 ? pos.getLockedQuantity() : BigDecimal.ZERO;
         BigDecimal available = pos.getQuantity().subtract(lockedQty).max(BigDecimal.ZERO);
@@ -125,6 +126,7 @@ class RunnerContextAssembler {
                 .entryPrice(pos.getAveragePrice())
                 .currentPnlPercent(calculatePnlPercent(pos))
                 .openedAt(pos.getOpenedAt())
+                .peakPrice(lotPeaks.update(runner.getId(), pos.getId(), pos.getAveragePrice(), pos.getCurrentPrice()))
                 .build();
     }
 

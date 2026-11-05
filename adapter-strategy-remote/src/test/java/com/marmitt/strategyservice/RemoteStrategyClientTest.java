@@ -15,6 +15,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import com.marmitt.core.dto.strategy.OpenLotDto;
+import com.marmitt.core.dto.strategy.PricePointDto;
+import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort;
+
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RemoteStrategyClientTest {
 
     private static final UUID REF = UUID.fromString("5ea5e0a0-0000-4000-a000-000000000001");
-    private static final StrategyEndpoint ENDPOINT = new StrategyEndpoint("http://strategy:8090/v1/", "token-1");
+    private static final StrategyEndpoint ENDPOINT = new StrategyEndpoint("http://strategy:8090/v2/", "token-1");
     private static final Instant TICK = Instant.parse("2026-10-19T12:00:00Z");
     private static final String BUY = """
             {"strategyName":"SMA","decision":"SHOULD_BUY","confidence":"0.80","quantity":"0.00100000",
@@ -54,49 +58,39 @@ class RemoteStrategyClientTest {
         assertEquals(TradingAction.SHOULD_BUY, output.decision());
         assertEquals(0, new BigDecimal("0.001").compareTo(output.quantity()));
         assertNull(output.limitPrice());
-        assertEquals("http://strategy:8090/v1/evaluate", http.calls.getFirst().url());
+        assertEquals("http://strategy:8090/v2/evaluate", http.calls.getFirst().url());
         assertEquals("Bearer token-1", http.calls.getFirst().headers().get("Authorization"));
     }
 
     @Test
-    void requestCarriesTickIdAndAPerRunnerSequence() throws Exception {
-        http.reply = request -> new StrategyServiceHttpPort.Response(200, BUY);
-        RemoteStrategyClient client = client(Duration.ofSeconds(1));
-        UUID runnerA = UUID.randomUUID();
-        UUID runnerB = UUID.randomUUID();
-
-        client.evaluate(REF, ENDPOINT, input(), context(runnerA));
-        client.evaluate(REF, ENDPOINT, input(), context(runnerA));
-        client.evaluate(REF, ENDPOINT, input(), context(runnerB));
-
-        JsonNode first = objectMapper.readTree(http.calls.get(0).body());
-        JsonNode second = objectMapper.readTree(http.calls.get(1).body());
-        JsonNode third = objectMapper.readTree(http.calls.get(2).body());
-        long firstSequence = first.path("sequence").asLong();
-        assertEquals(firstSequence + 1, second.path("sequence").asLong(), "Estritamente crescente por runner");
-        assertEquals(runnerA + ":" + TICK.toEpochMilli() + ":" + (firstSequence + 1), second.path("tickId").asText());
-        assertEquals(firstSequence, third.path("sequence").asLong(), "Cada runner tem o seu contador");
-        assertEquals("65000.50", second.path("input").path("currentPrice").asText(), "Decimal trafega como string");
-    }
-
-    @Test
-    void sequenceKeepsGrowingAcrossAClientRestart() throws Exception {
+    void requestCarriesTheWholeInteraction() throws Exception {
         http.reply = request -> new StrategyServiceHttpPort.Response(200, BUY);
         UUID runner = UUID.randomUUID();
-        RemoteStrategyClient beforeRestart = client(Duration.ofSeconds(1));
-        for (int i = 0; i < 5; i++) {
-            beforeRestart.evaluate(REF, ENDPOINT, input(), context(runner));
-        }
-        long lastBeforeRestart = objectMapper.readTree(http.calls.getLast().body()).path("sequence").asLong();
+        OpenLotDto lot = OpenLotDto.builder().lotId(UUID.randomUUID()).quantity(BigDecimal.ONE)
+                .availableQuantity(BigDecimal.ONE).entryPrice(new BigDecimal("64000"))
+                .currentPnlPercent(BigDecimal.ONE).openedAt(TICK).peakPrice(new BigDecimal("65500.25")).build();
+        StrategyInputDto withHistory = input().withPriceHistory(List.of(
+                new PricePointDto(new BigDecimal("64999.50"), TICK.minusSeconds(1)),
+                new PricePointDto(new BigDecimal("65000.50"), TICK)));
+        StrategyContextDto base = context(runner);
+        StrategyContextDto withLot = StrategyContextDto.builder().runnerId(runner).portfolioId(base.portfolioId())
+                .symbol(base.symbol()).positionContext(base.positionContext()).openLots(List.of(lot))
+                .pendingOrders(List.of()).totalCapital(base.totalCapital()).availableCapital(base.availableCapital())
+                .maxOperationAmount(base.maxOperationAmount()).minOperationAmount(base.minOperationAmount())
+                .maxOpenPositions(1).currentOpenPositions(1).realizedPnl(base.realizedPnl())
+                .unrealizedPnl(base.unrealizedPnl()).build();
 
-        // ctrade reinicia um segundo depois: contador em memoria recomeca, o servico guardou o anterior.
-        RemoteStrategyClient afterRestart = new RemoteStrategyClient(http, objectMapper,
-                Duration.ofSeconds(5), Clock.fixed(TICK.plusSeconds(1), ZoneOffset.UTC));
-        afterRestart.evaluate(REF, ENDPOINT, input(), context(runner));
+        client(Duration.ofSeconds(1)).evaluate(REF, ENDPOINT, withHistory, withLot);
 
-        long firstAfterRestart = objectMapper.readTree(http.calls.getLast().body()).path("sequence").asLong();
-        assertTrue(firstAfterRestart > lastBeforeRestart,
-                "Depois do restart o sequence continua acima do ultimo visto pelo servico");
+        JsonNode body = objectMapper.readTree(http.calls.getFirst().body());
+        assertEquals(runner + ":" + TICK.toEpochMilli(), body.path("tickId").asText());
+        assertTrue(body.path("sequence").isMissingNode(), "sequence saiu no contrato 2.0");
+        assertEquals("65000.50", body.path("input").path("currentPrice").asText(), "Decimal trafega como string");
+        JsonNode history = body.path("input").path("priceHistory");
+        assertEquals(2, history.size());
+        assertEquals("64999.50", history.get(0).path("price").asText());
+        assertEquals(TICK.toString(), history.get(1).path("timestamp").asText());
+        assertEquals("65500.25", body.path("context").path("openLots").get(0).path("peakPrice").asText());
     }
 
     @Test
@@ -153,13 +147,38 @@ class RemoteStrategyClientTest {
     @Test
     void describeReadsTheServedIdentityFromMeta() {
         http.reply = request -> new StrategyServiceHttpPort.Response(200,
-                "[{\"strategyId\":\"" + REF + "\",\"name\":\"SMA\",\"version\":\"1.0.0\",\"contractVersion\":\"1.1.0\"}]");
+                "[{\"strategyId\":\"" + REF + "\",\"name\":\"SMA\",\"version\":\"1.0.0\",\"contractVersion\":\"2.0.0\","
+                        + "\"requirements\":{\"priceHistory\":{\"ticks\":20}}}]");
 
         var identity = client(Duration.ofSeconds(1)).describe(REF, ENDPOINT);
 
         assertEquals(REF, identity.strategyId());
-        assertEquals("1.1.0", identity.contractVersion());
-        assertEquals("http://strategy:8090/v1/meta?strategyRef=" + REF, http.calls.getFirst().url());
+        assertEquals("2.0.0", identity.contractVersion());
+        assertEquals(20, identity.priceHistoryTicks());
+        assertEquals("http://strategy:8090/v2/meta?strategyRef=" + REF, http.calls.getFirst().url());
+    }
+
+    @Test
+    void emptyRequirementsMeanNoPriceHistory() {
+        assertEquals(0, describeWith("{}").priceHistoryTicks());
+    }
+
+    @Test
+    void metaOutsideTheContractIsAnInvalidResponse() {
+        for (String requirements : List.of("null", "{\"candles\":{\"limit\":500}}",
+                "{\"priceHistory\":{}}", "{\"priceHistory\":{\"ticks\":\"20\"}}",
+                "{\"priceHistory\":{\"ticks\":1.5}}")) {
+            StrategyUnavailableException e = assertThrows(StrategyUnavailableException.class,
+                    () -> describeWith(requirements), requirements);
+            assertEquals(Reason.INVALID_RESPONSE, e.reason(), requirements);
+        }
+    }
+
+    private StrategyEvaluationPort.RemoteStrategyIdentity describeWith(String requirements) {
+        http.reply = request -> new StrategyServiceHttpPort.Response(200,
+                "[{\"strategyId\":\"" + REF + "\",\"name\":\"SMA\",\"version\":\"1.0.0\","
+                        + "\"contractVersion\":\"2.0.0\",\"requirements\":" + requirements + "}]");
+        return client(Duration.ofSeconds(1)).describe(REF, ENDPOINT);
     }
 
     private void assertReason(Reason expected, RemoteStrategyClient client) {
@@ -176,7 +195,7 @@ class RemoteStrategyClientTest {
     private static StrategyInputDto input() {
         BigDecimal price = new BigDecimal("65000.50");
         return new StrategyInputDto(Symbol.of("BTCUSDT"), price, null, price, price, BigDecimal.ONE,
-                price, price, TICK, Map.of());
+                price, price, TICK, Map.of(), List.of());
     }
 
     private static StrategyContextDto context(UUID runnerId) {

@@ -27,6 +27,7 @@ class RemoteTradingStrategy implements TradingStrategy {
     private final StrategyEvaluationPort evaluation;
     private volatile StrategyEndpoint endpoint;
     private volatile boolean enabled;
+    private volatile int requiredPriceHistoryTicks;
 
     RemoteTradingStrategy(UUID strategyRef, String name, String version, StrategyEndpoint endpoint,
                           StrategyEvaluationPort evaluation) {
@@ -56,6 +57,15 @@ class RemoteTradingStrategy implements TradingStrategy {
     @Override
     public String getStrategyVersion() {
         return version;
+    }
+
+    @Override
+    public int requiredPriceHistoryTicks() {
+        return requiredPriceHistoryTicks;
+    }
+
+    void requirePriceHistoryTicks(int ticks) {
+        this.requiredPriceHistoryTicks = ticks;
     }
 
     @Override
