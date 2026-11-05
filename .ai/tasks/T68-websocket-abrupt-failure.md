@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 11), T56 (coordenador de market data), T25 (rejeições consecutivas), T49 (comandos do operador)
-**Status:** Em andamento (PR #175 mergeado; falta validar em testnet o critério da decisão abaixo e a rodada de 72h)
+**Status:** Em andamento (PRs #175 e #176 mergeados; falta a rodada de 72h, junto com a T69)
 
 ---
 
