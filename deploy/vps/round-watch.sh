@@ -6,7 +6,9 @@
 # runners. Anomalia e estado fora de OK, algum ERROR ou runner fora de ACTIVE: cada mudanca do conjunto de
 # anomalias vai para o arquivo ANOMALY e para o Discord (DISCORD_WEBHOOK_URL do .env).
 #
-# Uso:  ./round-watch.sh       (ROUND_DIR=~/round; INTERVAL=300)
+# Em cada checkpoint da T53 (3h, 8h e 24h) grava checkpoint-<h>h.md com o relatorio da janela e avisa no Discord.
+#
+# Uso:  ./round-watch.sh       (ROUND_DIR=~/round; INTERVAL=300; CHECKPOINTS="10800 28800 86400", em segundos)
 set -uo pipefail
 
 cd "$(dirname "$0")"
@@ -25,9 +27,26 @@ notify() {
     | curl -s -m 20 -o /dev/null -w 'discord %{http_code}\n' -H 'Content-Type: application/json' -d @- "$WEBHOOK"
 }
 
+# O agente aplica os criterios da T53 sobre o relatorio; aqui so os dados, para nao depender da sessao dele.
+checkpoint() {
+  local at=$1 name="$(( $1 / 3600 ))h" now rec report
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  report="$ROUND_DIR/checkpoint-$name.md"
+  python3 ../../scripts/round_report.py --start "$START" --end "$now" --env-file .env --portfolio "$PORTFOLIO" \
+    > "$report" 2>&1 </dev/null
+  rec=$(curl -s -m 60 -H "X-Admin-Key: $K" "$B/reconciliation?symbol=BTCUSDT&from=$START&to=$now" | python3 -c "
+import json,sys
+s=json.load(sys.stdin)['summary']
+print(f\"{s['matched']}/{s['total']} divergent={s['divergent']} exchangeOnly={s['exchangeOnly']} localOnly={s['localOnly']}\")" 2>/dev/null || echo indisponivel)
+  msg="ctrade rodada $N: checkpoint $name: estado=$st errors=${err:-?} fills=$fills conciliacao $rec"
+  echo "$(date -u +%FT%H:%M:%SZ) $msg"
+  notify "$msg"
+}
+
 # Na largada o primeiro tick ainda nao chegou: MARKET_DATA_STALE seria um falso alarme.
 sleep "${GRACE:-60}"
 last=""
+pending=(${CHECKPOINTS:-10800 28800 86400})
 while (( $(date +%s) < END_TS )); do
   w=$(( $(date +%s) - START_TS ))
   st=$(curl -s -m 20 -H "X-Admin-Key: $K" $B/admin/operational-state | python3 -c "
@@ -57,6 +76,11 @@ print(j['status']+(' '+','.join(bad) if bad else ''))" 2>/dev/null || echo UNREA
     notify "$msg"
     last=$current
   fi
+
+  while (( ${#pending[@]} > 0 && w >= pending[0] )); do
+    checkpoint "${pending[0]}"
+    pending=("${pending[@]:1}")
+  done
 
   left=$(( END_TS - $(date +%s) ))
   (( left > 0 )) && sleep $(( left < INTERVAL ? left : INTERVAL ))

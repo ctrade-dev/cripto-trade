@@ -28,6 +28,7 @@ public record RemoteStrategyView(UUID strategyRef,
                                  String lastError,
                                  Instant lastVerificationAt,
                                  String servedContractVersion,
+                                 Integer priceHistoryTicks,
                                  Instant createdAt,
                                  Instant updatedAt,
                                  List<RunnerRef> runners) {

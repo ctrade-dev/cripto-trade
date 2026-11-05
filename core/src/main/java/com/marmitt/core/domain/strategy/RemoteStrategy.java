@@ -28,13 +28,15 @@ public class RemoteStrategy {
     private Instant lastVerificationAt;
     /** Versao do contrato que o servico declarou na ultima conferencia bem-sucedida. */
     private String servedContractVersion;
+    /** Ticks de historico declarados na primeira conferencia (T69); mudar exige novo {@code strategyRef}. */
+    private Integer priceHistoryTicks;
     private final Instant createdAt;
     private Instant updatedAt;
 
     public RemoteStrategy(UUID strategyRef, String name, String version, StrategyEndpoint endpoint,
                           RemoteStrategyStatus status, RemoteStrategyVerification verification, String lastError,
-                          Instant lastVerificationAt, String servedContractVersion, Instant createdAt,
-                          Instant updatedAt) {
+                          Instant lastVerificationAt, String servedContractVersion, Integer priceHistoryTicks,
+                          Instant createdAt, Instant updatedAt) {
         this.strategyRef = Objects.requireNonNull(strategyRef, "strategyRef cannot be null");
         this.name = requireText(name, "name");
         this.version = requireText(version, "version");
@@ -44,6 +46,7 @@ public class RemoteStrategy {
         this.lastError = lastError;
         this.lastVerificationAt = lastVerificationAt;
         this.servedContractVersion = servedContractVersion;
+        this.priceHistoryTicks = priceHistoryTicks;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt cannot be null");
     }
@@ -54,7 +57,7 @@ public class RemoteStrategy {
     public static RemoteStrategy register(UUID strategyRef, String name, String version, StrategyEndpoint endpoint,
                                           Instant now) {
         return new RemoteStrategy(strategyRef, name, version, endpoint, RemoteStrategyStatus.ENABLED,
-                RemoteStrategyVerification.PENDING, null, null, null, now, now);
+                RemoteStrategyVerification.PENDING, null, null, null, null, now, now);
     }
 
     /**
@@ -115,11 +118,12 @@ public class RemoteStrategy {
     /**
      * @return {@code true} se o resultado mudou (antes nao estava conferida)
      */
-    public boolean markVerified(String contractVersion, Instant now) {
+    public boolean markVerified(String contractVersion, int declaredPriceHistoryTicks, Instant now) {
         boolean changed = verification != RemoteStrategyVerification.VERIFIED;
         verification = RemoteStrategyVerification.VERIFIED;
         lastError = null;
         servedContractVersion = contractVersion;
+        priceHistoryTicks = declaredPriceHistoryTicks;
         lastVerificationAt = now;
         if (changed) {
             updatedAt = now;

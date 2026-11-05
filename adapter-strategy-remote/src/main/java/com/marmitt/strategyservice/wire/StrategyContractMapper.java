@@ -1,9 +1,11 @@
 package com.marmitt.strategyservice.wire;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.dto.strategy.OpenLotDto;
 import com.marmitt.core.dto.strategy.PendingOrderDto;
 import com.marmitt.core.dto.strategy.PositionContext;
+import com.marmitt.core.dto.strategy.PricePointDto;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
@@ -30,9 +32,9 @@ public final class StrategyContractMapper {
 
     // ---------------------------------------------------------------- core -> rede
 
-    public static WireTypes.EvaluateRequest toRequest(UUID strategyRef, String tickId, long sequence,
-                                                      StrategyInputDto input, StrategyContextDto context) {
-        return new WireTypes.EvaluateRequest(strategyRef.toString(), tickId, sequence, toWire(input), toWire(context));
+    public static WireTypes.EvaluateRequest toRequest(UUID strategyRef, String tickId, StrategyInputDto input,
+                                                      StrategyContextDto context) {
+        return new WireTypes.EvaluateRequest(strategyRef.toString(), tickId, toWire(input), toWire(context));
     }
 
     public static WireTypes.Decision toWire(StrategyOutputDto output) {
@@ -49,7 +51,10 @@ public final class StrategyContractMapper {
         return new WireTypes.MarketInput(input.symbol().value(), decimal(input.currentPrice()),
                 decimal(input.previousPrice()), decimal(input.bidPrice()), decimal(input.askPrice()),
                 decimal(input.volume()), decimal(input.high24h()), decimal(input.low24h()),
-                instant(input.timestamp()), input.additionalData());
+                instant(input.timestamp()), input.additionalData(),
+                input.priceHistory().stream()
+                        .map(point -> new WireTypes.PricePoint(decimal(point.price()), instant(point.timestamp())))
+                        .toList());
     }
 
     private static WireTypes.StrategyContext toWire(StrategyContextDto context) {
@@ -71,7 +76,7 @@ public final class StrategyContractMapper {
     private static List<WireTypes.OpenLot> lots(List<OpenLotDto> lots) {
         return lots.stream().map(lot -> new WireTypes.OpenLot(uuid(lot.lotId()), decimal(lot.quantity()),
                 decimal(lot.availableQuantity()), decimal(lot.entryPrice()), decimal(lot.currentPnlPercent()),
-                instant(lot.openedAt()))).toList();
+                instant(lot.openedAt()), decimal(lot.peakPrice()))).toList();
     }
 
     private static WireTypes.PendingOrder toWire(PendingOrderDto order) {
@@ -99,7 +104,10 @@ public final class StrategyContractMapper {
                 decimalOrNull(input.previousPrice()), decimalOrNull(input.bidPrice()),
                 decimalOrNull(input.askPrice()), decimalOrNull(input.volume()), decimalOrNull(input.high24h()),
                 decimalOrNull(input.low24h()), Instant.parse(input.timestamp()),
-                input.additionalData() == null ? Map.of() : input.additionalData());
+                input.additionalData() == null ? Map.of() : input.additionalData(),
+                input.priceHistory() == null ? List.of() : input.priceHistory().stream()
+                        .map(point -> new PricePointDto(new BigDecimal(point.price()), Instant.parse(point.timestamp())))
+                        .toList());
     }
 
     public static StrategyContextDto toCore(WireTypes.StrategyContext context) {
@@ -125,7 +133,34 @@ public final class StrategyContractMapper {
     private static List<OpenLotDto> coreLots(List<WireTypes.OpenLot> lots) {
         return lots.stream().map(lot -> new OpenLotDto(UUID.fromString(lot.lotId()), new BigDecimal(lot.quantity()),
                 new BigDecimal(lot.availableQuantity()), new BigDecimal(lot.entryPrice()),
-                new BigDecimal(lot.currentPnlPercent()), Instant.parse(lot.openedAt()))).toList();
+                new BigDecimal(lot.currentPnlPercent()), Instant.parse(lot.openedAt()),
+                new BigDecimal(lot.peakPrice()))).toList();
+    }
+
+    /**
+     * Ticks de historico declarados em {@code requirements}. Requisito desconhecido e recusado: a estrategia
+     * precisaria de algo que este ctrade nao entrega, e a falha deve aparecer na conferencia, nao no tick.
+     *
+     * @throws IllegalArgumentException se {@code requirements} faltar ou estiver fora do contrato
+     */
+    public static int priceHistoryTicks(JsonNode requirements) {
+        if (requirements == null || !requirements.isObject()) {
+            throw new IllegalArgumentException("requirements is required");
+        }
+        requirements.fieldNames().forEachRemaining(name -> {
+            if (!"priceHistory".equals(name)) {
+                throw new IllegalArgumentException("unknown requirement " + name);
+            }
+        });
+        JsonNode priceHistory = requirements.get("priceHistory");
+        if (priceHistory == null) {
+            return 0;
+        }
+        JsonNode ticks = priceHistory.get("ticks");
+        if (ticks == null || !ticks.canConvertToInt() || !ticks.isIntegralNumber()) {
+            throw new IllegalArgumentException("requirements.priceHistory.ticks must be an integer");
+        }
+        return ticks.intValue();
     }
 
     // ---------------------------------------------------------------- escalares

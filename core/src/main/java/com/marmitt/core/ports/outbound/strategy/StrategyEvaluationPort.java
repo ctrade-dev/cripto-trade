@@ -21,7 +21,7 @@ public interface StrategyEvaluationPort {
                                StrategyContextDto context);
 
     /**
-     * Identidade que o serviço declara servir para {@code strategyRef} ({@code /meta} no contrato REST).
+     * Identidade e requisitos que o serviço declara para {@code strategyRef} ({@code /meta} no contrato REST).
      *
      * @throws com.marmitt.core.exceptions.StrategyUnavailableException se o serviço não responder ou
      *         não servir a versão
@@ -29,8 +29,10 @@ public interface StrategyEvaluationPort {
     RemoteStrategyIdentity describe(UUID strategyRef, StrategyEndpoint endpoint);
 
     /**
-     * @param contractVersion versão do contrato de rede que o serviço implementa (ex.: {@code 1.1.0})
+     * @param contractVersion   versão do contrato de rede que o serviço implementa (ex.: {@code 2.0.0})
+     * @param priceHistoryTicks ticks de histórico que a estratégia declarou precisar (T69)
      */
-    record RemoteStrategyIdentity(UUID strategyId, String name, String version, String contractVersion) {
+    record RemoteStrategyIdentity(UUID strategyId, String name, String version, String contractVersion,
+                                  int priceHistoryTicks) {
     }
 }

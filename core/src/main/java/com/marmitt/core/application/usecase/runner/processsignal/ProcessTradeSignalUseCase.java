@@ -6,6 +6,7 @@ import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.dto.capital.BuyExecutionContext;
 import com.marmitt.core.dto.notification.ErrorNotificationEvent;
+import com.marmitt.core.dto.strategy.PricePointDto;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
@@ -21,6 +22,7 @@ import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 import com.marmitt.core.ports.outbound.exchange.OrderDispatchPort;
 import com.marmitt.core.ports.outbound.exchange.rest.OrderQuantityNormalizerPort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
+import com.marmitt.core.ports.outbound.marketdata.PriceHistoryPort;
 import com.marmitt.core.ports.outbound.metrics.SignalDecision;
 import com.marmitt.core.ports.outbound.metrics.SignalMetricsPort;
 import com.marmitt.core.ports.outbound.metrics.TickDiscardReason;
@@ -90,6 +92,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
     private final OrderConciliationPort orderConciliation;
     private final SignalMetricsPort signalMetrics;
     private final LatestPricePort latestPrices;
+    private final PriceHistoryPort priceHistory;
     private final RunnerMailbox mailbox;
     private final Duration staleTickThreshold;
     private final Duration slowProcessingWarning;
@@ -119,6 +122,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                                         List<OrderQuantityNormalizerPort> orderNormalizers,
                                         SignalMetricsPort signalMetrics,
                                         LatestPricePort latestPrices,
+                                        PriceHistoryPort priceHistory,
                                         ErrorNotificationPort notification,
                                         Executor runnerExecutor,
                                         Duration staleTickThreshold,
@@ -128,6 +132,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         this.orderConciliation = orderConciliation;
         this.signalMetrics = signalMetrics;
         this.latestPrices = latestPrices;
+        this.priceHistory = priceHistory;
         this.notification = notification;
         this.mailbox = new RunnerMailbox(runnerExecutor, this::evaluateTick, signalMetrics);
         this.staleTickThreshold = staleTickThreshold;
@@ -278,6 +283,8 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
     public void execute(MarketDataDto marketData) {
         String symbol = marketData.symbol().value();
         String exchangeId = marketData.exchangeName();
+        // T69: antes do filtro de runners, para o historico ja estar pronto quando um runner ativar.
+        priceHistory.record(exchangeId, symbol, marketData.price(), marketData.timestamp());
 
         List<StrategyRunner> strategyRunners = strategyRunnerRepository.findOperationalBySymbol(symbol, exchangeId);
         if (strategyRunners.isEmpty()) {
@@ -324,7 +331,8 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
             if (safeMode.cancelsOrders()) {
                 enforceSafeMode(runner, safeMode, marketData.price());
             } else if (!protectionActed) {
-                processRunner(runner, tradeIntentFactory.buildStrategyInput(marketData), marketData.price());
+                processRunner(runner, marketData.exchangeName(), tradeIntentFactory.buildStrategyInput(marketData),
+                        marketData.price());
             }
         } catch (RunnerHaltedException e) {
             log.warn("priceUpdate: signal discarded - runner halted mid-flight runnerId={} symbol={}",
@@ -491,15 +499,39 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                 .orElseThrow(() -> new RunnerNotFoundException(runnerId));
     }
 
-    private void processRunner(StrategyRunner runner, StrategyInputDto input, BigDecimal currentPrice) {
+    /** A decisao vale so para este tick (T69): descartada aqui, o tick seguinte decide de novo. */
+    private boolean dropBecauseDispatchBlocked(StrategyRunner runner) {
+        if (!orderDispatch.isBlocked(runner.getExchangeId())) {
+            return false;
+        }
+        log.debug("priceUpdate: order dispatch blocked runner={} exchange={} - signal dropped, next tick decides again",
+                runner.getId(), runner.getExchangeId());
+        signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.DISPATCH_BLOCKED);
+        return true;
+    }
+
+    private void processRunner(StrategyRunner runner, String marketDataSource, StrategyInputDto input,
+                               BigDecimal currentPrice) {
         Optional<TradingStrategy> activeStrategy = signalEvaluator.resolveActiveStrategy(runner);
         if (activeStrategy.isEmpty()) {
             return;
         }
 
+        // T69: a estrategia e stateless e recebe o historico inteiro; sem ele, nao e consultada.
+        int requiredTicks = activeStrategy.get().requiredPriceHistoryTicks();
+        // A serie e a da fonte do tick: o runner pode receber market data de outra exchange autorizada.
+        List<PricePointDto> history = priceHistory.latest(marketDataSource, runner.getSymbol(), requiredTicks,
+                input.timestamp());
+        if (history.size() < requiredTicks) {
+            signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.WAITING_HISTORY);
+            log.debug("priceUpdate: waiting price history runner={} have={} required={}",
+                    runner.getId(), history.size(), requiredTicks);
+            return;
+        }
+
         StrategyContextDto context = contextAssembler.assemble(runner, currentPrice);
         StrategySignalEvaluator.Evaluation evaluation =
-                signalEvaluator.evaluate(runner, activeStrategy.get(), input, context);
+                signalEvaluator.evaluate(runner, activeStrategy.get(), input.withPriceHistory(history), context);
         if (evaluation.unavailable()) {
             signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.STRATEGY_UNAVAILABLE);
             return;
@@ -520,6 +552,9 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
             // canProcessRunner e o retorno da estrategia. Lanca RunnerHaltedException (capturada em
             // execute) — mesma semantica de seguranca dos ramos BUY/SELL antes do dispatch.
             checkRunnerNotHalted(runner.getId());
+            if (dropBecauseDispatchBlocked(runner)) {
+                return;
+            }
             cancelSignalHandler.handle(runner, strategyOutput.targetTransactionId(), strategyOutput.reasoning());
             signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.CANCEL);
             return;
@@ -540,10 +575,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                                               OrderType orderType) {
         // T68: sem conexao nao ha ordem. Criar a transacao so para rejeita-la aqui dentro geraria uma por
         // tick e contaria para o HALT de rejeicoes consecutivas (T25), que existe para recusas da exchange.
-        if (orderDispatch.isBlocked(runner.getExchangeId())) {
-            log.debug("priceUpdate: order dispatch blocked runner={} exchange={} - signal dropped, next tick decides again",
-                    runner.getId(), runner.getExchangeId());
-            signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.DISPATCH_BLOCKED);
+        if (dropBecauseDispatchBlocked(runner)) {
             return SignalDecision.DISPATCH_BLOCKED;
         }
         RunnerExposureService.ExposureSnapshot exposureSnapshot = signalPolicy.requiresExposureSnapshot(signal)

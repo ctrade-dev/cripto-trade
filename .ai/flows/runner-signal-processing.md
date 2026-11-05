@@ -36,17 +36,21 @@ adaptadores externos.
    quando ela age no tick, a estrategia nao e consultada.
    Le o nivel do Safe Mode de cada portfolio uma vez por tick. Em `CANCEL_ALL`/`PANIC_SELL` o runner
    segue o ramo "Safe Mode" abaixo e a estrategia nao e consultada (T45).
-4. `RunnerContextAssembler` monta `StrategyContextDto` com portfolio,
+4. Com menos ticks em `PriceHistoryPort` que os requisitos da estrategia, o tick conta como
+   `WAITING_HISTORY` e a estrategia nao e consultada (T69). Cada tick recebido entra no historico antes da
+   mailbox, na thread de market data. Depois, `RunnerContextAssembler` monta `StrategyContextDto` com portfolio,
    posicoes, ordens pendentes, limites e PnL. A posicao e marcada ao preco do tick (em memoria):
-   `unrealizedPnl` e o percentual do lote refletem o mercado (T43).
+   `unrealizedPnl` e o percentual do lote refletem o mercado (T43); `peakPrice` vem do `LotPeakTracker` (T69).
 5. `StrategySignalEvaluator` resolve a estrategia **so por `strategyId`** e a avalia. Qualquer falha
    (excecao, retorno nulo, sinal invalido, estrategia remota indisponivel) vira HOLD implicito com o
    desfecho `STRATEGY_UNAVAILABLE` (T41). Estrategia remota = `RemoteTradingStrategy` posta no
    repositorio pelo catalogo persistido (`RemoteStrategyCatalogUseCase`, T54) e avaliada pelo
    `StrategyEvaluationPort` com o endereco/token do catalogo (contrato em `docs/strategy-service/`).
-   Ela so e consultada quando habilitada e conferida via `/v1/meta` neste processo; desabilitada ou
+   Ela so e consultada quando habilitada e conferida via `/v2/meta` neste processo; desabilitada ou
    pendente, o runner fica em HOLD implicito sem chamar o servico.
-6. Sinal `HOLD` encerra o fluxo sem efeito.
+6. Sinal `HOLD` encerra o fluxo sem efeito. Com o envio a exchange bloqueado por conexao perdida (T68), `BUY`,
+   `SELL` e `CANCEL` sao descartados antes de criar transacao ou enviar algo (`DISPATCH_BLOCKED`): a decisao vale
+   so para o tick dela, e o tick seguinte decide de novo (T69). O mesmo vale para a protecao do lote e o Safe Mode.
 7. `PreTradeRiskPolicy` (T50) descarta, antes de persistir: `limitPrice` a mais de 10% do preco do
    tick (BUY e SELL) e BUY com o runner em `maxOpenPositions` ou `maxPendingOrders` (snapshot de
    exposicao carregado para todo BUY). SELL nunca e barrada por contagem, para nao travar saidas.

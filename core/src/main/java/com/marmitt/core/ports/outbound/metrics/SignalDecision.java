@@ -27,6 +27,8 @@ public enum SignalDecision {
     REJECTED_MAX_PENDING,
     /** Envio a exchange bloqueado por conexao perdida: nenhuma ordem e criada, o tick seguinte decide de novo (T68). */
     DISPATCH_BLOCKED,
+    /** Ainda nao ha os ticks que a estrategia declarou em seus requisitos: ela nao foi consultada (T69). */
+    WAITING_HISTORY,
     /** Tick conduzido pelo Safe Mode (CANCEL_ALL/PANIC_SELL): a estrategia nao foi consultada (T45). */
     SAFE_MODE,
     /** A estrategia nao produziu decisao utilizavel (falha, indisponivel, resposta invalida, velha) — T41. */

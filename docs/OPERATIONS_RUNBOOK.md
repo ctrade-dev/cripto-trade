@@ -447,7 +447,7 @@ passa de `maxHoldingDuration`. Vale com a estratégia fora do ar e em HALT. Ajus
 A estratégia é uma app que implementa `docs/strategy-service/CONTRACT.md`; o catálogo é operado por API.
 
 - Cadastrar: `POST /api/admin/strategies`
-  `{"strategyRef","name","version","baseUrl":"http://host:porta/v1","token"}`. Esperado
+  `{"strategyRef","name","version","baseUrl":"http://host:porta/v2","token"}`. Esperado
   `verification=VERIFIED`, `usable=true`; `FAILED` = ler `lastError` (conferido de novo a cada 30s).
   `409 STRATEGY_DEFINITION_CONFLICT`: versão nova = `strategyRef` novo; endereço novo = `PATCH`.
 - Consultar: `GET /api/admin/strategies[/{ref}]`, histórico em `.../events`.

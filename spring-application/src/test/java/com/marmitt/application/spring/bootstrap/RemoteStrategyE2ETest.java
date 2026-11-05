@@ -40,6 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
 
     private static final UUID REF = UUID.fromString("5ea5e0a0-0000-4000-a000-0000000000e2");
+    private static final UUID NEEDS_HISTORY_REF = UUID.randomUUID();
+    private static volatile String lastEvaluateBody = "";
     private static final MockWebServer SERVICE = new MockWebServer();
 
     @Autowired
@@ -60,10 +62,13 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
             @Override
             public MockResponse dispatch(@NotNull RecordedRequest request) {
                 String path = request.getPath() == null ? "" : request.getPath();
-                if (path.startsWith("/v1/meta")) {
+                if (path.startsWith("/v2/meta")) {
                     return json("[{\"strategyId\":\"" + REF + "\",\"name\":\"RemoteE2E\",\"version\":\"1.0.0\","
-                            + "\"contractVersion\":\"1.1.0\"}]");
+                            + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1}}},"
+                            + "{\"strategyId\":\"" + NEEDS_HISTORY_REF + "\",\"name\":\"NeedsHistory\",\"version\":\"1.0.0\","
+                            + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1000}}}]");
                 }
+                lastEvaluateBody = request.getBody().clone().readUtf8();
                 BigDecimal limit = MARKET_PRICE.multiply(new BigDecimal("1.01"));
                 String buy = "{\"strategyName\":\"RemoteE2E\",\"decision\":\"SHOULD_BUY\",\"confidence\":\"0.9\","
                         + "\"quantity\":\"0.00100000\",\"limitPrice\":\"" + limit.toPlainString() + "\",\"reasoning\":\"e2e\"}";
@@ -97,7 +102,7 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
     void registerInTheCatalog() {
         mode = Mode.BUY;
         catalog.register(new RegisterRemoteStrategyRequest(REF, "RemoteE2E", "1.0.0",
-                SERVICE.url("/v1").toString(), "e2e-token"), "e2e setup");
+                SERVICE.url("/v2").toString(), "e2e-token"), "e2e setup");
         catalog.enable(REF, "e2e setup");
     }
 
@@ -117,6 +122,25 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
 
         assertTrue(signalEvaluatedCount(runnerId, "BUY") >= 1.0);
         assertEquals(0.0, signalEvaluatedCount(runnerId, "STRATEGY_UNAVAILABLE"));
+        assertTrue(lastEvaluateBody.contains("\"priceHistory\":[{\"price\":"), lastEvaluateBody);
+    }
+
+    /** T69: sem os ticks declarados a estrategia nao e consultada, e a espera aparece na metrica. */
+    @Test
+    void strategyIsNotCalledUntilTheDeclaredPriceHistoryIsAvailable() {
+        catalog.register(new RegisterRemoteStrategyRequest(NEEDS_HISTORY_REF, "NeedsHistory", "1.0.0",
+                SERVICE.url("/v2").toString(), "e2e-token"), "e2e setup");
+        assertEquals(1000, catalog.get(NEEDS_HISTORY_REF).priceHistoryTicks());
+        UUID runnerId = createAndActivateRunner(createPortfolio(), NEEDS_HISTORY_REF);
+        int callsBefore = SERVICE.getRequestCount();
+
+        driveTicks(4);
+        awaitCondition(() -> signalEvaluatedCount(runnerId, "WAITING_HISTORY") > 0, WAIT_TIMEOUT,
+                "tick contado como espera de historico", runnerId);
+
+        assertEquals(callsBefore, SERVICE.getRequestCount(), "a estrategia nao foi chamada");
+        assertEquals(0, transactionCount(runnerId));
+        haltRunner.haltById(runnerId, RunnerStatusCause.manual("test"));
     }
 
     @Test

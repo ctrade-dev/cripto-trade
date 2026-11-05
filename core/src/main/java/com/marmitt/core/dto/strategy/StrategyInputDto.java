@@ -5,6 +5,7 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Builder
@@ -18,8 +19,18 @@ public record StrategyInputDto(
         BigDecimal high24h,
         BigDecimal low24h,
         Instant timestamp,
-        Map<String, Object> additionalData
+        Map<String, Object> additionalData,
+        List<PricePointDto> priceHistory
 ) {
+
+    public StrategyInputDto {
+        priceHistory = priceHistory == null ? List.of() : priceHistory;
+    }
+
+    public StrategyInputDto withPriceHistory(List<PricePointDto> history) {
+        return new StrategyInputDto(symbol, currentPrice, previousPrice, bidPrice, askPrice, volume, high24h, low24h,
+                timestamp, additionalData, history);
+    }
 
     /**
      * Verifica se os dados de entrada da estratégia são válidos

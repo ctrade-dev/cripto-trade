@@ -111,6 +111,32 @@ class RunnerLifecycleE2ETest extends ScenarioStrategyE2ETestSupport {
         }
     }
 
+    /** T69: a decisao vale so para o tick dela. Descartado o cancelamento, o proximo tick decide de novo. */
+    @Test
+    void strategyCancelWhileDispatchIsBlockedIsDroppedAndDecidedAgainAfterwards() {
+        UUID runnerId = activateScenario(new RestingBuyCancelStrategy(ScenarioStrategyConfig.boundedConfig(1)));
+        String exchange = strategyRunnerRepository.findById(runnerId).orElseThrow().getExchangeId();
+        publishTick(MARKET_PRICE);
+        awaitCondition(() -> transactionsOfType(runnerId, "BUY").stream().anyMatch(tx -> "SUBMITTED".equals(tx.status())),
+                WAIT_TIMEOUT, "BUY descansando", runnerId);
+        double cancelsBefore = signalEvaluatedCount(runnerId, "CANCEL");
+
+        exchangeAdapters.blockDispatch(exchange);
+        try {
+            sleep(100);
+            publishTick(MARKET_PRICE);
+            awaitCondition(() -> signalEvaluatedCount(runnerId, "DISPATCH_BLOCKED") > 0, WAIT_TIMEOUT,
+                    "cancelamento descartado pelo bloqueio", runnerId);
+            assertEquals(cancelsBefore, signalEvaluatedCount(runnerId, "CANCEL"), "nada foi enviado");
+            assertEquals("SUBMITTED", transactionsOfType(runnerId, "BUY").getFirst().status());
+        } finally {
+            exchangeAdapters.unblockDispatch(exchange);
+        }
+
+        tickUntil(() -> transactionsOfType(runnerId, "BUY").stream().anyMatch(tx -> "CANCELED".equals(tx.status())),
+                "cancelamento depois do desbloqueio", runnerId);
+    }
+
     /** T53 rodada 11: com o envio bloqueado o comando respondia 202 e a ordem seguia na exchange. */
     @Test
     void operatorCancelIsRefusedWhileDispatchIsBlockedAndWorksAfterwards() {

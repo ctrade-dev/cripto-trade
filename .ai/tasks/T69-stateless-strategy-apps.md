@@ -3,7 +3,7 @@
 **Complexidade:** Alta
 **Responsável:** Claude
 **Dependências:** T40 (contrato 1.1), T41 (estratégia remota), T60 (apps de soak), T68 (envio bloqueado)
-**Status:** Spec revisada com o mantenedor (2026-11-05)
+**Status:** Em andamento (falta a rodada de 72h)
 
 ---
 
@@ -76,8 +76,9 @@ Não precisa de endpoint novo, e o `/evaluate` não gasta seus 250 ms com idas e
   conforme os requisitos da estratégia. `RunnerContextAssembler` preenche `peakPrice`.
 - **Espera por histórico:** com menos ticks que o declarado, a estratégia não é chamada e o tick conta em
   `signal.evaluated.total` como `WAITING_HISTORY`. A proteção do lote e o Safe Mode rodam antes e não dependem disso.
-- **`spring-application`:** buffer circular em memória por `(exchange, symbol)`. O registro roda na thread de market
-  data, antes da mailbox, e não pode bloquear (T42).
+- **`spring-application`:** buffer circular em memória por `(exchange, symbol)`, da fonte do tick, porque um runner pode
+  receber market data de outra exchange autorizada. O registro roda na thread de market data, antes da mailbox, e não
+  pode bloquear (T42).
 - **`adapter-strategy-remote`:** tipos de wire, mapper, rotas `/v2`, leitura de `requirements`.
 - **Catálogo:**
   - grava os requisitos no cadastro e os compara a cada verificação;
@@ -129,15 +130,17 @@ Não precisa de endpoint novo, e o `/evaluate` não gasta seus 250 ms com idas e
 
 ## Critérios de aceite
 
-- [ ] `CONTRACT.md` e `openapi.yaml` na versão 2.0, com a regra stateless e a decisão por tick.
-- [ ] `DISPATCH_BLOCKED` documentado em `.ai/flows/runner-signal-processing.md`.
-- [ ] Manual, seção 8, atualizado com a regra.
-- [ ] Nenhuma app guarda estado que influencie a decisão nem faz chamada de saída, com teste de conformidade.
-- [ ] Requisito alterado sem novo `strategyId`, desconhecido ou acima do teto falha a verificação com o motivo.
-- [ ] Runner sem histórico suficiente não chama a estratégia, e `priceHistory` sempre chega completo.
-- [ ] Reiniciar uma app com lote aberto não muda a decisão seguinte e não exige warm-up.
-- [ ] E2E: `SHOULD_CANCEL` com envio bloqueado não envia nada, conta `DISPATCH_BLOCKED` e sai quando a conexão volta.
-- [ ] Testnet: queda provocada com cancelamento vencido do `SoakBook`; o pedido sai depois da reconexão.
+- [x] `CONTRACT.md` e `openapi.yaml` na versão 2.0, com a regra stateless e a decisão por tick.
+- [x] `DISPATCH_BLOCKED` documentado em `.ai/flows/runner-signal-processing.md`.
+- [x] Manual, seção 8, atualizado com a regra.
+- [x] Nenhuma app guarda estado que influencie a decisão nem faz chamada de saída, com teste de conformidade.
+- [x] Requisito alterado sem novo `strategyId`, desconhecido ou acima do teto falha a verificação com o motivo.
+- [x] Runner sem histórico suficiente não chama a estratégia, e `priceHistory` sempre chega completo.
+- [x] Reiniciar uma app com lote aberto não muda a decisão seguinte e não exige warm-up.
+- [x] E2E: `SHOULD_CANCEL` com envio bloqueado não envia nada, conta `DISPATCH_BLOCKED` e sai quando a conexão volta.
+- [x] Testnet: queda provocada com cancelamento vencido do `SoakBook`; o pedido sai depois da reconexão (rodada curta 70:
+  `USER_DATA` fora por 49 s, atravessando o prazo de 120 s. A ordem seguiu `SUBMITTED`, `CANCEL` não contou durante a queda
+  e a ordem terminou `CANCELED` logo depois da reconexão).
 - [ ] Testnet: latência e falhas do `/evaluate` sem piora relevante com `priceHistory`.
 - [ ] Rodada de 72h aprovada, com checkpoints (T53, decisão de 2026-11-05).
 

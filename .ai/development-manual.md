@@ -358,6 +358,8 @@ Antes de tocar dominio, conciliacao, portfolio, runner, boot ou ordem, leia
 
 ## 8. Estrategias
 
+- Apps de estrategia sao **stateless**, o caminho e **unilateral** (a app nunca chama o ctrade) e cada
+  configuracao e uma app, com seu `strategyId` (T69). Faltou dado: expandir o contrato.
 - O ctrade define o contrato (`docs/strategy-service/CONTRACT.md` e `openapi.yaml`), nunca a
   implementacao. Estrategia nova e app nova (em `ctrade-dev/ctrade-strategies` ou outra), cadastrada
   por `POST /api/admin/strategies` (T54).
@@ -366,8 +368,8 @@ Antes de tocar dominio, conciliacao, portfolio, runner, boot ou ordem, leia
 - Falha da estrategia (indisponivel, resposta invalida, excecao) vira HOLD no `StrategySignalEvaluator`.
 - Testes de integracao usam dubles in-process em
   `spring-application/src/test/.../testsupport/strategy` (cenarios da T35 e a SMA de teste): cada teste
-  registra o seu no repositorio. Dubles seguem as mesmas regras da decisao: funcao de
-  `(StrategyInputDto, StrategyContextDto)` + warm-up chaveado por runner, sem I/O.
+  registra o seu no repositorio. Dubles nao sao apps de estrategia: podem contar ciclos e janela por runner
+  para conduzir o cenario, sem I/O.
 
 ---
 
@@ -468,6 +470,7 @@ Nao usar como precedente; corrigir quando a task tocar a area:
   roadmap da T14 propoe nomes por dominio (`ExchangeStream*`).
 - `adapter-coinbase` incompleto (sem ordem/consulta).
 - Design no IG/Blueprint sem implementacao: auditoria em T39.
-- Estado de warm-up de estrategia por instancia, nao por runner (T40).
+- Estado na app de estrategia entre interacoes, e chamada da app para o ctrade (T69).
+- Parametros de estrategia no runner, enviados pelo ctrade: levam regra do ctrade para a app (T69).
 - Rejeicoes sinteticas (`expirePending*`, `OrderDispatchAdapter.toRejectedOrder`) informam
   `OrderType.LIMIT` fixo no `OrderDataDto`, mesmo para a liquidacao MARKET (T45).

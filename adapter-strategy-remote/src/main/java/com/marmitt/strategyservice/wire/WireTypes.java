@@ -1,12 +1,13 @@
 package com.marmitt.strategyservice.wire;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.Map;
 
 /**
- * Formato de rede do contrato do strategy service ({@code docs/strategy-service/openapi.yaml}, 1.1).
+ * Formato de rede do contrato do strategy service ({@code docs/strategy-service/openapi.yaml}, 2.0).
  *
  * <p>Espelha o spec campo a campo: decimais e instantes trafegam como {@code String} (decimal como
  * string, ISO-8601 UTC); UUIDs como string. A conversão para os DTOs do core fica no
@@ -17,13 +18,16 @@ public final class WireTypes {
     private WireTypes() {
     }
 
-    public record EvaluateRequest(String strategyRef, String tickId, long sequence,
-                                  MarketInput input, StrategyContext context) {
+    public record EvaluateRequest(String strategyRef, String tickId, MarketInput input, StrategyContext context) {
     }
 
     public record MarketInput(String symbol, String currentPrice, String previousPrice, String bidPrice,
                               String askPrice, String volume, String high24h, String low24h,
-                              String timestamp, Map<String, Object> additionalData) {
+                              String timestamp, Map<String, Object> additionalData,
+                              List<PricePoint> priceHistory) {
+    }
+
+    public record PricePoint(String price, String timestamp) {
     }
 
     public record StrategyContext(String runnerId, String portfolioId, String symbol,
@@ -40,7 +44,7 @@ public final class WireTypes {
     }
 
     public record OpenLot(String lotId, String quantity, String availableQuantity, String entryPrice,
-                          String currentPnlPercent, String openedAt) {
+                          String currentPnlPercent, String openedAt, String peakPrice) {
     }
 
     public record PendingOrder(String transactionId, String type, String quantity, String price,
@@ -54,11 +58,12 @@ public final class WireTypes {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Meta(String strategyId, String name, String version, String contractVersion) {
+    public record Meta(String strategyId, String name, String version, String contractVersion,
+                       JsonNode requirements) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Health(String status, boolean ready, String detail, String strategyRef, String runnerId) {
+    public record Health(String status, boolean ready, String detail, String strategyRef) {
     }
 
     public record Error(String message) {

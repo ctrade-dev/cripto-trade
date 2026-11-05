@@ -19,6 +19,7 @@ import com.marmitt.core.ports.outbound.notification.ErrorNotificationPort;
 import com.marmitt.core.ports.outbound.repository.RemoteStrategyCatalogRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.PriceHistoryPort;
 import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort;
 import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort.RemoteStrategyIdentity;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
@@ -38,7 +39,7 @@ import java.util.UUID;
  * <p><b>Um caminho de conferencia.</b> Cadastro, reabilitacao, troca de endereco e o ciclo periodico
  * passam pelo mesmo {@link #sync}: garante a {@link RemoteTradingStrategy} no repositorio de estrategias
  * e, se a entrada esta habilitada e ainda nao foi conferida neste processo, confere a identidade pelo
- * proprio servico ({@code /v1/meta}). Conferida, a estrategia passa a ser consultada pelos runners;
+ * proprio servico ({@code /v2/meta}). Conferida, a estrategia passa a ser consultada pelos runners;
  * enquanto nao, eles ficam em HOLD implicito.
  *
  * <p><b>Idempotencia e historico.</b> Mudanca repetida nao falha nem gera evento; conferencia repetida
@@ -50,7 +51,7 @@ import java.util.UUID;
 @Slf4j
 public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort, SyncRemoteStrategiesPort {
 
-    static final int SUPPORTED_CONTRACT_MAJOR = 1;
+    static final int SUPPORTED_CONTRACT_MAJOR = 2;
 
     private final RemoteStrategyCatalogRepositoryPort catalog;
     private final StrategyRepositoryPort strategyRepository;
@@ -282,8 +283,9 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
         }
 
         if (failure == null) {
+            remote.requirePriceHistoryTicks(served.priceHistoryTicks());
             remote.setEnabled(true);
-            if (strategy.markVerified(served.contractVersion(), now)) {
+            if (strategy.markVerified(served.contractVersion(), served.priceHistoryTicks(), now)) {
                 log.info("remoteStrategy: verified strategyRef={} name={} version={} contract={}",
                         strategy.getStrategyRef(), served.name(), served.version(), served.contractVersion());
                 return List.of(RemoteStrategyEvent.of(strategy.getStrategyRef(), RemoteStrategyEventType.VERIFIED,
@@ -311,6 +313,14 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
         if (!isSupportedContract(served.contractVersion())) {
             return "unsupported contract version " + served.contractVersion()
                     + " (supported major " + SUPPORTED_CONTRACT_MAJOR + ")";
+        }
+        int ticks = served.priceHistoryTicks();
+        if (ticks < 0 || ticks > PriceHistoryPort.MAX_TICKS) {
+            return "service requires " + ticks + " price history ticks, supported 0 to " + PriceHistoryPort.MAX_TICKS;
+        }
+        if (expected.getPriceHistoryTicks() != null && expected.getPriceHistoryTicks() != ticks) {
+            return "service requires " + ticks + " price history ticks, catalog expects "
+                    + expected.getPriceHistoryTicks() + " - a changed requirement needs a new strategyRef";
         }
         return null;
     }
@@ -342,7 +352,7 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
         return new RemoteStrategyView(strategy.getStrategyRef(), strategy.getName(), strategy.getVersion(),
                 strategy.getEndpoint().baseUrl(), strategy.getEndpoint().hasToken(), strategy.getStatus(),
                 strategy.getVerification(), usable, strategy.getLastError(), strategy.getLastVerificationAt(),
-                strategy.getServedContractVersion(), strategy.getCreatedAt(), strategy.getUpdatedAt(), runners);
+                strategy.getServedContractVersion(), strategy.getPriceHistoryTicks(), strategy.getCreatedAt(), strategy.getUpdatedAt(), runners);
     }
 
     private static RemoteStrategyView.RunnerRef runnerRef(StrategyRunner runner) {
