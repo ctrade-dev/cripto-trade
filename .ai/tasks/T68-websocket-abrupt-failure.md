@@ -86,8 +86,10 @@ proteção do lote e o `PANIC_SELL`, que não teriam como sair e tentam de novo 
 - [x] `ORDER_DISPATCH_BLOCKED` acusa com envio bloqueado e runner `ACTIVE` (teste).
 - [x] `cancel` e `close` devolvem `EXCHANGE_UNAVAILABLE` com envio bloqueado (teste).
 - [x] Testnet: queda provocada nos dois canais reconecta sozinha, libera o envio e as ordens voltam (rodada curta 68).
-- [ ] Sinal durante o bloqueio não cria ordem nem para o runner (teste E2E e queda provocada em testnet).
-- [ ] Testnet: `round-watch.sh` desacoplado grava `ANOMALY` e avisa no Discord; o aviso é conferido pelo mantenedor.
+- [x] Sinal durante o bloqueio não cria ordem nem para o runner (teste E2E e rodada curta 69: 16 quedas provocadas em
+  ~9 min, 16 reconexões, 9 sinais descartados, 0 rejeições, 5 runners `ACTIVE`, conciliação 20 de 20).
+- [x] Testnet: `round-watch.sh` desacoplado grava `ANOMALY` e avisa no Discord (`204`, rodadas 68 e 69). Falta o
+  mantenedor confirmar que a mensagem chegou.
 - [ ] Nova rodada de 72h na T53.
 
 ## Fontes

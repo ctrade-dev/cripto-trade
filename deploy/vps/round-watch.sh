@@ -25,6 +25,8 @@ notify() {
     | curl -s -m 20 -o /dev/null -w 'discord %{http_code}\n' -H 'Content-Type: application/json' -d @- "$WEBHOOK"
 }
 
+# Na largada o primeiro tick ainda nao chegou: MARKET_DATA_STALE seria um falso alarme.
+sleep "${GRACE:-60}"
 last=""
 while (( $(date +%s) < END_TS )); do
   w=$(( $(date +%s) - START_TS ))
