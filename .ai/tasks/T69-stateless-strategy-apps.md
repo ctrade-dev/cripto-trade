@@ -26,6 +26,10 @@ Consequências:
 - **Identidade imutável.** Mudou metadado da estratégia (nome, versão ou requisitos), é outra estratégia: novo
   `strategyId` e novo runner. O contrato já define "uma versão = um `strategyId`", e o runner já guarda `strategyId`
   imutável.
+- **Uma configuração, uma app.** Os parâmetros são da app, fixados ao subir o processo, e o ctrade não os conhece.
+  Outra configuração é outra app, com outro `strategyId`, para outro runner. Decisão do mantenedor: parâmetros no
+  runner levariam regra do ctrade para dentro da app. Isso não fere a regra stateless, porque a configuração não muda
+  entre interações.
 
 ## Problema
 
@@ -107,11 +111,6 @@ Não precisa de endpoint novo, e o `/evaluate` não gasta seus 250 ms com idas e
 - **Dados de mercado de longo prazo (candles) e carga de histórico da Binance.** Abrir task quando surgir estratégia
   que precise de mais de 1000 ticks (~25 min) ou de candles. Caminho previsto: ela declara em `requirements`, o ctrade
   busca, mantém e envia.
-- **Parâmetros por runner.** Hoje os parâmetros são variáveis de ambiente do processo da app, então dois runners da
-  mesma estratégia usam os mesmos parâmetros, e outra configuração exige outro `strategyId` e outro processo. Caminho
-  previsto: o runner guarda parâmetros imutáveis e o ctrade os envia em cada `/evaluate`, o que o stateless torna simples;
-  como os requisitos passam a depender dos parâmetros, o ctrade os consultaria ao criar o runner. É uma adição compatível
-  ao contrato 2.x. Abrir task quando o número de variantes justificar.
 - Persistir `peakPrice`.
 - Dublês de teste in-process do ctrade: continuam podendo contar ciclos, porque não são apps de estratégia. O manual
   (seção 8) passa a distinguir os dois casos.
