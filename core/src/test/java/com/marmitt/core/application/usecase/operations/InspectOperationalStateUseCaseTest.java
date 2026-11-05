@@ -110,7 +110,7 @@ class InspectOperationalStateUseCaseTest {
         OperationalStateReport report = useCase.inspect();
 
         assertEquals(OperationalSeverity.OK, report.status());
-        assertEquals(15, report.checks().size());
+        assertEquals(16, report.checks().size());
         assertTrue(report.checks().stream().allMatch(c -> c.status() == OperationalSeverity.OK), report.toString());
         assertEquals("docs/OPERATIONS_RUNBOOK.md#dlq-unresolved", check(report, "DLQ_UNRESOLVED").runbook());
     }
@@ -244,6 +244,18 @@ class InspectOperationalStateUseCaseTest {
         OperationalCheck disconnected = check(useCase.inspect(), "STREAM_DISCONNECTED");
         assertEquals(OperationalSeverity.CRITICAL, disconnected.status());
         assertEquals("NOT_OPENED", disconnected.subjects().getFirst().get("status"));
+    }
+
+    /** T53 rodada 11: envio bloqueado com os streams ainda marcados como conectados. */
+    @Test
+    void blockedOrderDispatchIsCriticalWhateverTheStreamStatusSays() {
+        assertEquals(OperationalSeverity.OK, check(useCase.inspect(), "ORDER_DISPATCH_BLOCKED").status());
+
+        when(adapters.isDispatchBlocked("MOCK")).thenReturn(true);
+
+        OperationalCheck blocked = check(useCase.inspect(), "ORDER_DISPATCH_BLOCKED");
+        assertEquals(OperationalSeverity.CRITICAL, blocked.status());
+        assertEquals("MOCK", blocked.subjects().getFirst().get("exchange"));
     }
 
     @Test

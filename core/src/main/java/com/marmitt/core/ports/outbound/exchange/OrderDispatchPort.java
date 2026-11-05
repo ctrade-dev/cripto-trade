@@ -37,4 +37,10 @@ public interface OrderDispatchPort {
      * @param command alvo do cancelamento (agnóstico de provider)
      */
     void cancel(OrderCancelCommand command);
+
+    /**
+     * O envio para a exchange esta bloqueado por conexao perdida? Com o bloqueio, {@link #dispatch} rejeita a
+     * ordem e {@link #cancel} nao envia nada.
+     */
+    boolean isBlocked(String exchangeId);
 }

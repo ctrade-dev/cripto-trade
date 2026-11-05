@@ -276,6 +276,17 @@ O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a ca
   manual (ver [Partida](#partida-depois-de-um-boot)).
 - **Confirmar:** status `CONNECTED` em `GET /api/websocket/all` e a verificação em `OK`.
 
+<a id="order-dispatch-blocked"></a>
+### ORDER_DISPATCH_BLOCKED — envio de ordens bloqueado por conexão perdida
+
+- **Diagnóstico:** um stream (`MARKET` ou `USER_DATA`) caiu e ainda não voltou. Ordens novas são rejeitadas aqui
+  dentro, e `cancel` e `close` do operador respondem `409 EXCHANGE_UNAVAILABLE`, sem enviar nada. Rejeições
+  seguidas por este motivo podem parar o runner (`RUNNER_HALTED`). Ordens que já estão na exchange seguem vivas.
+- **Ação:** a reconexão é automática (tentativa a cada 5s, e o coordenador a cada 30s). Persistindo, ver os logs
+  `Scheduling reconnect`, `marketData:` e [stream-disconnected](#stream-disconnected). Runner parado por
+  rejeições não volta sozinho: `resume` depois que o envio liberar.
+- **Confirmar:** log `All lost channels reconnected` e a verificação em `OK`.
+
 <a id="exchange-balance-divergence"></a>
 ### EXCHANGE_BALANCE_DIVERGENCE — saldo local diferente da exchange
 
@@ -413,8 +424,8 @@ Runner: 5 rejeições seguidas param só ele (`[RUNNER_AUTO_HALTED]`). Retomada 
 | Retomar | `POST /api/admin/runners/{id}/resume` |
 | Encerrar | `POST /api/admin/runners/{id}/terminate` (arquiva sozinho quando zerado) |
 | Limites, proteção, liquidação | `PATCH /api/admin/runners/{id}` (campo omitido mantém) |
-| Cancelar ordem | `POST /api/admin/runners/{id}/orders/{transactionId}/cancel` (`202`) |
-| Fechar posição | `POST /api/admin/runners/{id}/positions/{positionId}/close` (`202`, SELL MARKET do lote) |
+| Cancelar ordem | `POST /api/admin/runners/{id}/orders/{transactionId}/cancel` (`202`; `409` com o envio bloqueado) |
+| Fechar posição | `POST /api/admin/runners/{id}/positions/{positionId}/close` (`202`, SELL MARKET do lote; `409` com o envio bloqueado) |
 
 O `X-Reason` de `start`, `halt`, `resume` e `terminate` vira o motivo da transição no histórico do runner
 (`RUNNER_STATUS_CHANGED` em `GET /api/admin/events`, origem `MANUAL`). Transições do sistema ficam com

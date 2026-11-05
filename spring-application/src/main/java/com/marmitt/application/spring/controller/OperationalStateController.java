@@ -39,7 +39,7 @@ public class OperationalStateController {
             CAPITAL_RESERVED_WITHOUT_ORDER, CAPITAL_RESERVATION_STALE, TRANSACTION_STUCK, POSITION_LOCK_ORPHAN,
             DLQ_UNRESOLVED, RUNNER_HALTED, RUNNER_RECONCILING, RUNNER_STUCK_TERMINATING,
             RUNNER_ON_HOLD_STRATEGY_UNUSABLE, STRATEGY_VERIFICATION_FAILED, MARKET_DATA_STALE,
-            STREAM_DISCONNECTED, EXCHANGE_REST_CIRCUIT_OPEN. With includeExchange=true also
+            STREAM_DISCONNECTED, ORDER_DISPATCH_BLOCKED, EXCHANGE_REST_CIRCUIT_OPEN. With includeExchange=true also
             EXCHANGE_BALANCE_DIVERGENCE (local balance vs the exchange account) and EXCHANGE_TRADE_DIVERGENCE
             (fills of the last exchangeWindowHours vs the exchange trade history); these consume exchange API
             quota, so they only run on request. Also exported as the metrics operational_state_status and

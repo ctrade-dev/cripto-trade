@@ -130,6 +130,11 @@ public class OrderDispatchAdapter implements OrderDispatchPort {
                 command.clientOrderId(), command.exchangeId(), command.symbol());
     }
 
+    @Override
+    public boolean isBlocked(String exchangeId) {
+        return exchangeAdapterRepository.isDispatchBlocked(exchangeId);
+    }
+
     private SendOrderRequest toSendOrderRequest(OrderDispatchCommand command, String exchangeName) {
         OrderSide side = command.type() == TransactionType.BUY ? OrderSide.BUY : OrderSide.SELL;
         return new SendOrderRequest(

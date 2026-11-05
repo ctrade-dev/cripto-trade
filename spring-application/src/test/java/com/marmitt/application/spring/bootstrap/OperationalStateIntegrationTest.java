@@ -65,7 +65,7 @@ class OperationalStateIntegrationTest extends AbstractIntegrationTest {
     void consolidatedStateListsEveryCheckAndPointsTheAffectedPortfolio() throws Exception {
         mockMvc.perform(get("/api/admin/operational-state").header("X-Admin-Key", ADMIN_KEY))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.checks.length()").value(15))
+                .andExpect(jsonPath("$.checks.length()").value(16))
                 .andExpect(jsonPath("$.checks[?(@.id=='DLQ_UNRESOLVED')].status").value("OK"))
                 // Nos testes o orquestrador de boot fica desligado: o boot nunca conclui.
                 .andExpect(jsonPath("$.checks[?(@.id=='BOOT_NOT_READY')].status").value("CRITICAL"));
@@ -87,7 +87,7 @@ class OperationalStateIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/admin/operational-state").param("includeExchange", "true")
                         .param("exchangeWindowHours", "6").header("X-Admin-Key", ADMIN_KEY))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.checks.length()").value(17))
+                .andExpect(jsonPath("$.checks.length()").value(18))
                 .andExpect(jsonPath("$.checks[?(@.id=='EXCHANGE_BALANCE_DIVERGENCE')].status").value("OK"))
                 // Sem Binance configurada nos testes nao ha historico de trades: nao conferido, nao alarme.
                 .andExpect(jsonPath("$.checks[?(@.id=='EXCHANGE_TRADE_DIVERGENCE')].status").value("OK"));

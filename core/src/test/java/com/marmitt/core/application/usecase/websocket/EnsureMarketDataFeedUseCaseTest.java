@@ -109,6 +109,29 @@ class EnsureMarketDataFeedUseCaseTest {
         assertEquals(List.of("ETH/USDT/TICKER"), pairs((StreamSubscriptionRequest) request.getValue()));
     }
 
+    /** T53 rodada 11: conexao marcada como conectada com o socket fechado repetia a assinatura para sempre. */
+    @Test
+    void subscribeRejectedBySocketReopensTheConnectionInTheNextCycle() {
+        WebSocketConnectionManager market = WebSocketConnectionManager.forExchange("BINANCE");
+        market.setConnectionResult(ConnectionResultDto.connecting());
+        market.setConnectionResult(new ConnectionResultDto(ConnectionStatus.CONNECTED, "up", NOW.minusSeconds(600),
+                UUID.randomUUID(), java.util.Map.of()));
+        when(connections.hasConnection(ConnectionKey.market("BINANCE"))).thenReturn(true);
+        when(connections.getConnection(ConnectionKey.market("BINANCE"))).thenReturn(market);
+        connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(600));
+        when(prices.findUpdatedAt(anyString())).thenReturn(Optional.of(NOW.minusSeconds(120)));
+        when(send.execute(any())).thenThrow(new IllegalStateException("WebSocket send rejected"));
+
+        useCase.ensure();
+
+        assertEquals(ConnectionStatus.ERROR, market.getConnectionResult().status());
+        verify(connectMarket, never()).execute(anyString(), any());
+
+        useCase.ensure();
+
+        verify(connectMarket).execute(org.mockito.ArgumentMatchers.eq("BINANCE"), any());
+    }
+
     @Test
     void freshConnectionGetsTimeForItsFirstTicks() {
         connected(ConnectionKey.market("BINANCE"), NOW.minusSeconds(10));

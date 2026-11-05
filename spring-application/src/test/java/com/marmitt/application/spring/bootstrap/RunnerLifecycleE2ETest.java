@@ -8,7 +8,9 @@ import com.marmitt.core.enums.RunnerStatus;
 import com.marmitt.core.ports.inbound.runner.HaltRunnerPort;
 import com.marmitt.core.ports.inbound.runner.ManageRunnerLifecyclePort;
 import com.marmitt.core.ports.inbound.runner.RunnerOrderCommandPort;
+import com.marmitt.core.exceptions.RunnerOperationException;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
+import com.marmitt.core.ports.outbound.repository.ExchangeAdapterRepositoryPort;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 import com.marmitt.application.spring.testsupport.strategy.scenario.FilledBuyRestingSellCancelStrategy;
 import com.marmitt.application.spring.testsupport.strategy.scenario.RestingBuyCancelStrategy;
@@ -25,6 +27,7 @@ import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -44,6 +47,9 @@ class RunnerLifecycleE2ETest extends ScenarioStrategyE2ETestSupport {
 
     @Autowired
     private LatestPricePort latestPrices;
+
+    @Autowired
+    private ExchangeAdapterRepositoryPort exchangeAdapters;
 
     @Test
     void createdRunnerStartsWithoutRestartAndResumesAfterKillSwitch() {
@@ -82,6 +88,31 @@ class RunnerLifecycleE2ETest extends ScenarioStrategyE2ETestSupport {
         runnerOrderCommands.cancelOrder(runnerId, buyId);
         assertEquals("CANCELED", transactionsOfType(runnerId, "BUY").getFirst().status());
         assertEquals(0, balance(portfolioId).reserved().signum());
+    }
+
+    /** T53 rodada 11: com o envio bloqueado o comando respondia 202 e a ordem seguia na exchange. */
+    @Test
+    void operatorCancelIsRefusedWhileDispatchIsBlockedAndWorksAfterwards() {
+        UUID runnerId = activateScenario(new RestingBuyCancelStrategy(ScenarioStrategyConfig.boundedConfig(1)));
+        tickUntil(() -> transactionsOfType(runnerId, "BUY").stream().anyMatch(tx -> "SUBMITTED".equals(tx.status())),
+                "BUY descansando", runnerId);
+        UUID buyId = transactionsOfType(runnerId, "BUY").getFirst().id();
+        haltRunner.haltById(runnerId, RunnerStatusCause.manual("test"));
+        String exchange = strategyRunnerRepository.findById(runnerId).orElseThrow().getExchangeId();
+
+        exchangeAdapters.blockDispatch(exchange);
+        try {
+            RunnerOperationException refused = assertThrows(RunnerOperationException.class,
+                    () -> runnerOrderCommands.cancelOrder(runnerId, buyId));
+            assertEquals("EXCHANGE_UNAVAILABLE", refused.code());
+            assertEquals("SUBMITTED", transactionsOfType(runnerId, "BUY").getFirst().status());
+        } finally {
+            exchangeAdapters.unblockDispatch(exchange);
+        }
+
+        runnerOrderCommands.cancelOrder(runnerId, buyId);
+        awaitCondition(() -> "CANCELED".equals(transactionsOfType(runnerId, "BUY").getFirst().status()),
+                WAIT_TIMEOUT, "BUY cancelada depois do bloqueio", runnerId);
     }
 
     @Test

@@ -50,6 +50,8 @@ import java.util.function.Function;
  *   <li>conexao de market data da fonte ausente ou caida: abre com todos os simbolos demandados;</li>
  *   <li>conexao conectada ha mais que o limiar e simbolo sem tick ha mais que o limiar: assina de novo
  *       o simbolo (assinar de novo e inofensivo no MOCK e na Binance);</li>
+ *   <li>assinatura recusada pelo socket: a conexao nao esta de pe, seja o que for que o estado diga. Fica
+ *       {@code ERROR} e o ciclo seguinte reabre (T68);</li>
  *   <li>stream de usuario demandado ausente ou caido: abre.</li>
  * </ul>
  * Conexao abrindo ou reconectando e deixada em paz: a estrategia de reconexao esta trabalhando.
@@ -153,6 +155,14 @@ public class EnsureMarketDataFeedUseCase implements EnsureMarketDataFeedPort {
             sendMessage.execute(request(source, stale));
         } catch (RuntimeException e) {
             log.error("marketData: subscribe failed source={} symbols={} - {}", source, stale, e.getMessage(), e);
+            markDown(ConnectionKey.market(source), e);
+        }
+    }
+
+    private void markDown(ConnectionKey key, RuntimeException cause) {
+        WebSocketConnectionManager manager = connections.getConnection(key);
+        if (manager.getConnectionResult().isConnected()) {
+            manager.setConnectionResult(ConnectionResultDto.failure("Subscribe rejected", manager.getConnectionId(), cause));
         }
     }
 

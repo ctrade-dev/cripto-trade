@@ -6,6 +6,7 @@ import com.marmitt.core.dto.websocket.request.MessageRequest;
 import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.websocket.response.WebSocketConnectionResponse;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
+import com.marmitt.core.enums.ConnectionStatus;
 import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.ports.inbound.websocket.ConnectMarketStreamPort;
 import com.marmitt.core.ports.inbound.websocket.ConnectUserStreamPort;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,6 +26,10 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class LinearBackoffReconnectionStrategy implements ReconnectionStrategyPort {
+
+    /** Outro caminho (o coordenador de market data, T56) ja recuperou ou esta recuperando a conexao. */
+    private static final Set<ConnectionStatus> RECOVERED_OR_RECOVERING = Set.of(
+            ConnectionStatus.CONNECTED, ConnectionStatus.CONNECTING, ConnectionStatus.RECONNECTING);
 
     private final WebSocketConnectionRepositoryPort connectionRepository;
     private final ExchangeAdapterRepositoryPort adapterRepository;
@@ -71,6 +77,13 @@ public class LinearBackoffReconnectionStrategy implements ReconnectionStrategyPo
 
         scheduler.schedule(() -> {
             try {
+                ConnectionStatus status = connectionRepository
+                        .getConnection(new ConnectionKey(exchangeName, channel)).getConnectionResult().status();
+                if (RECOVERED_OR_RECOVERING.contains(status)) {
+                    log.debug("Skipping reconnect attempt {} - exchange={} channel={} already {}",
+                            attempt, exchangeName, channel, status);
+                    return;
+                }
                 if (channel == StreamChannel.MARKET) {
                     reconnectMarketStream(exchangeName, attempt);
                 } else {

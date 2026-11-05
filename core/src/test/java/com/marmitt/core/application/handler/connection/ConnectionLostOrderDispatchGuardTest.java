@@ -1,12 +1,16 @@
 package com.marmitt.core.application.handler.connection;
 
+import com.marmitt.core.dto.connection.ConnectionKey;
+import com.marmitt.core.dto.connection.ConnectionResultDto;
 import com.marmitt.core.dto.events.WebSocketClosedEvent;
 import com.marmitt.core.dto.events.WebSocketConnectedEvent;
 import com.marmitt.core.dto.events.WebSocketFailedEvent;
+import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
 import com.marmitt.core.ports.outbound.exchange.streaming.UserStreamSession;
 import com.marmitt.core.ports.outbound.repository.ExchangeAdapterRepositoryPort;
+import com.marmitt.core.ports.outbound.repository.WebSocketConnectionRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,16 +20,19 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ConnectionLostOrderDispatchGuardTest {
 
     private TrackingAdapterRepository adapterRepository;
     private ConnectionLostOrderDispatchGuard guard;
+    private final WebSocketConnectionRepositoryPort connections = mock(WebSocketConnectionRepositoryPort.class);
 
     @BeforeEach
     void setup() {
         adapterRepository = new TrackingAdapterRepository();
-        guard = new ConnectionLostOrderDispatchGuard(adapterRepository);
+        guard = new ConnectionLostOrderDispatchGuard(adapterRepository, connections);
     }
 
     @Test
@@ -113,6 +120,24 @@ class ConnectionLostOrderDispatchGuardTest {
         WebSocketConnectedEvent event = WebSocketConnectedEvent.of(
                 "BINANCE", "Connected", UUID.randomUUID(), StreamChannel.MARKET);
         guard.onConnectionReestablished(event);
+
+        assertFalse(adapterRepository.isDispatchBlocked("BINANCE"));
+    }
+
+    /** O socket novo segue de pe: nenhuma reconexao viria liberar o envio (T68). */
+    @Test
+    void lateEventsOfAReplacedConnection_doNotBlockDispatch() {
+        WebSocketConnectionManager manager = WebSocketConnectionManager.forExchange("BINANCE");
+        manager.setConnectionResult(ConnectionResultDto.connecting());
+        manager.setConnectionResult(ConnectionResultDto.connected("up", UUID.randomUUID()));
+        ConnectionKey key = ConnectionKey.market("BINANCE");
+        when(connections.hasConnection(key)).thenReturn(true);
+        when(connections.getConnection(key)).thenReturn(manager);
+
+        guard.onConnectionFailed(WebSocketFailedEvent.of(
+                "BINANCE", "Connection reset", UUID.randomUUID(), null, StreamChannel.MARKET));
+        guard.onConnectionClosed(WebSocketClosedEvent.unexpected(
+                "BINANCE", 1006, "Connection reset", UUID.randomUUID(), StreamChannel.MARKET));
 
         assertFalse(adapterRepository.isDispatchBlocked("BINANCE"));
     }
