@@ -261,6 +261,7 @@ relatório); `deploy/vps/round-watch.sh` acusa anomalia durante a rodada (`deplo
 | 8 | 2026-10-30 | 3 (apps T60), 2ª de 24h | ~12h (encerrada) | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 4, 5 e 6). Pavio às 01:20:45Z (dia seguinte ao ataque à Binance): SELL de proteção a mercado preencheu em parte e o resto voltou `EXPIRED`; o ctrade não aceita `PARTIAL → EXPIRED`, a transação ficou presa e o watchdog pôs o portfolio em `HALT` às 01:23:54Z; ~60 `ERROR`/h até o fim. 67 fills, 67 iguais à exchange. Loki com 100% de cobertura (T66 validada). | F11, F12, F13 abaixo → T67 |
 | 9 | 2026-10-30/31 | 3 (apps T60), 3ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 24h limpa). T67 validada em operação: zero `ERROR`, nenhum `HALT`, estado operacional `OK` a rodada toda; 532 fills, 532 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. | F14 abaixo |
 | 10 | 2026-10-31/11-01 | 3 (apps T60), 4ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (2ª de 24h limpa seguida). Zero `ERROR`, nenhum evento automático, estado operacional `OK` a rodada toda; 168 fills, 168 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. Largada e fechamento pelos scripts da VPS (PR #174), fechamento no horário. | F14 de novo (rompimento) |
+| 11 | 2026-11-02/05 | 3 (apps T60), final de 72h | 72h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 3, 5 e 6). Limpa até 55h47. Às 20:26Z de 04/11 o canal `USER_DATA` caiu sem mensagem de erro e não reconectou; o `MARKET` caiu igual às 01:38Z de 05/11. Envio bloqueado, runner do livro em `HALT` por recusas, sem preço até o fim, 1309 `ERROR`. 938 fills, 938 iguais à exchange; DLQ vazia. | F15, F16, F17, F18 abaixo |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -528,6 +529,57 @@ métricas, eventos e conciliação).
 - **Fim:** runners `HALTED` às 16:43:06Z; 4 LIMIT canceladas (202); em voo 0; `locked` BTC e USDT = 0.
   Ficam lotes `OPEN` do livro (0.00153 BTC) e do caos (0.00051 BTC).
 - **F14 de novo:** a SELL do rompimento ficou acima do preço de 18:47Z em diante, no mercado parado.
+
+### Rodada 11 — detalhes (2026-11-02 12:39:09Z → 2026-11-05 12:39:09Z, VPS)
+
+Versões: ctrade `f630f4b`, ctrade-strategies `b0fb837`. Portfolio `c1a89765` (1000 USDT), limites da rodada 7.
+Largada e fechamento pelos scripts da VPS; o fechamento rodou no horário, sem a sessão do agente. Arquivos em
+`~/round-11/` e log completo até 12:02Z em `~/round-11-evidence/` (VPS).
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | `/api/reconciliation`: 938 fills, 938 iguais, 0 divergentes, 0 só de um lado; `EXCHANGE_TRADE_DIVERGENCE` `OK` | OK |
+| 2 | DLQ | nenhuma entrada não resolvida | OK |
+| 3 | Capital | `CAPITAL_RESERVATION_STALE` `WARN`: 2 BUY com reserva há mais de 24h e as 3 BUY em voo não canceladas no fim (F17) | **Reprovado** |
+| 4 | Transação presa | `TRANSACTION_STUCK` `OK`; as 3 em voo estão de fato abertas na exchange | OK |
+| 5 | Safe Mode / halt | `HALT` automático do livro às 22:36:07Z: causa identificada, mas é efeito da F15 | **Reprovado** |
+| 6 | `ERROR` | 1309 no ctrade (1305 de assinatura em socket fechado a cada 30s; os demais da F15 e do `HALT`) | **Reprovado** |
+| 7 | Estabilidade | heap mínimo 42.7 → 47.0 MB, threads 49 → 42, sem restart; avaliação média 8.3 ms na 1ª hora e sem dado na última (sem tick) | OK no que deu para medir |
+| 8 | Saldo no restart | sem restart na rodada; boot inicial `SUCCESS`; `EXCHANGE_BALANCE_DIVERGENCE` `OK` | — |
+
+- **Linha do tempo (UTC):**
+  - 04/11 13:01:01: Binance fecha o `MARKET` com código 1001 após 48h22; reconectou em 2 s. O caminho de
+    fechamento limpo funciona.
+  - 04/11 20:26:00: `USER_DATA` cai com `EOFException` sem mensagem (F15). Envio de ordens bloqueado.
+  - 04/11 22:36:02: fill do SELL do livro, que chegou sem o stream de usuário. 5 BUY recusadas
+    (`dispatch blocked: connection lost`) e `HALT` às 22:36:07.
+  - 05/11 01:37:56: último tick. `MARKET` cai às 01:38:00, também com `EOFException` sem mensagem.
+  - 05/11 12:39: fechamento: halt 200 nos 5 runners, cancelamento 202 nas 3 BUY, mas nada cancelado (F17).
+- **Ordens:** tendência 268 idas e voltas, reversão 125, rompimento 40, livro 35, caos 1 BUY. Resultado
+  realizado -7.99 USDT (apps de teste, sem significado).
+- **WARN:** 7298, os padrões já conhecidos do caos e o SELL acima do lote descartado.
+- **Fim:** 3 BUY LIMIT abertas na exchange (`locked` USDT 494.76) e lote `OPEN` do caos (0.00051 BTC), sem
+  proteção avaliando desde o último tick. Ficam assim até o ctrade ser reiniciado.
+- **Ainda não exercitado:** reconexão depois de falha abrupta, porque ela não acontece com a F15.
+
+- **F15 — Bug (alto): falha abrupta do WebSocket nunca reconecta.** `OkHttp3ListenerConverter.onFailure` publica
+  o evento com o `Throwable`. `ConnectionFailedHandler` chama `ConnectionResultDto.failure(reason, id, cause)`,
+  que monta um `Map.of` com `cause.getMessage()`; com mensagem nula (`EOFException`) dá `NullPointerException`
+  (`ConnectionResultDto.java:109`). O handler aborta antes de `setConnectionResult` e de `scheduleReconnect`: a
+  conexão segue `CONNECTED` e o bloqueio de envio nunca é liberado. O outro `failure` com `cause` no mesmo
+  arquivo tem o mesmo `Map.of`. Só o restart do ctrade recupera. → task a abrir.
+- **F16 — Observabilidade (alto): `STREAM_DISCONNECTED` não vê o stream morto.** O check lê o mesmo estado que
+  a F15 deixou errado e ficou `OK` até o fim, com o gauge `websocket_connection_state` em 0 nos dois canais.
+  De 20:26Z a 22:36Z o estado operacional não acusou nada, com o envio de ordens bloqueado.
+  `EnsureMarketDataFeedUseCase` também confia nesse estado e repete a assinatura em socket fechado em vez de
+  reabrir a conexão. → task a abrir.
+- **F17 — Bug (médio): cancelamento devolve 202 e não faz nada com o envio bloqueado.** `OrderDispatchAdapter.cancel`
+  só registra `cancel: blocked` e retorna. O operador recebe 202, a ordem segue aberta e o capital preso. O
+  comentário do código prevê que a estratégia reemita o cancelamento, o que não cobre o cancelamento do operador
+  nem runner parado. → decidir com a F15.
+- **F18 — Operação (médio): monitor da rodada depende da sessão do agente.** O SSH do `round-watch.sh` caiu logo
+  depois das 17:51Z de 04/11 e terminou com código 0 (o `tail` do pipeline esconde o erro), antes da primeira
+  falha. Ninguém olhou a rodada por cerca de 18h. O monitor deve rodar na VPS e avisar por conta própria.
 
 ## Fontes
 
