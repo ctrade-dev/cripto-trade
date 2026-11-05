@@ -280,6 +280,9 @@ T44  Proteção do lote (stop 5% MARKET; concluída)                   T24  Circ
 > para depois do soak (T53): hoje os E2E controlam o MOCK dentro do processo (preço de referência,
 > overrides, reset) e um container a mais na CI traz novos pontos de instabilidade.
 >
+> **Antes de produção (T69):** decidir se o pico do lote (`peakPrice`) deve ser persistido. Hoje ele recomeça no
+> restart do ctrade, e o trailing stop de uma estratégia fica menos protetor até o preço subir de novo.
+>
 > Fora desta trilha, ainda sem task: perfil `application-prod.yml` e gestão de segredos
 > (`GO_LIVE_CHECKLIST` itens 8–9), harness de backtest/modo shadow e limpeza de documentação
 > desatualizada.
