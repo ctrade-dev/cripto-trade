@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 11), T56 (coordenador de market data), T25 (rejeições consecutivas), T49 (comandos do operador)
-**Status:** Em andamento
+**Status:** Em andamento (PR #175 mergeado; falta validar em testnet o critério da decisão abaixo e a rodada de 72h)
 
 ---
 
@@ -59,11 +59,17 @@ Responsáveis: regra em `core`; infraestrutura e operação em `spring-applicati
   crítica. Bom para disponibilidade; não muda aqui.
 - Lacuna de fills durante a queda: já coberta pelo watchdog por REST (observado na rodada 11).
 
-## Decisão de negócio pendente
+## Decisão registrada (2026-11-05, mantenedor): envio bloqueado não conta para o `HALT`
 
-**Rejeição por envio bloqueado conta para o `HALT` de rejeições consecutivas (T25)?** Hoje conta. Com sinal a cada
-tick e reconexão em 5s, uma queda curta pode parar um runner que esteja tentando comprar, com retomada manual. É
-regra de risco: não muda sem o mantenedor. A queda provocada desta task mede o efeito.
+Com sinal a cada tick e reconexão em ~6 s, uma queda curta gerou até 4 de 5 rejeições num runner (`SoakReversion`,
+rodada curta 68). Opção escolhida: rejeição por conexão caída não conta para o `HALT` de rejeições consecutivas (T25).
+
+**Desenho:** com o envio bloqueado, `ProcessTradeSignalUseCase.processTradeSignal` descarta o sinal antes de criar a
+transação (`SignalDecision.DISPATCH_BLOCKED`) e o tick seguinte decide de novo. Assim não há rejeição a contar, e uma
+queda longa não cria uma transação `REJECTED` por tick, que era o que o `HALT` interrompia. `ConsecutiveRejectionGuard`
+não muda: recusas da exchange seguem contando. Sobra uma corrida: ordem que passou por este ponto e encontrou o
+bloqueio no envio ainda é rejeitada e conta, no máximo uma por runner a cada queda. O mesmo portão vale para a
+proteção do lote e o `PANIC_SELL`, que não teriam como sair e tentam de novo no tick seguinte.
 
 ## Riscos
 
@@ -73,14 +79,17 @@ regra de risco: não muda sem o mantenedor. A queda provocada desta task mede o 
 
 ## Critérios de aceitação
 
-- [ ] `EOFException` sem mensagem leva a `ERROR` e agenda reconexão (teste).
-- [ ] Falha de conexão superada não altera o estado nem bloqueia o envio (teste).
-- [ ] Tarefa de reconexão não age com a conexão já recuperada e não publica falha crítica (teste).
-- [ ] Assinatura recusada marca `ERROR` e o ciclo seguinte reabre (teste).
-- [ ] `ORDER_DISPATCH_BLOCKED` acusa com envio bloqueado e runner `ACTIVE` (teste).
-- [ ] `cancel` e `close` devolvem `EXCHANGE_UNAVAILABLE` com envio bloqueado (teste).
-- [ ] Testnet: queda provocada nos dois canais reconecta sozinha, libera o envio e as ordens voltam.
-- [ ] Testnet: `round-watch.sh` desacoplado grava `ANOMALY` e avisa no Discord; o aviso é conferido pelo mantenedor.
+- [x] `EOFException` sem mensagem leva a `ERROR` e agenda reconexão (teste).
+- [x] Falha de conexão superada não altera o estado nem bloqueia o envio (teste).
+- [x] Tarefa de reconexão não age com a conexão já recuperada e não publica falha crítica (teste).
+- [x] Assinatura recusada marca `ERROR` e o ciclo seguinte reabre (teste).
+- [x] `ORDER_DISPATCH_BLOCKED` acusa com envio bloqueado e runner `ACTIVE` (teste).
+- [x] `cancel` e `close` devolvem `EXCHANGE_UNAVAILABLE` com envio bloqueado (teste).
+- [x] Testnet: queda provocada nos dois canais reconecta sozinha, libera o envio e as ordens voltam (rodada curta 68).
+- [x] Sinal durante o bloqueio não cria ordem nem para o runner (teste E2E e rodada curta 69: 16 quedas provocadas em
+  ~9 min, 16 reconexões, 9 sinais descartados, 0 rejeições, 5 runners `ACTIVE`, conciliação 20 de 20).
+- [x] Testnet: `round-watch.sh` desacoplado grava `ANOMALY` e avisa no Discord (`204`, rodadas 68 e 69). Falta o
+  mantenedor confirmar que a mensagem chegou.
 - [ ] Nova rodada de 72h na T53.
 
 ## Fontes

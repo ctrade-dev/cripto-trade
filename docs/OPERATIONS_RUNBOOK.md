@@ -279,12 +279,12 @@ O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a ca
 <a id="order-dispatch-blocked"></a>
 ### ORDER_DISPATCH_BLOCKED — envio de ordens bloqueado por conexão perdida
 
-- **Diagnóstico:** um stream (`MARKET` ou `USER_DATA`) caiu e ainda não voltou. Ordens novas são rejeitadas aqui
-  dentro, e `cancel` e `close` do operador respondem `409 EXCHANGE_UNAVAILABLE`, sem enviar nada. Rejeições
-  seguidas por este motivo podem parar o runner (`RUNNER_HALTED`). Ordens que já estão na exchange seguem vivas.
+- **Diagnóstico:** um stream (`MARKET` ou `USER_DATA`) caiu e ainda não voltou. Sinais de compra e venda não viram
+  ordem (`signal.evaluated.total{decision="DISPATCH_BLOCKED"}`), nem os da proteção do lote e do `PANIC_SELL`, que
+  tentam de novo no tick seguinte. O runner não para por causa disso. `cancel` e `close` do operador respondem `409 EXCHANGE_UNAVAILABLE`, sem enviar nada. Ordens que já
+  estão na exchange seguem vivas.
 - **Ação:** a reconexão é automática (tentativa a cada 5s, e o coordenador a cada 30s). Persistindo, ver os logs
-  `Scheduling reconnect`, `marketData:` e [stream-disconnected](#stream-disconnected). Runner parado por
-  rejeições não volta sozinho: `resume` depois que o envio liberar.
+  `Scheduling reconnect`, `marketData:` e [stream-disconnected](#stream-disconnected).
 - **Confirmar:** log `All lost channels reconnected` e a verificação em `OK`.
 
 <a id="exchange-balance-divergence"></a>
