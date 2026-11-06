@@ -50,7 +50,8 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
 1. **Reconciliação** da janela: `binanceOnly = 0` e `localOnly = 0`.
 2. **DLQ:** nenhuma entrada não resolvida ao fim da janela, ou cada uma explicada e com task.
 3. **Capital:** com o runner sem posição e sem ordem em voo, `reserved = 0`; nenhuma reserva mais
-   velha que o TTL (`capital_reservation_oldest_age_seconds`).
+   velha que o TTL (`capital_reservation_oldest_age_seconds`), salvo LIMIT comprovadamente aberta na exchange
+   (decisão de 2026-11-06).
 4. **Transações:** nenhuma `PENDING`/`SUBMITTED` presa além do limiar do watchdog.
 5. **Safe Mode automático / halt de runner:** nenhum disparo sem causa identificada.
 6. **Logs:** nenhum `ERROR` sem explicação no Loki.
@@ -92,6 +93,18 @@ Substitui a sequência de rodadas de 24h e a validação só no fim (decisões 1
 - **O que reprova:** um critério descumprido. Rejeição provocada de propósito pelo `SoakChaos` não reprova, e
   `ANOMALY` é um aviso a analisar, não uma reprovação automática.
 - **Rodadas curtas** continuam valendo para validar uma correção específica antes de largar.
+
+## Decisão registrada (2026-11-06): reserva antiga com ordem aberta na exchange
+
+Vale a partir da rodada 12, decisão do mantenedor.
+
+- **Não reprova:** reserva acima de 24h de uma LIMIT confirmada como aberta na exchange. O `WARN` de
+  `CAPITAL_RESERVATION_STALE` é registrado no histórico da rodada, com a confirmação.
+- **Reprova:** reserva acima de 24h cuja ordem não existe na exchange, porque aí o capital vazou.
+- **Motivo:** o critério procura reserva vazada. Uma ordem real e visível é o alerta funcionando, e o `SoakTrend` e o
+  `SoakBreakout` não cancelam as próprias compras.
+- **Efeito conhecido:** esses runners podem ficar horas sem abrir outra ordem. Isso é calibração de estratégia, fora
+  dos critérios da rodada.
 
 ## Pré-requisitos ainda abertos
 
