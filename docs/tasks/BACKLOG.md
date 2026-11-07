@@ -283,6 +283,9 @@ T44  Proteção do lote (stop 5% MARKET; concluída)                   T24  Circ
 > **Depois da rodada 12 (T53):** calibrar a movimentação das apps de soak (prazo para BUY parada no `SoakTrend` e no
 > `SoakBreakout`, app mais sensível) e fazer um teste curto de carga com mais runners, em rodada separada.
 >
+> **Depois da rodada 12 (T53):** o `GlobalExceptionHandler` registra cliente desconectado (`AsyncRequestNotUsableException`,
+> `Broken pipe`) como `ERROR` e tenta responder 500. Uma leitura interrompida pelo cliente não é falha do ctrade.
+>
 > **Antes de produção (T69):** decidir se o pico do lote (`peakPrice`) deve ser persistido. Hoje ele recomeça no
 > restart do ctrade, e o trailing stop de uma estratégia fica menos protetor até o preço subir de novo.
 >
