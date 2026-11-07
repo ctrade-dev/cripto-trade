@@ -4,11 +4,15 @@
 #
 # A cada 5 min grava em watch.log o estado operacional, ERROR desde a largada (Prometheus), fills e status dos
 # runners. Anomalia e estado fora de OK, algum ERROR ou runner fora de ACTIVE: cada mudanca do conjunto de
-# anomalias vai para o arquivo ANOMALY e para o Discord (DISCORD_WEBHOOK_URL do .env).
+# anomalias vai para o arquivo ANOMALY e para o Discord (DISCORD_WEBHOOK_URL do .env). O conjunto leva a contagem de
+# ERROR, porque a janela vai ate a largada: sem ela, so o primeiro ERROR da rodada avisaria.
 #
 # Em cada checkpoint da T53 (3h, 8h e 24h) grava checkpoint-<h>h.md com o relatorio da janela e avisa no Discord.
 #
 # Uso:  ./round-watch.sh       (ROUND_DIR=~/round; INTERVAL=300; CHECKPOINTS="10800 28800 86400", em segundos)
+#
+# Para reiniciar com a rodada no ar, passar so os checkpoints que faltam; os ja vencidos seriam refeitos sobre a janela
+# inteira e avisados de novo. Sem nenhum: CHECKPOINTS=" ". Acrescentar ao watch.log (>>) e GRACE=0.
 set -uo pipefail
 
 cd "$(dirname "$0")"
@@ -60,7 +64,7 @@ print(j['status']+(' '+','.join(bad) if bad else ''))" 2>/dev/null || echo UNREA
 
   now=()
   [[ $st == OK* ]] || now+=("estado=$st")
-  (( ${err:-0} > 0 )) && now+=("ERROR")
+  (( ${err:-0} > 0 )) && now+=("ERROR=$err")
   off=$(tr ' ' '\n' <<< "$runners" | grep -v ':ACTIVE$' | paste -sd' ')
   [[ -n $off ]] && now+=("runners=$off")
   current="${now[*]:-}"
