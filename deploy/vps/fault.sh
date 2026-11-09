@@ -45,7 +45,7 @@ kill_conns() {
 }
 
 # Conexoes abertas na 443, para o log mostrar o que foi derrubado.
-conns() { ns ss -tn state established '( dport = :443 )' | awk 'NR>1{print $4}' | sed -E 's/^\[::ffff:([0-9.]+)\]:443$//; s/:443$//' | sort -u | paste -sd' '; }
+conns() { ns ss -tn state established '( dport = :443 )' | awk 'NR>1{print $4}' | sed -E 's/^\[::ffff:([0-9.]+)\]:443$/\1/; s/:443$//' | sort -u | paste -sd' '; }
 
 # Bloqueia os hosts por IP e pelo nome no TLS (SNI): uma reconexao que resolva outro IP tambem e recusada.
 block_out() {
@@ -151,9 +151,8 @@ case ${1:-} in
     USER_IPS=$(ips $WS_USER)
     snap antes
     log "conexoes: $(conns)"
-    [[ -n $(comm -12 <(tr ' ' '
-' <<< "$(conns)" | sort) <(tr ' ' '
-' <<< "$USER_IPS" | sort)) ]]       || { log "nenhuma conexao aberta com $WS_USER ($USER_IPS): abortado"; exit 1; }
+    [[ -n $(comm -12 <(conns | tr ' ' '\n' | sort) <(tr ' ' '\n' <<< "$USER_IPS" | sort)) ]] \
+      || { log "nenhuma conexao aberta com $WS_USER ($(paste -sd' ' <<< "$USER_IPS")): abortado"; exit 1; }
     wait_book_cancel || exit 1
     T0=$(q "select now()")
     for ip in $USER_IPS; do
