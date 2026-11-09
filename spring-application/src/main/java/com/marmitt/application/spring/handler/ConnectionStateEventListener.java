@@ -7,6 +7,7 @@ import com.marmitt.core.dto.exchange.command.PostConnectionCommandResult;
 import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.ports.inbound.handler.*;
 import com.marmitt.core.ports.inbound.websocket.PostConnectionEstablishedPort;
+import com.marmitt.core.ports.outbound.connection.ReconnectionStrategyPort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -26,6 +27,7 @@ public class ConnectionStateEventListener {
     private final ConnectionLostOrderDispatchGuard dispatchGuard;
     private final ApplicationEventPublisher eventPublisher;
     private final WebSocketConnectionStateGauge connectionStateGauge;
+    private final ReconnectionStrategyPort reconnectionStrategy;
 
     public ConnectionStateEventListener(
             ConnectionEstablishedPort handleConnectionEstablishedPort,
@@ -37,7 +39,8 @@ public class ConnectionStateEventListener {
             ConnectionDisconnectedPort handleConnectionDisconnectedPort,
             ConnectionLostOrderDispatchGuard dispatchGuard,
             ApplicationEventPublisher eventPublisher,
-            WebSocketConnectionStateGauge connectionStateGauge) {
+            WebSocketConnectionStateGauge connectionStateGauge,
+            ReconnectionStrategyPort reconnectionStrategy) {
 
         this.handleConnectionEstablishedPort = handleConnectionEstablishedPort;
         this.handlePostConnectionEstablishedPort = handlePostConnectionEstablishedPort;
@@ -49,6 +52,7 @@ public class ConnectionStateEventListener {
         this.dispatchGuard = dispatchGuard;
         this.eventPublisher = eventPublisher;
         this.connectionStateGauge = connectionStateGauge;
+        this.reconnectionStrategy = reconnectionStrategy;
     }
 
     @EventListener
@@ -66,6 +70,8 @@ public class ConnectionStateEventListener {
                     null,
                     event.channel()));
         } else {
+            // so a conexao pronta para uso (logon do USER_DATA feito) encerra a sequencia de falhas (T53 F19)
+            reconnectionStrategy.connectionEstablished(event.exchange(), event.channel());
             dispatchGuard.onConnectionReestablished(event);
         }
     }

@@ -18,7 +18,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -52,7 +51,7 @@ class ConnectionFailedHandlerTest {
 
         assertEquals(ConnectionStatus.ERROR, manager.getConnectionResult().status());
         assertEquals("EOFException", manager.getConnectionResult().metadata().get("errorMessage"));
-        verify(reconnection).scheduleReconnect(EXCHANGE, channel, connectionId, 1);
+        verify(reconnection).scheduleReconnect(EXCHANGE, channel, connectionId);
     }
 
     @Test
@@ -61,6 +60,6 @@ class ConnectionFailedHandlerTest {
                 new EOFException("reset"), StreamChannel.MARKET));
 
         assertEquals(ConnectionStatus.CONNECTED, manager.getConnectionResult().status());
-        verify(reconnection, never()).scheduleReconnect(anyString(), any(), any(), anyInt());
+        verify(reconnection, never()).scheduleReconnect(anyString(), any(), any());
     }
 }
