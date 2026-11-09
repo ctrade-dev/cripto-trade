@@ -95,7 +95,8 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
 `~/round/` (`ROUND_DIR`): `round.env` (número, início, fim, portfolio, runners), `watch.log`, `ANOMALY`, `close.log`, `report.md`,
 `stats-<app>.json` e `CLOSED` quando terminou.
 
-1. **Largada:** `./round-start.sh <número> <horas>`. Recusa se houver rodada sem `CLOSED` ou saldo
+1. **Largada:** `./round-start.sh <número> <duração>`, em horas (`72`) ou minutos (`45m`); `RUNNERS_PER_APP=N` cria N
+   runners por app, com a alocação dividida entre eles (teste de carga). Recusa se houver rodada sem `CLOSED` ou saldo
    `locked` na exchange (ordem no livro de antes da limpeza vira trade só na exchange). Para o ctrade,
    limpa o banco (`./reset-testnet-db.sh`, só testnet), sobe tudo, cadastra as apps, cria o portfolio de
    1000 USDT e um runner por app em BTCUSDT com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
@@ -111,6 +112,18 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
    `scripts/round_report.py` (T64). Classificar e assinar a rodada fica com quem opera, com `./versions.sh`
    no cabeçalho. Rodado à mão depois do fim, fecha na hora.
 4. Derrubar uma app para o teste de indisponibilidade: `docker compose stop chaos`.
+
+### Testes curtos da fase 4
+
+Roteiro, esperado e autorizações na T53 ("Roteiro — Fase 4"). Rodam sobre uma sessão curta de `round-start.sh`;
+cada execução grava o passo a passo em `~/round/fault-*.log` ou `~/round/drill-*.log`.
+
+- `./fault.sh`: provoca as falhas (restart do ctrade, queda de WebSocket, queda da exchange, confirmação perdida,
+  ordem perdida, app fora do ar). O firewall vale só para o container do ctrade e as regras saem no fim, mesmo com
+  erro ou Ctrl-C. Sem argumentos, mostra o uso.
+- `./drill.sh`: kill switch, retomada, níveis de Safe Mode e ajustes de runner pela API. `PANIC_SELL`, limite de risco
+  e política de liquidação só saem com `--autorizado`, depois da autorização do mantenedor.
+- `round-lib.sh`: funções comuns dos dois (API, banco, retrato da sessão).
 
 ## Memória e disco
 
