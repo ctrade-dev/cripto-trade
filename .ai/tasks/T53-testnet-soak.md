@@ -351,6 +351,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 70 | 2026-11-05 | Validação da T69, fora da numeração | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Sem veredito de soak. `USER_DATA` fora por 49 s: cancelamento vencido descartado na queda e enviado depois da reconexão. Conciliação 27 de 27, `locked` 0. 27 fills contra 41 da curta 69, sem causa medida. | Acompanhar fills e avaliações na rodada 12 |
 | Curta 101 | 2026-11-09 | 4, sessão 1 (F4.2, F4.4) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.2 e F4.4 passaram.** WebSockets fora por 2 min: `CRITICAL` com `STREAM_DISCONNECTED`, `MARKET_DATA_STALE` e `ORDER_DISPATCH_BLOCKED`, reconexão 4 s depois da rede voltar, sem `HALT`. Exchange inteira fora por 2 min: watchdog falhou 2 ciclos, Safe Mode seguiu `NORMAL`, tudo voltou sozinho. 192 `ERROR`, todos das tentativas de reconexão provocadas. Fechamento: comparação de 3h com a exchange OK, DLQ vazia. | F19, F20 |
 | Curta 102 | 2026-11-09 | 4, sessão 1 (F4.7, F4.1) | 1h20 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.7 e F4.1 passaram.** App do `SoakTrend` fora por 10 min: 161 `STRATEGY_UNAVAILABLE`, runner `ACTIVE`, volta sem ação manual. Três restarts (10 s, 3 min passando o prazo de 120 s do `SoakBook`, 30 s com lote aberto): boot `SUCCESS`, `phase3` recuperou as ordens em voo, sanidade `OK`. Zero `ERROR`. Conciliação 45 de 45. | F21; F7 de novo |
+| Curta 103 | 2026-11-09 | 4, sessão 2 (F4.5, F4.6) | 1h25 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.5 e F4.6 passaram.** Confirmação perdida: a SELL do `SoakBook` chegou à exchange e ficou `PENDING` do nosso lado; o próprio `SoakBook` a cancelou 2 min depois e o `CANCELED` do stream a conciliou (o watchdog não chegou a agir). Ordem perdida: a SELL nunca chegou à exchange e virou `EXPIRED` pelo watchdog depois da carência, com o lote destravado. 2 `ERROR`, as quedas provocadas do `USER_DATA`. Nenhum `HALT`. | F22 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -725,6 +726,25 @@ arquivo de saída do teste.
 - **F7 de novo:** o fechamento da curta 102 deu `EXCHANGE_TRADE_DIVERGENCE` `CRITICAL` porque a janela de 2h do relatório
   atravessa o reset do banco e pega 57 fills da curta 101 (`exchangeOnly`). Na janela da própria sessão, 45 de 45.
   Sessões curtas seguidas pedem o relatório com a janela a partir de `START`.
+
+
+### Fase 4, sessão 2 — detalhes (2026-11-09, VPS, curta 103)
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.5 Confirmação perdida | Passou | entrada do `ws-api` descartada 19:47:18Z–19:47:49Z; SELL `5b7a6d44` criada às 19:47:19Z ficou `PENDING`; às 19:49:25Z o `SoakBook` pediu o cancelamento, a exchange conhecia a ordem e o `CANCELED` do stream a conciliou e destravou o lote. O caminho do watchdog por `clientOrderId` não foi exercido: a estratégia chegou antes |
+| F4.6 Ordem perdida | Passou | saída para o `ws-api` descartada 19:53:47Z–19:54:17Z; SELL `7606e0cf` nunca chegou à exchange; `EXPIRED` às 20:03:51Z (carência de 10 min) e lote destravado; nenhum `HALT` |
+
+**Achados:**
+
+- **F22 — Bug (médio): cancelamento repetido de ordem que a exchange não conhece.** Na F4.6, de 19:55:48Z a 20:03:47Z
+  o `SoakBook` pediu o cancelamento da SELL `PENDING` a cada tick; cada pedido foi à exchange e voltou
+  `ORDER_NOT_FOUND` (222 vezes em 8 min, log `cancel: order unknown to the exchange ... awaiting its final status`).
+  Nada quebrou, mas é cota de API gasta à toa e, com vários runners, pode encostar no limite da Binance. O
+  `CancelSignalHandler` deveria segurar novos cancelamentos da mesma ordem `PENDING` desconhecida até o watchdog dar o
+  status final.
+- **F4.5 sem o caminho do watchdog:** para exercitá-lo, repetir com a app do `SoakBook` parada logo depois do corte
+  (a ordem fica sem pedido de cancelamento até a carência).
 
 ## Fontes
 
