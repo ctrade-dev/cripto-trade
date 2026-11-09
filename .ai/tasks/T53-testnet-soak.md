@@ -4,7 +4,7 @@
 **Responsável:** Claude (spec, procedimento, análise) + mantenedor (execução no ambiente)
 **Dependências:** T2 (perfil testnet), T18 (relatório de reconciliação), T21/T51 (alertas), T25/T43/T44/T45/T48
 (proteções), T41 (estratégia remota).
-**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); falhas controladas da fase 4 pendentes.
+**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 em testes curtos, roteiro abaixo.
 
 ---
 
@@ -71,8 +71,8 @@ Cada fase só começa com a anterior aprovada. Uma rodada reprovada gera achado 
    uma num processo, para estressar o ctrade (mailbox por runner, chamadas remotas concorrentes,
    capital disputado). Limiares da SMA apertados (≈ 0,2%) para gerar várias idas e voltas por hora. Na testnet, com tick a cada ~1,5 s e janela de 20 ticks, o limiar
    que deu várias idas e voltas por hora foi **0,02%** (T60, rodada curta de 2026-10-22).
-5. **Falhas controladas:** as cinco da fase 4, **uma por rodada**; o mantenedor executa a ação, o
-   roteiro e a análise ficam com o Claude.
+5. **Falhas controladas:** ~~as cinco da fase 4, uma por rodada; o mantenedor executa a ação~~. Substituída
+   pela decisão de 2026-11-09 (testes curtos executados pelo Claude).
 6. **Critérios:** os 8 critérios valem. `ERROR` causado comprovadamente pela testnet é aceito quando
    registrado no histórico da rodada.
 7. **Validação no fim da rodada (revista em 2026-10-21):** sem verificação periódica durante a rodada;
@@ -105,6 +105,18 @@ Vale a partir da rodada 12, decisão do mantenedor.
   `SoakBreakout` não cancelam as próprias compras.
 - **Efeito conhecido:** esses runners podem ficar horas sem abrir outra ordem. Isso é calibração de estratégia, fora
   dos critérios da rodada.
+
+## Decisão registrada (2026-11-09): testes curtos depois da rodada de 72h
+
+Decisão do mantenedor, com a rodada 12 aprovada. Substitui a decisão 5 e a rodada única de 2026-11-05 daqui em diante.
+
+- **72h só quando necessário:** uma nova rodada longa só se uma mudança justificar.
+- **Testes curtos à vontade:** cada falha controlada e cada validação vira um teste curto na VPS, quantos forem
+  necessários, pelo roteiro da fase 4 abaixo.
+- **Quem executa:** o Claude provoca as falhas na VPS com os scripts de `deploy/vps`. Antes de começar, informa ao
+  mantenedor a ordem e o tempo de cada teste. Ações da coluna da direita dos limites de autonomia do runbook
+  (`PANIC_SELL`, descer HALT automático, mudar limites de risco ou a política de liquidação) continuam pedindo
+  autorização, teste a teste.
 
 ## Pré-requisitos ainda abertos
 
@@ -273,6 +285,51 @@ relatório); `deploy/vps/round-watch.sh`, iniciado pela largada, acusa anomalia 
   Entra no relatório da rodada para separar as falhas de propósito das inesperadas.
 - Derrubar uma app (`docker compose stop chaos`) deve deixar só o runner dela em HOLD
   (`STRATEGY_UNAVAILABLE`); os demais seguem operando.
+
+## Roteiro — Fase 4 (falhas controladas e testes curtos)
+
+Decisão de 2026-11-09. Cada teste roda na VPS sobre uma sessão curta de `round-start.sh` (banco limpo, as cinco apps,
+limites da rodada 7) e só começa com os 5 runners `ACTIVE` e o `SoakBreakout` fora de `WAITING_HISTORY`.
+
+**Aprovação de todo teste:** os 8 critérios da T53 na janela do teste, mais o esperado do próprio teste. `ERROR`,
+`HALT` e `WARN` provocados pelo teste são aceitos quando a causa é a falha provocada e ficam registrados. Um teste
+reprovado vira achado, depois task, e o teste se repete com a correção.
+
+### Testes
+
+| # | Teste | Como provocar | Esperado | Autorização | Duração |
+|---|---|---|---|---|---|
+| F4.1 | Restart com ordem em voo | Parar o ctrade com ordem `SUBMITTED` do `SoakBook`. Três vezes: parada de ~10 s; parada de ~3 min, atravessando o prazo de 120 s da ordem; parada com lote aberto | Boot `SUCCESS`; `phase3` acha a ordem e aplica o status da exchange; o `SoakBook` volta a cancelar e recolocar; runners com histórico ficam em `WAITING_HISTORY` e voltam sozinhos; conciliação sem divergência; balanço do boot sem `FAIL_DEFICIT` | Não | ~40 min |
+| F4.2 | Queda curta de WebSocket | Bloquear os dois canais (`MARKET` e `USER_DATA`) por 2 min, com o REST livre | `STREAM_DISCONNECTED`, `MARKET_DATA_STALE` e `ORDER_DISPATCH_BLOCKED` acusam; decisões descartadas como `DISPATCH_BLOCKED`; reconexão sozinha; nenhum `HALT`; estado volta a `OK` | Não | ~25 min |
+| F4.3 | Queda longa de WebSocket | Bloquear os dois canais por 6 min, além das 10 tentativas de reconexão (5 s × tentativa, ~4,6 min) | Esgotadas as tentativas, `ERROR` de falha crítica e `HALT` automático de todos os runners (`CriticalConnectionFailureHandler`); a conexão volta depois do bloqueio; retomada manual dos runners | Sim: retomar os runners parados pelo sistema | ~35 min |
+| F4.4 | Queda total da exchange | Bloquear WebSocket e REST (`api.testnet.binance.vision`) por 2 min, com ordem em voo | Watchdog falha sem entrar em Safe Mode (menos de 3 ciclos); circuit breaker do REST pode abrir e fechar; tudo volta sozinho | Não | ~25 min |
+| F4.5 | Confirmação perdida | Logo depois de um cancelamento do `SoakBook`, descartar o que chega do `ws-api` por ~60 s: a ordem nova chega à exchange e a resposta não volta | A ordem fica `PENDING` só do nosso lado; depois da carência (10 min), o watchdog a acha por `clientOrderId` e aplica o status real; nenhuma ordem só na exchange no fim; conciliação sem divergência | Não | ~30 min |
+| F4.6 | Ordem perdida | Mesmo momento, descartando o que sai para o `ws-api` e derrubando a conexão: a ordem nunca chega à exchange | Depois da carência, o watchdog não acha a ordem e a marca `EXPIRED`, devolvendo a reserva ou o lote; nenhum `HALT` | Não | ~30 min |
+| F4.7 | Estratégia fora do ar | Parar o container do `SoakTrend` por 10 min, com lote aberto se houver; depois subir de novo | `STRATEGY_UNAVAILABLE` e HOLD implícito; runner segue `ACTIVE`; ao voltar, a app responde e o runner segue sem ação manual | Não | ~25 min |
+| F4.8 | Proteção do lote sem estratégia | Com o `SoakChaos` segurando lote e a app parada, baixar `maxHoldingDuration` do runner dele para `PT5M` | `PROTECTIVE_EXIT`: venda MARKET do lote sem consultar a estratégia | Sim: mudar limite de risco | ~20 min |
+| F4.9 | Kill switch e retomada | `POST /api/admin/runners/halt`; esperar 5 min; retomar um a um | Todos `HALTED` na hora; nenhuma ordem nova; LIMIT no livro segue (comportamento documentado); retomada sem divergência | Sim: retomar runners | ~20 min |
+| F4.10 | Drill de Safe Mode, MARKET | `HALT` → `CANCEL_ALL` → `PANIC_SELL` → descer um nível por vez → retomar | Cada nível com o efeito do runbook; `PANIC_SELL` vende os lotes a mercado; `locked` 0 e nenhum lote aberto no fim; descida e retomada sem divergência | Sim: `PANIC_SELL` | ~30 min |
+| F4.11 | Drill de Safe Mode, LIMIT | Igual ao F4.10, com `liquidationOrderType=LIMIT` nos runners | SELL LIMIT 1% abaixo do último preço, escalada para MARKET depois de 3 ticks sem preencher (T48) | Sim: `PANIC_SELL` e política de liquidação | ~30 min |
+
+### Testes que dependem de desenvolvimento
+
+| # | Teste | Desenvolvimento antes | Esperado | Duração |
+|---|---|---|---|---|
+| F4.12 | Cliente desconectado | ctrade: `GlobalExceptionHandler` deixa de registrar `ERROR` (e de responder 500) quando o cliente fecha a conexão | Ler `/transactions` e fechar no meio: nenhum `ERROR` | ~15 min |
+| F4.13 | Calibração das apps de soak | ctrade-strategies: prazo de cancelamento nas compras do `SoakTrend` e do `SoakBreakout`, a partir de `requestedAt`, e uma venda do `SoakBook` que acompanhe o preço | Nenhuma ordem parada além do prazo; fills por hora sem buracos longos | ~2h |
+| F4.14 | Carga | `round-start.sh` com N runners por app (ex.: 20 no total), com alocação dividida | Latência de avaliação e mailbox estáveis; sem tick descartado por atraso; os 8 critérios | ~1h |
+
+### Desenvolvimento necessário
+
+| Item | Onde | Para | Tipo |
+|---|---|---|---|
+| `fault.sh` | `deploy/vps` | Provocar as falhas de F4.1 a F4.7 com segurança: regra de firewall só no container do ctrade, sempre removida no fim (`trap`), e evidências antes e depois em `$ROUND_DIR/fault-<teste>.log` | Script |
+| `drill.sh` | `deploy/vps` | F4.8 a F4.11 pela API, com `X-Reason`; `PANIC_SELL` só com confirmação explícita na linha de comando | Script |
+| `round-start.sh` | `deploy/vps` | Duração em minutos para os testes curtos; N runners por app para a F4.14 | Script |
+| `GlobalExceptionHandler` | ctrade | F4.12 | Código, PR |
+| Prazos e preço das apps | ctrade-strategies | F4.13 | Código, PR |
+
+Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só começam com o aval do mantenedor.
 
 ## Registro de execuções
 
