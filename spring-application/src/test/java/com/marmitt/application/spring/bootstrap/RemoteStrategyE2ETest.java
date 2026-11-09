@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,6 +43,8 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
     private static final UUID REF = UUID.fromString("5ea5e0a0-0000-4000-a000-0000000000e2");
     private static final UUID NEEDS_HISTORY_REF = UUID.randomUUID();
     private static volatile String lastEvaluateBody = "";
+    /** Chamadas de /evaluate para NEEDS_HISTORY_REF. Runners de outros testes seguem ativos e chamam o mesmo servidor. */
+    private static final AtomicInteger NEEDS_HISTORY_CALLS = new AtomicInteger();
     private static final MockWebServer SERVICE = new MockWebServer();
 
     @Autowired
@@ -69,6 +72,9 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
                             + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1000}}}]");
                 }
                 lastEvaluateBody = request.getBody().clone().readUtf8();
+                if (lastEvaluateBody.contains(NEEDS_HISTORY_REF.toString())) {
+                    NEEDS_HISTORY_CALLS.incrementAndGet();
+                }
                 BigDecimal limit = MARKET_PRICE.multiply(new BigDecimal("1.01"));
                 String buy = "{\"strategyName\":\"RemoteE2E\",\"decision\":\"SHOULD_BUY\",\"confidence\":\"0.9\","
                         + "\"quantity\":\"0.00100000\",\"limitPrice\":\"" + limit.toPlainString() + "\",\"reasoning\":\"e2e\"}";
@@ -132,13 +138,11 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
                 SERVICE.url("/v2").toString(), "e2e-token"), "e2e setup");
         assertEquals(1000, catalog.get(NEEDS_HISTORY_REF).priceHistoryTicks());
         UUID runnerId = createAndActivateRunner(createPortfolio(), NEEDS_HISTORY_REF);
-        int callsBefore = SERVICE.getRequestCount();
-
         driveTicks(4);
         awaitCondition(() -> signalEvaluatedCount(runnerId, "WAITING_HISTORY") > 0, WAIT_TIMEOUT,
                 "tick contado como espera de historico", runnerId);
 
-        assertEquals(callsBefore, SERVICE.getRequestCount(), "a estrategia nao foi chamada");
+        assertEquals(0, NEEDS_HISTORY_CALLS.get(), "a estrategia nao foi chamada");
         assertEquals(0, transactionCount(runnerId));
         haltRunner.haltById(runnerId, RunnerStatusCause.manual("test"));
     }
