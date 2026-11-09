@@ -58,7 +58,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T50 | Limites de risco pré-trade (posições, ordens, preço, utilização) | Média | Claude | Concluído |
 | T51 | Observabilidade de capital, Safe Mode e lifecycle                | Baixa | Claude | Concluído |
 | T52 | MOCK: cancelamento de ordem em preenchimento simulado            | Média | Claude | Concluído |
-| T53 | Soak test em testnet (procedimento, critérios, execuções)        | Média | Claude | Pendente  |
+| T53 | Soak test em testnet (procedimento, critérios, execuções)        | Média | Claude | Em andamento |
 | T54 | Catálogo dinâmico de estratégias remotas (cadastro via API)       | Alta  | Claude | Concluído |
 | T55 | Operabilidade por IA (API segura, códigos, auditoria, estado consolidado) | Alta | Claude | Concluído |
 | T56 | Demanda de market data: conexões e assinaturas automáticas      | Média | Claude | Concluído |
@@ -73,8 +73,8 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T65 | Remover estratégias embutidas (módulos strategy e reference)    | Média | Claude | Concluído    |
 | T66 | Cobertura de logs e causa de falha REST visíveis (T53 F9/F10)   | Média | Claude | Concluído    |
 | T67 | Ordem expirada após preenchimento parcial (T53 F11–F13)         | Média | Claude | Concluído    |
-| T68 | Falha abrupta do WebSocket não reconecta (T53 F15–F18)          | Média | Claude | Em andamento |
-| T69 | Apps de estratégia stateless (contrato 2.0)                     | Alta  | Claude | Em andamento |
+| T68 | Falha abrupta do WebSocket não reconecta (T53 F15–F18)          | Média | Claude | Concluído    |
+| T69 | Apps de estratégia stateless (contrato 2.0)                     | Alta  | Claude | Concluído    |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução

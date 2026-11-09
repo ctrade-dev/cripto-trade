@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T53 (rodada 11), T56 (coordenador de market data), T25 (rejeições consecutivas), T49 (comandos do operador)
-**Status:** Em andamento (PRs #175 e #176 mergeados; falta a rodada de 72h, junto com a T69)
+**Status:** Concluído (PRs #175 e #176; rodada 12 de 72h aprovada em 2026-11-08)
 
 ---
 
@@ -90,7 +90,7 @@ proteção do lote e o `PANIC_SELL`, que não teriam como sair e tentam de novo 
   ~9 min, 16 reconexões, 9 sinais descartados, 0 rejeições, 5 runners `ACTIVE`, conciliação 20 de 20).
 - [x] Testnet: `round-watch.sh` desacoplado grava `ANOMALY` e avisa no Discord (`204`, rodadas 68 e 69). Falta o
   mantenedor confirmar que a mensagem chegou.
-- [ ] Nova rodada de 72h na T53.
+- [x] Nova rodada de 72h na T53 (rodada 12, aprovada).
 
 ## Fontes
 

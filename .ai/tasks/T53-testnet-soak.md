@@ -4,7 +4,7 @@
 **Responsável:** Claude (spec, procedimento, análise) + mantenedor (execução no ambiente)
 **Dependências:** T2 (perfil testnet), T18 (relatório de reconciliação), T21/T51 (alertas), T25/T43/T44/T45/T48
 (proteções), T41 (estratégia remota).
-**Status:** Pendente — fase 1 pronta para rodar (roteiro abaixo); fases 2–4 bloqueadas pelos pré-requisitos abertos.
+**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); falhas controladas da fase 4 pendentes.
 
 ---
 
@@ -289,7 +289,7 @@ relatório); `deploy/vps/round-watch.sh`, iniciado pela largada, acusa anomalia 
 | 9 | 2026-10-30/31 | 3 (apps T60), 3ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 24h limpa). T67 validada em operação: zero `ERROR`, nenhum `HALT`, estado operacional `OK` a rodada toda; 532 fills, 532 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. | F14 abaixo |
 | 10 | 2026-10-31/11-01 | 3 (apps T60), 4ª de 24h | 24h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (2ª de 24h limpa seguida). Zero `ERROR`, nenhum evento automático, estado operacional `OK` a rodada toda; 168 fills, 168 iguais à exchange; DLQ vazia; Loki com 100% de cobertura. Largada e fechamento pelos scripts da VPS (PR #174), fechamento no horário. | F14 de novo (rompimento) |
 | 11 | 2026-11-02/05 | 3 (apps T60), final de 72h | 72h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Reprovada** (critérios 3, 5 e 6). Limpa até 55h47. Às 20:26Z de 04/11 o canal `USER_DATA` caiu sem mensagem de erro e não reconectou; o `MARKET` caiu igual às 01:38Z de 05/11. Envio bloqueado, runner do livro em `HALT` por recusas, sem preço até o fim, 1309 `ERROR`. 938 fills, 938 iguais à exchange; DLQ vazia. | F15, F16, F17, F18 abaixo |
-| 12 | 2026-11-05/08 | 3 (apps T60), 72h com checkpoints | 72h (em andamento) | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Largada às 23:16:44Z de 05/11, fim previsto às 23:16:44Z de 08/11. Versões: ctrade `7698773`, ctrade-strategies `4d6296b`. Checkpoints: 3h (102/102 fills), 8h (202/202) e 24h (613/613), todos com estado `OK`, zero `ERROR` e nenhum disparo automático. Em 38h, `SoakBook`, `SoakReversion` e `SoakTrend` parados em LIMIT que o preço não alcançou, o que reduziu os fills; canais vivos e sem corte de 24h da Binance. Em 07/11: 1 `ERROR` às 13:18:06Z, explicado (consulta do mantenedor a `/transactions`, truncada com `head`, deu `Broken pipe`; sem efeito na operação). `CAPITAL_RESERVATION_STALE` `WARN` desde 16:21:13Z, por uma BUY do `SoakTrend` confirmada aberta (status `NEW` no watchdog, `locked` igual ao total): não reprova, pela decisão de 06/11. | Calibração das apps; cliente desconectado não deve ser `ERROR`; monitor não avisa `ERROR` novo depois do primeiro |
+| 12 | 2026-11-05/08 | 3 (apps T60), final de 72h com checkpoints | 72h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 72h limpa). Checkpoints de 3h, 8h e 24h e fim sem reprovação; 886 fills, 888 de 888 iguais à exchange; 1 `ERROR` explicado; reconexão do `MARKET` sem perda; restart final com boot `SUCCESS`. T68 e T69 validadas. | Cliente desconectado como `ERROR`; calibração das apps; monitor (PR #178) |
 | Curta 69 | 2026-11-05 | Validação da T68, fora da numeração | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Sem veredito de soak. 16 quedas provocadas em cerca de 9 min: 16 reconexões, 9 sinais descartados, nenhuma rejeição, runners ativos, 20 de 20 fills iguais à exchange. | - |
 | Curta 70 | 2026-11-05 | Validação da T69, fora da numeração | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Sem veredito de soak. `USER_DATA` fora por 49 s: cancelamento vencido descartado na queda e enviado depois da reconexão. Conciliação 27 de 27, `locked` 0. 27 fills contra 41 da curta 69, sem causa medida. | Acompanhar fills e avaliações na rodada 12 |
 
@@ -610,6 +610,31 @@ Largada e fechamento pelos scripts da VPS; o fechamento rodou no horário, sem a
 - **F18 — Operação (médio): monitor da rodada depende da sessão do agente.** O SSH do `round-watch.sh` caiu logo
   depois das 17:51Z de 04/11 e terminou com código 0 (o `tail` do pipeline esconde o erro), antes da primeira
   falha. Ninguém olhou a rodada por cerca de 18h. O monitor deve rodar na VPS e avisar por conta própria.
+
+### Rodada 12 — detalhes (2026-11-05 23:16:44Z → 2026-11-08 23:16:44Z, VPS)
+
+Versões: ctrade `7698773` (contrato 2.0, T68 e T69), ctrade-strategies `4d6296b`. Monitor trocado no ar em 07/11 18:23Z
+pelo `2b55c8d` (PR #178), sem reiniciar o ctrade. Portfolio `59047142` (1000 USDT), limites da rodada 7.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | 888 fills, 888 iguais, 0 divergentes, 0 só de um lado; `EXCHANGE_TRADE_DIVERGENCE` `OK` em 72h | OK |
+| 2 | DLQ | nenhuma entrada | OK |
+| 3 | Capital | `CAPITAL_RESERVATION_STALE` `WARN` de 07/11 16:21Z a 08/11 ~08:04Z: BUY do `SoakTrend` confirmada aberta (`NEW` no watchdog, `locked` igual ao total). Não reprova pela decisão de 2026-11-06. No fim, `locked` 0 e reserva só dos 2 lotes abertos | OK |
+| 4 | Transação presa | `TRANSACTION_STUCK` `OK` o tempo todo; 0 em voo depois do fechamento | OK |
+| 5 | Safe Mode / halt | nenhum evento automático; os 5 `HALT` são do fechamento | OK |
+| 6 | `ERROR` | 1: `Broken pipe` em `/transactions` às 13:18:06Z de 07/11, leitura do mantenedor truncada com `head` | OK (explicado) |
+| 7 | Estabilidade | heap mínimo 43.2 → 42.0 MB, threads 50 → 48, avaliação média 9.5 → 9.1 ms, p99 do `/evaluate` ~3.5 ms | OK |
+| 8 | Saldo no restart | restart em 2026-11-09 12:04:58Z: boot `SUCCESS`, `phase2.sanity` `OK` (BTC esperado 0.00208, os 2 lotes abertos), 0 `ERROR` | OK |
+
+- **T68:** o `MARKET` fechou às 00:01:01Z de 08/11 e reconectou em 17 s, sem `ERROR`. O `USER_DATA` não caiu; o
+  corte abrupto segue validado nas rodadas curtas 69 e 70.
+- **T69:** o `SoakBook` cancelou 2054 ordens, todas entre 120 e 139 s, com a métrica `CANCEL` igual ao número de
+  cancelamentos. Sem queda do `USER_DATA`, o descarte com envio bloqueado não ocorreu nesta rodada (validado na curta 70).
+- **Fluxo:** 612 fills nas primeiras 24h e 24 nas 14h seguintes, com `SoakBook`, `SoakReversion` e `SoakTrend` parados
+  em LIMIT que o preço não alcançou; depois voltou. O `SoakBook` ficou cerca de 19h recolocando a mesma venda.
+- **Achados (backlog):** cliente desconectado vira `ERROR` no `GlobalExceptionHandler`; calibrar prazos e
+  sensibilidade das apps de soak; monitor só avisava o primeiro `ERROR` (corrigido no PR #178).
 
 ## Fontes
 

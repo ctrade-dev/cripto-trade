@@ -3,7 +3,7 @@
 **Complexidade:** Alta
 **Responsável:** Claude
 **Dependências:** T40 (contrato 1.1), T41 (estratégia remota), T60 (apps de soak), T68 (envio bloqueado)
-**Status:** Em andamento (falta a rodada de 72h)
+**Status:** Concluído (rodada 12 de 72h aprovada em 2026-11-08)
 
 ---
 
@@ -142,7 +142,7 @@ Não precisa de endpoint novo, e o `/evaluate` não gasta seus 250 ms com idas e
   `USER_DATA` fora por 49 s, atravessando o prazo de 120 s. A ordem seguiu `SUBMITTED`, `CANCEL` não contou durante a queda
   e a ordem terminou `CANCELED` logo depois da reconexão).
 - [ ] Testnet: latência e falhas do `/evaluate` sem piora relevante com `priceHistory`.
-- [ ] Rodada de 72h aprovada, com checkpoints (T53, decisão de 2026-11-05).
+- [x] Rodada de 72h aprovada, com checkpoints (T53, decisão de 2026-11-05).
 
 ## Validação
 
