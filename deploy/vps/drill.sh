@@ -39,12 +39,13 @@ case ${1:-} in
     done
     sleep 20; snap depois ;;
   safe-mode)
-    L=${2:?nivel}; open_log "drill-safe-mode-$L"; REASON="T53 F4.10/F4.11: Safe Mode $L"
+    L=${2:?nivel}
     case $L in
       NORMAL|HALT|CANCEL_ALL) ;;
       PANIC_SELL) authorized "$@" ;;
       *) echo "nivel: NORMAL, HALT, CANCEL_ALL ou PANIC_SELL" >&2; exit 1 ;;
     esac
+    open_log "drill-safe-mode-$L"; REASON="T53 F4.10/F4.11: Safe Mode $L"
     snap antes; safe_mode_status
     log "mudanca: $(cmd PUT "/admin/portfolios/$PORTFOLIO/safe-mode" "{\"level\":\"$L\",\"confirm\":true}")"
     for _ in 1 2 3 4 5 6; do sleep 10; safe_mode_status; done
@@ -60,6 +61,6 @@ case ${1:-} in
     r=$(runner_of "$N"); [[ -n $r ]] || { log "runner de $N nao encontrado"; exit 1; }
     snap antes; log "${r:0:8}: $(cmd PATCH "/admin/runners/$r" "{\"maxHoldingDuration\":\"$D\"}")" ;;
   *)
-    sed -n '2,15p' "$0"; exit 1 ;;
+    sed -n '2,14p' "$0"; exit 1 ;;
 esac
 log "fim"

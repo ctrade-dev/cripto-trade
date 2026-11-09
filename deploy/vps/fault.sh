@@ -44,7 +44,20 @@ kill_conns() {
   log "conexoes derrubadas"
 }
 
-block_out() { local ip; for ip in "$@"; do add_rule OUTPUT -d "$ip" -p tcp --dport 443 -j REJECT; done; kill_conns "$@"; }
+# Conexoes abertas na 443, para o log mostrar o que foi derrubado.
+conns() { ns ss -tn state established '( dport = :443 )' | awk 'NR>1{print $4}' | sed -E 's/^\[::ffff:([0-9.]+)\]:443$//; s/:443$//' | sort -u | paste -sd' '; }
+
+# Bloqueia os hosts por IP e pelo nome no TLS (SNI): uma reconexao que resolva outro IP tambem e recusada.
+block_out() {
+  local h ip
+  for h in "$@"; do
+    for ip in $(ips "$h"); do add_rule OUTPUT -d "$ip" -p tcp --dport 443 -j REJECT --reject-with tcp-reset; done
+    add_rule OUTPUT -p tcp --dport 443 -m string --string "$h" --algo bm -j REJECT --reject-with tcp-reset
+  done
+  log "conexoes antes: $(conns)"
+  kill_conns $(ips "$@")
+  log "conexoes depois: $(conns)"
+}
 
 # Espera passiva, com o estado a cada 15 s.
 hold() {
@@ -124,19 +137,23 @@ case ${1:-} in
       all) HOSTS="$WS_MARKET $WS_USER" ;; market) HOSTS=$WS_MARKET ;; user) HOSTS=$WS_USER ;;
       *) echo "canal: all, market ou user" >&2; exit 1 ;;
     esac
-    snap antes; block_out $(ips $HOSTS); log "WebSocket fora: $HOSTS"
+    snap antes; block_out $HOSTS; log "WebSocket fora: $HOSTS"
     hold "$S"; clear_rules; log "rede de volta"
     after 120 ;;
   exchange)
     S=${2:?segundos}; open_log fault-exchange "$@"
     wait_book_order || exit 1
-    snap antes; block_out $(ips $WS_MARKET $WS_USER $REST); log "exchange fora (WebSocket e REST)"
+    snap antes; block_out $WS_MARKET $WS_USER $REST; log "exchange fora (WebSocket e REST)"
     hold "$S"; clear_rules; log "rede de volta"
     after 180 ;;
   lost-ack|lost-order)
     S=${2:?segundos}; open_log "fault-$1" "$@"
     USER_IPS=$(ips $WS_USER)
     snap antes
+    log "conexoes: $(conns)"
+    [[ -n $(comm -12 <(tr ' ' '
+' <<< "$(conns)" | sort) <(tr ' ' '
+' <<< "$USER_IPS" | sort)) ]]       || { log "nenhuma conexao aberta com $WS_USER ($USER_IPS): abortado"; exit 1; }
     wait_book_cancel || exit 1
     T0=$(q "select now()")
     for ip in $USER_IPS; do
@@ -162,6 +179,6 @@ import json,sys
 d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get('content',d.get('strategies',[]))
 print(' '.join(f\"{s.get('name')}:{s.get('status')}:{s.get('verification')}:{s.get('usable')}\" for s in d))")" ;;
   *)
-    sed -n '2,15p' "$0"; exit 1 ;;
+    sed -n '2,12p' "$0"; exit 1 ;;
 esac
 log "fim"
