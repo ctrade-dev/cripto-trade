@@ -283,7 +283,10 @@ O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a ca
   ordem (`signal.evaluated.total{decision="DISPATCH_BLOCKED"}`), nem os da proteção do lote e do `PANIC_SELL`, que
   tentam de novo no tick seguinte. O runner não para por causa disso. `cancel` e `close` do operador respondem `409 EXCHANGE_UNAVAILABLE`, sem enviar nada. Ordens que já
   estão na exchange seguem vivas.
-- **Ação:** a reconexão é automática (tentativa a cada 5s, e o coordenador a cada 30s). Persistindo, ver os logs
+- **Ação:** a reconexão é automática: uma fila por canal, com espera de 5s × tentativa (`Scheduling reconnect
+  attempt N/10`), e o coordenador a cada 30s. Depois de 10 tentativas seguidas sem conexão (~4,6 min), o ctrade
+  registra `Max reconnect attempts` (`ERROR`), para todos os runners (`HALT` automático, falha crítica de conexão) e
+  deixa a reconexão com o coordenador; a contagem recomeça quando o canal conecta. Persistindo, ver os logs
   `Scheduling reconnect`, `marketData:` e [stream-disconnected](#stream-disconnected).
 - **Confirmar:** log `All lost channels reconnected` e a verificação em `OK`.
 

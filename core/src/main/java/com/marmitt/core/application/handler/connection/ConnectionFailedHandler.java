@@ -23,8 +23,8 @@ public class ConnectionFailedHandler implements ConnectionFailedPort {
 
     @Override
     public void execute(final WebSocketFailedEvent event) {
-        log.warn("WebSocket failed - exchange={} channel={} attempt={} critical={} reason={}",
-                event.exchange(), event.channel(), event.attemptCount(), event.isCritical(), event.reason());
+        log.warn("WebSocket failed - exchange={} channel={} critical={} reason={}",
+                event.exchange(), event.channel(), event.isCritical(), event.reason());
         try {
             ConnectionKey key = new ConnectionKey(event.exchange(), event.channel());
             WebSocketConnectionManager manager = connectionRepository.getConnection(key);
@@ -41,8 +41,7 @@ public class ConnectionFailedHandler implements ConnectionFailedPort {
             manager.setConnectionResult(failure);
 
             if (!event.isCritical()) {
-                reconnectionStrategy.scheduleReconnect(
-                        event.exchange(), event.channel(), event.connectionId(), event.attemptCount());
+                reconnectionStrategy.scheduleReconnect(event.exchange(), event.channel(), event.connectionId());
             }
 
         } catch (Exception e) {

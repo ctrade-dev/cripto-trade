@@ -21,8 +21,8 @@ class CriticalConnectionFailureHandlerTest {
         RecordingHaltRunnerPort haltPort = new RecordingHaltRunnerPort();
         CriticalConnectionFailureHandler handler = new CriticalConnectionFailureHandler(haltPort);
 
-        WebSocketFailedEvent critical = WebSocketFailedEvent.withAttempts(
-                "BINANCE", "Max attempts", null, null, 11, StreamChannel.MARKET);
+        WebSocketFailedEvent critical = WebSocketFailedEvent.critical(
+                "BINANCE", "Max attempts", StreamChannel.MARKET, 10);
 
         assertTrue(critical.isCritical());
         handler.execute(critical);
