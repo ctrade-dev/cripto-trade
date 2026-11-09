@@ -629,7 +629,7 @@ pelo `2b55c8d` (PR #178), sem reiniciar o ctrade. Portfolio `59047142` (1000 USD
 
 - **T68:** o `MARKET` fechou às 00:01:01Z de 08/11 e reconectou em 17 s, sem `ERROR`. O `USER_DATA` não caiu; o
   corte abrupto segue validado nas rodadas curtas 69 e 70.
-- **T69:** o `SoakBook` cancelou 2054 ordens, todas entre 120 e 139 s, com a métrica `CANCEL` igual ao número de
+- **T69:** o `SoakBook` pediu 2053 cancelamentos, todos entre 120 e 170 s (mais 1 do fechamento), com a métrica `CANCEL` igual ao número de
   cancelamentos. Sem queda do `USER_DATA`, o descarte com envio bloqueado não ocorreu nesta rodada (validado na curta 70).
 - **Fluxo:** 612 fills nas primeiras 24h e 24 nas 14h seguintes, com `SoakBook`, `SoakReversion` e `SoakTrend` parados
   em LIMIT que o preço não alcançou; depois voltou. O `SoakBook` ficou cerca de 19h recolocando a mesma venda.
