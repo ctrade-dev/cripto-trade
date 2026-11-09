@@ -349,6 +349,8 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | 12 | 2026-11-05/08 | 3 (apps T60), final de 72h com checkpoints | 72h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **Aprovada** (1ª de 72h limpa). Checkpoints de 3h, 8h e 24h e fim sem reprovação; 886 fills, 888 de 888 iguais à exchange; 1 `ERROR` explicado; reconexão do `MARKET` sem perda; restart final com boot `SUCCESS`. T68 e T69 validadas. | Cliente desconectado como `ERROR`; calibração das apps; monitor (PR #178) |
 | Curta 69 | 2026-11-05 | Validação da T68, fora da numeração | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Sem veredito de soak. 16 quedas provocadas em cerca de 9 min: 16 reconexões, 9 sinais descartados, nenhuma rejeição, runners ativos, 20 de 20 fills iguais à exchange. | - |
 | Curta 70 | 2026-11-05 | Validação da T69, fora da numeração | 1h | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | Sem veredito de soak. `USER_DATA` fora por 49 s: cancelamento vencido descartado na queda e enviado depois da reconexão. Conciliação 27 de 27, `locked` 0. 27 fills contra 41 da curta 69, sem causa medida. | Acompanhar fills e avaliações na rodada 12 |
+| Curta 101 | 2026-11-09 | 4, sessão 1 (F4.2, F4.4) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.2 e F4.4 passaram.** WebSockets fora por 2 min: `CRITICAL` com `STREAM_DISCONNECTED`, `MARKET_DATA_STALE` e `ORDER_DISPATCH_BLOCKED`, reconexão 4 s depois da rede voltar, sem `HALT`. Exchange inteira fora por 2 min: watchdog falhou 2 ciclos, Safe Mode seguiu `NORMAL`, tudo voltou sozinho. 192 `ERROR`, todos das tentativas de reconexão provocadas. Fechamento: comparação de 3h com a exchange OK, DLQ vazia. | F19, F20 |
+| Curta 102 | 2026-11-09 | 4, sessão 1 (F4.7, F4.1) | 1h20 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.7 e F4.1 passaram.** App do `SoakTrend` fora por 10 min: 161 `STRATEGY_UNAVAILABLE`, runner `ACTIVE`, volta sem ação manual. Três restarts (10 s, 3 min passando o prazo de 120 s do `SoakBook`, 30 s com lote aberto): boot `SUCCESS`, `phase3` recuperou as ordens em voo, sanidade `OK`. Zero `ERROR`. Conciliação 45 de 45. | F21; F7 de novo |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -692,6 +694,37 @@ pelo `2b55c8d` (PR #178), sem reiniciar o ctrade. Portfolio `59047142` (1000 USD
   em LIMIT que o preço não alcançou; depois voltou. O `SoakBook` ficou cerca de 19h recolocando a mesma venda.
 - **Achados (backlog):** cliente desconectado vira `ERROR` no `GlobalExceptionHandler`; calibrar prazos e
   sensibilidade das apps de soak; monitor só avisava o primeiro `ERROR` (corrigido no PR #178).
+
+
+### Fase 4, sessão 1 — detalhes (2026-11-09, VPS, curtas 101 e 102)
+
+A sessão 1 do roteiro (F4.2, F4.4, F4.7, F4.1) precisou de duas sessões curtas: o laço de espera do agente usava
+`pgrep -f` com o nome do teste e achava a si mesmo, e cerca de 2h passaram entre a F4.2 e a F4.4. Esperas agora olham o
+arquivo de saída do teste.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.2 Queda curta de WebSocket | Passou | `fault-ws` 14:05:33Z–14:07:34Z; reconexão dos dois canais às 14:07:38Z e envio liberado; estado `OK` às 14:09:34Z |
+| F4.4 Queda total da exchange | Passou | `fault-exchange` 16:10:26Z–16:12:28Z; watchdog `failed=2` em 16:11:20Z e 16:12:20Z, `recovered` a partir de 16:13:20Z; Safe Mode `NORMAL` |
+| F4.7 Estratégia fora do ar | Passou | `SoakTrend` parado 16:35:27Z–16:45:29Z; 161 `STRATEGY_UNAVAILABLE` e nenhuma outra decisão; depois `HOLD`/`BUY`/`SELL` normais e catálogo `VERIFIED` |
+| F4.1 Restart com ordem em voo | Passou | paradas de 10 s, 180 s e 30 s com lote; boot `SUCCESS` nas três; `phase3` com `hasErrors=false`; runners com histórico em `WAITING_HISTORY` voltaram sozinhos; 0 `ERROR` |
+
+**Achados:**
+
+- **F19 — Bug (alto): o contador de reconexão não sobe.** Nas 95 tentativas da F4.2 (e nas 96 da F4.4) o log diz sempre
+  `Scheduling reconnect attempt 1/10`. `LinearBackoffReconnectionStrategy` só passa `attempt + 1` quando a reconexão
+  lança exceção na hora; a falha assíncrona da conexão nova chega como um evento de falha novo, com `attemptCount` 1.
+  Resultado: o intervalo fica em 5 s e as 10 tentativas nunca se esgotam, então o `HALT` de
+  `CriticalConnectionFailureHandler` não dispara numa queda longa. **A F4.3 fica bloqueada até a correção.**
+- **F20 — Bug (médio): cadeias de reconexão em paralelo no `MARKET`.** A partir de ~20 s de queda o `MARKET` agenda duas
+  tentativas a cada 5 s (14:05:52Z e 14:05:53Z, e assim por diante): 70 tentativas em 2 min contra 25 do `USER_DATA`.
+  Provavelmente a mesma causa da F19 (cada falha agenda uma reconexão nova sem cancelar a anterior); a investigar junto.
+- **F21 — Observabilidade (baixo): app de estratégia fora não aparece no estado operacional.** Na F4.7 o estado ficou
+  `OK` durante os 10 min; o catálogo segue `VERIFIED` e só as métricas e o `WARN` do log mostram o
+  `STRATEGY_UNAVAILABLE`. Um operador que olha só o estado não vê a app caída.
+- **F7 de novo:** o fechamento da curta 102 deu `EXCHANGE_TRADE_DIVERGENCE` `CRITICAL` porque a janela de 2h do relatório
+  atravessa o reset do banco e pega 57 fills da curta 101 (`exchangeOnly`). Na janela da própria sessão, 45 de 45.
+  Sessões curtas seguidas pedem o relatório com a janela a partir de `START`.
 
 ## Fontes
 
