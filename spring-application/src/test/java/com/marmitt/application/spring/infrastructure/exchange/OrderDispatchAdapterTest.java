@@ -10,6 +10,7 @@ import com.marmitt.core.dto.websocket.request.SendCancelOrderRequest;
 import com.marmitt.core.dto.websocket.request.SendOrderRequest;
 import com.marmitt.core.enums.OrderType;
 import com.marmitt.core.enums.TransactionType;
+import com.marmitt.core.exceptions.ExchangeQueryException;
 import com.marmitt.core.ports.inbound.runner.OrderConciliationPort;
 import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
 import com.marmitt.core.ports.outbound.exchange.ExchangeOrderPort;
@@ -209,6 +210,50 @@ class OrderDispatchAdapterTest {
         adapter.cancel(command); // mesma ordem -> tenta de novo (slot livre) e envia
 
         assertEquals(1, sent.size(), "unsupported no-op must release the de-dup slot for retry");
+    }
+
+    @Test
+    void cancel_keepsDeDupSlot_whenExchangeDoesNotKnowTheOrder() {
+        int[] calls = {0};
+        ExchangeOrderExecutionPort notFound = new ExchangeOrderExecutionPort() {
+            @Override public OrderDataDto submitOrder(SendOrderRequest request) { throw new UnsupportedOperationException(); }
+            @Override public OrderDataDto cancelOrder(SendCancelOrderRequest request) {
+                calls[0]++;
+                throw new ExchangeQueryException(EXCHANGE, ExchangeQueryException.ErrorType.ORDER_NOT_FOUND, "Unknown order sent.");
+            }
+        };
+        StubAdapterRepository adapterRepo = new StubAdapterRepository(
+                new StubOrderPort(OrderSubmissionResult.dispatched()), notFound);
+        OrderDispatchAdapter adapter = new OrderDispatchAdapter(adapterRepo, new RecordingConciliationPort());
+        OrderCancelCommand command = new OrderCancelCommand("t01-SELL-001", UUID.randomUUID(), SYMBOL, EXCHANGE);
+
+        assertThrows(ExchangeQueryException.class, () -> adapter.cancel(command));
+        adapter.cancel(command); // mesma ordem no tick seguinte: a exchange ja respondeu, nao reenvia
+
+        assertEquals(1, calls[0], "ORDER_NOT_FOUND is an exchange answer and must keep the de-dup slot (F22)");
+    }
+
+    @Test
+    void cancel_releasesDeDupSlot_whenSendFailsTechnically() {
+        int[] calls = {0};
+        ExchangeOrderExecutionPort flaky = new ExchangeOrderExecutionPort() {
+            @Override public OrderDataDto submitOrder(SendOrderRequest request) { throw new UnsupportedOperationException(); }
+            @Override public OrderDataDto cancelOrder(SendCancelOrderRequest request) {
+                if (calls[0]++ == 0) {
+                    throw new ExchangeQueryException(EXCHANGE, ExchangeQueryException.ErrorType.TEMPORARY, "timeout");
+                }
+                return null;
+            }
+        };
+        StubAdapterRepository adapterRepo = new StubAdapterRepository(
+                new StubOrderPort(OrderSubmissionResult.dispatched()), flaky);
+        OrderDispatchAdapter adapter = new OrderDispatchAdapter(adapterRepo, new RecordingConciliationPort());
+        OrderCancelCommand command = new OrderCancelCommand("t01-SELL-001", UUID.randomUUID(), SYMBOL, EXCHANGE);
+
+        assertThrows(ExchangeQueryException.class, () -> adapter.cancel(command));
+        adapter.cancel(command); // falha tecnica liberou o slot: tenta de novo
+
+        assertEquals(2, calls[0], "a technical failure must release the de-dup slot for retry");
     }
 
     // ---- stubs ----

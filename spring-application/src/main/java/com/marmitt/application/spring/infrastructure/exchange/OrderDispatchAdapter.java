@@ -9,6 +9,7 @@ import com.marmitt.core.dto.websocket.request.SendCancelOrderRequest;
 import com.marmitt.core.dto.websocket.request.SendOrderRequest;
 import com.marmitt.core.enums.OrderSide;
 import com.marmitt.core.enums.TransactionType;
+import com.marmitt.core.exceptions.ExchangeQueryException;
 import com.marmitt.core.ports.inbound.runner.OrderConciliationPort;
 import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
 import com.marmitt.core.ports.outbound.exchange.ExchangeOrderPort;
@@ -31,7 +32,8 @@ public class OrderDispatchAdapter implements OrderDispatchPort {
      * Janela de de-dup de cancel: uma estrategia deterministica reemite SHOULD_CANCEL a cada tick
      * enquanto o CANCELED async nao chega. Suprimimos reenvios do mesmo clientOrderId dentro desta
      * janela (evita rate-limit). A marca e gravada APENAS apos um envio real — blocked/unsupported
-     * nao consomem a janela, para nao bloquear um retry legitimo apos um no-op.
+     * nao consomem a janela, para nao bloquear um retry legitimo apos um no-op. A resposta
+     * {@code ORDER_NOT_FOUND} da exchange conta como envio real e consome a janela.
      */
     private static final Duration CANCEL_COOLDOWN = Duration.ofSeconds(30);
 
@@ -122,12 +124,22 @@ public class OrderDispatchAdapter implements OrderDispatchPort {
                     command.exchangeId(), command.clientOrderId());
             return;
         } catch (RuntimeException e) {
-            recentCancelByClientOrderId.remove(command.clientOrderId(), now);
+            // ORDER_NOT_FOUND e resposta da exchange, nao falha de envio: a reserva fica, para que a
+            // ordem que a exchange nao conhece nao receba um cancelamento por tick ate o status final
+            // chegar pelo watchdog (T53 F22).
+            if (!isOrderNotFound(e)) {
+                recentCancelByClientOrderId.remove(command.clientOrderId(), now);
+            }
             throw e;
         }
 
         log.debug("cancel: cancel sent — clientOrderId={} exchange={} symbol={} — awaits CANCELED via stream",
                 command.clientOrderId(), command.exchangeId(), command.symbol());
+    }
+
+    private static boolean isOrderNotFound(RuntimeException e) {
+        return e instanceof ExchangeQueryException query
+                && query.errorType() == ExchangeQueryException.ErrorType.ORDER_NOT_FOUND;
     }
 
     @Override
