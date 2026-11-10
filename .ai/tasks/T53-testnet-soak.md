@@ -353,6 +353,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 102 | 2026-11-09 | 4, sessão 1 (F4.7, F4.1) | 1h20 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.7 e F4.1 passaram.** App do `SoakTrend` fora por 10 min: 161 `STRATEGY_UNAVAILABLE`, runner `ACTIVE`, volta sem ação manual. Três restarts (10 s, 3 min passando o prazo de 120 s do `SoakBook`, 30 s com lote aberto): boot `SUCCESS`, `phase3` recuperou as ordens em voo, sanidade `OK`. Zero `ERROR`. Conciliação 45 de 45. | F21; F7 de novo |
 | Curta 103 | 2026-11-09 | 4, sessão 2 (F4.5, F4.6) | 1h25 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.5 e F4.6 passaram.** Confirmação perdida: a SELL do `SoakBook` chegou à exchange e ficou `PENDING` do nosso lado; o próprio `SoakBook` a cancelou 2 min depois e o `CANCELED` do stream a conciliou (o watchdog não chegou a agir). Ordem perdida: a SELL nunca chegou à exchange e virou `EXPIRED` pelo watchdog depois da carência, com o lote destravado. 2 `ERROR`, as quedas provocadas do `USER_DATA`. Nenhum `HALT`. | F22 |
 | Curta 104 | 2026-11-09 | 4, sessão 3 (F4.2 de novo, F4.3, F4.9) | 1h50 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #181 | **F4.2 e F4.9 passaram; F4.3 passou no `HALT`, falhou na volta.** F4.2: tentativas 1, 2, 3… com espera crescente e uma fila por canal; os dois canais voltaram 7 e 12 s depois da rede; 18 `ERROR` (eram 95). F4.3: `HALT` automático 4 min 35 s depois do corte; o `MARKET` voltou sozinho, o `USER_DATA` não, e a retomada respondeu `409`; destravado pela API. F4.9: `HALTED` na hora, nenhuma ordem nova em 5 min, retomada um a um sem `ERROR`. Conciliação 54 de 54. | F23, F24 |
+| Curta 105 | 2026-11-10 | 4, F4.3 de novo | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.3 passou.** WebSockets fora por 6 min: os dois canais esgotaram as 10 tentativas às 13:12:29Z e o `HALT` automático parou os 5 runners; `STREAM_DISCONNECTED` seguiu visível como `WARN`; o coordenador reabriu o `USER_DATA` a cada 30 s com todos parados; os dois canais voltaram sozinhos 29 s depois da rede; retomada `200` sem intervenção nas conexões e estado `OK`. 49 `ERROR`, todos da queda provocada. Conciliação 38 de 38. | F23, F24 resolvidos |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -774,6 +775,13 @@ da F4.3 e da F4.9 e os dois 500 da F24.
   (`Invalid transition from CONNECTED to CONNECTING`) porque abre o `MARKET` primeiro e ele já estava conectado.
   `POST /api/websocket/disconnect` respondeu 500 (`Invalid transition from ERROR to DISCONNECTING`) no `USER_DATA`,
   mas derrubou o `MARKET` antes de falhar; o `connect` seguinte abriu os dois canais.
+
+**F4.3 repetida (curta 105, 2026-11-10, com o PR #183):** passou. `fault-ws` 13:07:54Z–13:13:56Z; `Max reconnect
+attempts (10)` no `USER_DATA` e no `MARKET` às 13:12:29Z e `HALT` dos 5 runners (o segundo `halt-all` não tinha o que
+parar); depois do `HALT`, `STREAM_DISCONNECTED` como `WARN` e `marketData: connecting user stream` a cada 30 s;
+`Reconnected after 11 failed attempt(s)` nos dois canais às 13:14:25Z e envio liberado; retomada às 13:23:17Z com
+`200` nos 5 runners, sem conexão manual. Duas SELL que estavam no livro encheram durante a queda e foram conciliadas
+na volta. F23 e F24 resolvidos.
 
 ## Fontes
 
