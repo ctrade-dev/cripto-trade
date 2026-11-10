@@ -355,6 +355,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 104 | 2026-11-09 | 4, sessão 3 (F4.2 de novo, F4.3, F4.9) | 1h50 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #181 | **F4.2 e F4.9 passaram; F4.3 passou no `HALT`, falhou na volta.** F4.2: tentativas 1, 2, 3… com espera crescente e uma fila por canal; os dois canais voltaram 7 e 12 s depois da rede; 18 `ERROR` (eram 95). F4.3: `HALT` automático 4 min 35 s depois do corte; o `MARKET` voltou sozinho, o `USER_DATA` não, e a retomada respondeu `409`; destravado pela API. F4.9: `HALTED` na hora, nenhuma ordem nova em 5 min, retomada um a um sem `ERROR`. Conciliação 54 de 54. | F23, F24 |
 | Curta 105 | 2026-11-10 | 4, F4.3 de novo | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.3 passou.** WebSockets fora por 6 min: os dois canais esgotaram as 10 tentativas às 13:12:29Z e o `HALT` automático parou os 5 runners; `STREAM_DISCONNECTED` seguiu visível como `WARN`; o coordenador reabriu o `USER_DATA` a cada 30 s com todos parados; os dois canais voltaram sozinhos 29 s depois da rede; retomada `200` sem intervenção nas conexões e estado `OK`. 49 `ERROR`, todos da queda provocada. Conciliação 38 de 38. | F23, F24 resolvidos |
 | Curta 106 | 2026-11-10 | 4, sessão 4 (F4.5 de novo, F4.8, F4.10, F4.11) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.8, F4.10 e F4.11 passaram; a F4.5 não exercitou o watchdog.** F4.5: a SELL ficou `PENDING` com o `SoakBook` parado e foi resolvida pelo fill do stream, não pelo watchdog. F4.8: venda MARKET do lote do `SoakChaos` 1 s depois de `PT5M`. F4.10: `HALT` → `CANCEL_ALL` (3 ordens no livro → 0) → `PANIC_SELL` (2 lotes vendidos a mercado em menos de 10 s) → descida até `NORMAL`. F4.11: SELL LIMIT 1% abaixo do último preço, preenchidas na hora, sem escalar para MARKET. 1 `ERROR`, provocado. Conciliação 135 de 135. | F4.13 confirmado |
+| Curta 107 | 2026-11-10 | 4, sessão 5 (F4.7 de novo; F4.14 não abriu) | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #184 | **F4.7 passou.** `SoakTrend` fora por 10 min: `STRATEGY_UNAVAILABLE` como `WARN` cerca de 60 s depois da primeira falha, com runner, estratégia, `failingSince` e motivo; runner `ACTIVE` o tempo todo; estado `OK` 21 s depois da volta e decisões normais sem ação manual. A F4.14 não abriu: `RUNNERS_PER_APP=4` bate no índice único de runner ativo por estratégia, símbolo, exchange e portfólio (F25). 0 `ERROR`. Conciliação 52 de 52. | F21 resolvido; F25 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -803,6 +804,26 @@ Fechamento: em voo 0, `locked` 0, conciliação 135 de 135. Um `ERROR`, da queda
   livro sem encher. É o que a F4.13 quer corrigir: falta prazo de cancelamento nas compras das apps de soak.
 - Restam dois caminhos sem teste de ponta a ponta: o watchdog por `clientOrderId` (F4.5) e a escalada da liquidação
   LIMIT (F4.11). Os dois precisam de uma ordem que fique parada. Com a F4.13 isso pode ser provocado de propósito.
+
+### Fase 4, sessão 5 — detalhes (2026-11-10, VPS, curta 107)
+
+Primeira sessão com o PR #184 (F21) na VPS.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.7 Estratégia fora do ar (de novo) | Passou | `trend` parado às 17:28:46Z; primeira falha às 17:28:49Z; `STRATEGY_UNAVAILABLE` `WARN` na amostra das 17:30:06Z (limite de 60 s), com `runnerId`, `strategyName`, `failingSince` e `lastReason`; runner `ACTIVE` em todas as amostras; `trend` de volta às 17:38:48Z, estado `OK` às 17:39:09Z, só `HOLD` do `SoakTrend` nos minutos seguintes |
+| F4.14 Carga | Não abriu (F25) | `RUNNERS_PER_APP=4 ./round-start.sh` criou o primeiro runner de cada app e o segundo respondeu 500: `duplicate key value violates unique constraint "idx_runners_active_unique"` |
+
+Fechamento: em voo 0, `locked` 0, conciliação 52 de 52, 0 `ERROR`. Os `WARN` são a queda do `SoakTrend`, as falhas
+de propósito do `SoakChaos` (que alternam com respostas boas e por isso não abrem `STRATEGY_UNAVAILABLE`) e 38
+`slow evaluation` dos timeouts do `trend` fora do ar.
+
+**Achado:**
+
+- **F25 — Script (baixo): `RUNNERS_PER_APP` contraria uma regra do domínio.** O índice
+  `idx_runners_active_unique` permite um só runner ativo por estratégia, símbolo, exchange e portfólio. N cópias da
+  mesma app no mesmo portfólio e no mesmo símbolo não existem. A F4.14 precisa mudar o `round-start.sh`: um portfólio
+  por cópia ou um símbolo por cópia. Decisão com o mantenedor.
 
 ## Fontes
 
