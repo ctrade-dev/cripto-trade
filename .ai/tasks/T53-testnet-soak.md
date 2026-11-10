@@ -356,6 +356,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 105 | 2026-11-10 | 4, F4.3 de novo | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.3 passou.** WebSockets fora por 6 min: os dois canais esgotaram as 10 tentativas às 13:12:29Z e o `HALT` automático parou os 5 runners; `STREAM_DISCONNECTED` seguiu visível como `WARN`; o coordenador reabriu o `USER_DATA` a cada 30 s com todos parados; os dois canais voltaram sozinhos 29 s depois da rede; retomada `200` sem intervenção nas conexões e estado `OK`. 49 `ERROR`, todos da queda provocada. Conciliação 38 de 38. | F23, F24 resolvidos |
 | Curta 106 | 2026-11-10 | 4, sessão 4 (F4.5 de novo, F4.8, F4.10, F4.11) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.8, F4.10 e F4.11 passaram; a F4.5 não exercitou o watchdog.** F4.5: a SELL ficou `PENDING` com o `SoakBook` parado e foi resolvida pelo fill do stream, não pelo watchdog. F4.8: venda MARKET do lote do `SoakChaos` 1 s depois de `PT5M`. F4.10: `HALT` → `CANCEL_ALL` (3 ordens no livro → 0) → `PANIC_SELL` (2 lotes vendidos a mercado em menos de 10 s) → descida até `NORMAL`. F4.11: SELL LIMIT 1% abaixo do último preço, preenchidas na hora, sem escalar para MARKET. 1 `ERROR`, provocado. Conciliação 135 de 135. | F4.13 confirmado |
 | Curta 107 | 2026-11-10 | 4, sessão 5 (F4.7 de novo; F4.14 não abriu) | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #184 | **F4.7 passou.** `SoakTrend` fora por 10 min: `STRATEGY_UNAVAILABLE` como `WARN` cerca de 60 s depois da primeira falha, com runner, estratégia, `failingSince` e motivo; runner `ACTIVE` o tempo todo; estado `OK` 21 s depois da volta e decisões normais sem ação manual. A F4.14 não abriu: `RUNNERS_PER_APP=4` bate no índice único de runner ativo por estratégia, símbolo, exchange e portfólio (F25). 0 `ERROR`. Conciliação 52 de 52. | F21 resolvido; F25 |
+| Curta 108 | 2026-11-10 | 4, F4.14 (carga) | 1h15 | 5 apps × 4 símbolos (BTC, ETH, BNB, SOL / USDT) = 20 runners, VPS Oracle ARM, banco limpo, com PR #185 | **F4.14 passou.** Cerca de 5 avaliações/s; tempo médio de avaliação entre 14,5 e 17,9 ms por amostra de 5 min, máximo de 398 ms; p95 da chamada às apps 43 ms; filas dos executores de market data, user data e avaliação em 0; nenhum tick descartado; CPU do processo de 1 a 2%; heap entre 45 e 99 MB. Estado `OK` da largada + 80 s até o fim. 1 `ERROR` (F26). Conciliação 66/66, 68/68, 27/27 e 47/47. | F26, F27 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -824,6 +825,39 @@ de propósito do `SoakChaos` (que alternam com respostas boas e por isso não ab
   `idx_runners_active_unique` permite um só runner ativo por estratégia, símbolo, exchange e portfólio. N cópias da
   mesma app no mesmo portfólio e no mesmo símbolo não existem. Decisão do mantenedor (2026-11-10): um símbolo por cópia.
   `round-start.sh` passa a receber `SYMBOLS`, e o fechamento e o monitor conferem saldo e conciliação de cada símbolo.
+
+### Fase 4, F4.14 — detalhes (2026-11-10, VPS, curta 108)
+
+`SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT" ./round-start.sh 108 75m`: 20 runners `ACTIVE`, alocação da rodada 7
+dividida por 4 (100 USDT por runner; o caos, com 50). Amostras a cada 5 min de 19:20Z a 20:30Z (`run-s10.out`).
+
+| Métrica | Resultado |
+|---|---|
+| Avaliações | ~5 por segundo nas 20 mailboxes |
+| Tempo de avaliação (`runner_signal_processing_time`) | média de 14,5 a 17,9 ms por janela; máximo de 252 a 398 ms, sem tendência de alta |
+| Chamada às apps (`strategy_remote_latency`, p95) | 43 ms do começo ao fim |
+| Filas | `marketDataExecutor`, `userDataExecutor` e `runnerSignalExecutor` em 0 em todas as amostras |
+| Ticks descartados (`runner_ticks_discarded_total`) | nenhum |
+| Processo | CPU de 1 a 2%, heap de 45 a 99 MB, 46 a 49 threads, nenhuma conexão do Hikari em espera |
+| Ordens | 205 `FILLED` e 107 `CANCELED` até 20:30Z |
+
+Fechamento: em voo 0, `locked` 0 nos cinco ativos, conciliação 66 de 66 (BTC), 68 de 68 (ETH), 27 de 27 (BNB) e
+47 de 47 (SOL). Os `WARN` são as falhas de propósito do `SoakChaos`, os cancelamentos de ordem já encerrada e as
+vendas descartadas sem lote, todos já conhecidos.
+
+**Achados:**
+
+- **F26 — Bug (baixo): a resposta da Binance à assinatura vira `ERROR`.** O coordenador assina símbolos numa conexão
+  já aberta (`marketData: subscribing [BNBUSDT, ETHUSDT, SOLUSDT]`, 19:20:53.378Z), e a Binance responde
+  `{"result":null,"id":N}`. `BinanceReceivedMessageProcessor` não reconhece a resposta (`Unrecognized message: no
+  event type field`) e `ProcessMessageEventListener` registra `ERROR` (19:20:53.648Z). Toda assinatura feita depois
+  da conexão gera um `ERROR` falso.
+- **F27 — Melhoria (baixa): largada com vários símbolos passa por `MARKET_DATA_STALE` `CRITICAL`.** A conexão de
+  mercado abre só com o símbolo do primeiro runner iniciado, e o coordenador só assina os outros depois que a conexão
+  tem mais de 1 min (`staleThreshold`). Os 3 símbolos ficaram sem tick por ~80 s, e o estado voltou a `OK` às
+  19:21:11Z. Para um operador (ou agente) é um alarme falso a cada largada.
+
+As correções esperam o aval do mantenedor.
 
 ## Fontes
 
