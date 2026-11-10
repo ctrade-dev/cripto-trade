@@ -30,10 +30,12 @@ psql "select runner_id||'/orders/'||id from transactions where $IN_FLIGHT" | whi
 done
 sleep 30
 log "em voo: $(psql "select count(*) from transactions where $IN_FLIGHT")"
-for a in BTC USDT; do
+for a in $(for s in $SYMBOLS; do printf '%s ' "${s%USDT}"; done)USDT; do
   log "saldo $a: $(curl -s -H "X-Admin-Key: $K" "$B/exchanges/BINANCE/balances?asset=$a" | python3 -c "import json,sys;b=json.load(sys.stdin)['balances'][0];print('free',b['free'],'locked',b['locked'])")"
 done
-log "conciliacao: $(curl -s -H "X-Admin-Key: $K" "$B/reconciliation?symbol=BTCUSDT&from=$START&to=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | python3 -c "import json,sys;print(json.load(sys.stdin)['summary'])")"
+for s in $SYMBOLS; do
+  log "conciliacao $s: $(curl -s -H "X-Admin-Key: $K" "$B/reconciliation?symbol=$s&from=$START&to=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | python3 -c "import json,sys;print(json.load(sys.stdin)['summary'])")"
+done
 # As apps nao tem porta publicada: /stats lido de dentro do container, com o token dele.
 STATS_PY='import os,urllib.request as u;print(u.urlopen(u.Request("http://localhost:8080/stats",headers={"Authorization":"Bearer "+os.environ["STRATEGY_TOKEN"]})).read().decode())'
 for app in trend reversion book breakout chaos; do

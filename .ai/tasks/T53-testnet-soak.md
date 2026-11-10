@@ -317,7 +317,7 @@ reprovado vira achado, depois task, e o teste se repete com a correção.
 |---|---|---|---|---|
 | F4.12 | Cliente desconectado | ctrade: `GlobalExceptionHandler` deixa de registrar `ERROR` (e de responder 500) quando o cliente fecha a conexão | Ler `/transactions` e fechar no meio: nenhum `ERROR` | ~15 min |
 | F4.13 | Calibração das apps de soak | ctrade-strategies: prazo de cancelamento nas compras do `SoakTrend` e do `SoakBreakout`, a partir de `requestedAt`, e uma venda do `SoakBook` que acompanhe o preço | Nenhuma ordem parada além do prazo; fills por hora sem buracos longos | ~2h |
-| F4.14 | Carga | `round-start.sh` com N runners por app (ex.: 20 no total), com alocação dividida | Latência de avaliação e mailbox estáveis; sem tick descartado por atraso; os 8 critérios | ~1h |
+| F4.14 | Carga | `round-start.sh` com `SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT"`: um runner por app em cada símbolo (20 no total, 4 streams de mercado), com alocação dividida (F25) | Latência de avaliação e mailbox estáveis; sem tick descartado por atraso; os 8 critérios | ~1h |
 
 ### Desenvolvimento necessário
 
@@ -325,7 +325,7 @@ reprovado vira achado, depois task, e o teste se repete com a correção.
 |---|---|---|---|
 | `fault.sh` | `deploy/vps` | Provocar as falhas de F4.1 a F4.7 com segurança: regra de firewall só no container do ctrade, sempre removida no fim (`trap`), e evidências antes e depois em `$ROUND_DIR/fault-<teste>.log` | Script |
 | `drill.sh` | `deploy/vps` | F4.8 a F4.11 pela API, com `X-Reason`; `PANIC_SELL` só com confirmação explícita na linha de comando | Script |
-| `round-start.sh` | `deploy/vps` | Duração em minutos para os testes curtos; N runners por app para a F4.14 | Script |
+| `round-start.sh` | `deploy/vps` | Duração em minutos para os testes curtos; um runner por app em cada símbolo para a F4.14 (F25) | Script |
 | `GlobalExceptionHandler` | ctrade | F4.12 | Código, PR |
 | Prazos e preço das apps | ctrade-strategies | F4.13 | Código, PR |
 
@@ -822,8 +822,8 @@ de propósito do `SoakChaos` (que alternam com respostas boas e por isso não ab
 
 - **F25 — Script (baixo): `RUNNERS_PER_APP` contraria uma regra do domínio.** O índice
   `idx_runners_active_unique` permite um só runner ativo por estratégia, símbolo, exchange e portfólio. N cópias da
-  mesma app no mesmo portfólio e no mesmo símbolo não existem. A F4.14 precisa mudar o `round-start.sh`: um portfólio
-  por cópia ou um símbolo por cópia. Decisão com o mantenedor.
+  mesma app no mesmo portfólio e no mesmo símbolo não existem. Decisão do mantenedor (2026-11-10): um símbolo por cópia.
+  `round-start.sh` passa a receber `SYMBOLS`, e o fechamento e o monitor conferem saldo e conciliação de cada símbolo.
 
 ## Fontes
 
