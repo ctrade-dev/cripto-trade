@@ -71,8 +71,8 @@ normal do CANCELED/FILLED, sem atalho. Runners fora de operacao (kill switch) na
 
 1. Equity = `available + reserved + PnL flutuante` (`PortfolioMarkToMarket`: posicoes OPEN e CLOSING
    ao ultimo preco do `LatestPricePort`). Sem preco para alguma posicao, o portfolio e pulado (`WARN` uma
-   vez por lote). Lote de runner parado tambem tem o simbolo assinado pelo coordenador de market data
-   (T58, `OpenLotDemand`), entao a janela sem preco se limita ao primeiro ciclo apos o boot. O mesmo
+   vez por lote). Runner parado tambem tem o simbolo assinado pelo coordenador de market data
+   (T53 F23, `StreamDemand`; lote de runner de outro status, T58 `OpenLotDemand`), entao a janela sem preco se limita ao primeiro ciclo apos o boot. O mesmo
    `PortfolioMarkToMarket` alimenta o PnL, que informa `unpricedPositions` e `priceAsOf`.
 2. Grava a amostra em `equity_snapshots`; pico = maior amostra desde `agora - 24h` ou desde o ultimo
    reset manual para NORMAL, o que for mais recente.

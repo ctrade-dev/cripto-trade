@@ -75,10 +75,12 @@ sem explicação (PnL, saldo, divergência com a exchange).
 <a id="partida-depois-de-um-boot"></a>
 ## Partida depois de um boot
 
-O coordenador de market data (T56) abre sozinho as conexões e assinaturas que os runners operacionais
-precisam: market data de cada fonte em `allowedMarketDataSources` e o stream de usuário da exchange que
-tem um. Runner parado com lote aberto também tem o símbolo assinado (T58), só para o lote ter preço
-(drawdown, PnL); ele continua sem negociar. Roda 5s depois do boot, a cada 30s (`ctrade.market-data.auto-feed.*`) e logo após `start`/`resume`.
+O coordenador de market data (T56) abre sozinho as conexões e assinaturas que os runners `ACTIVE`,
+`TERMINATING` e `HALTED` precisam: market data de cada fonte em `allowedMarketDataSources` e o stream de
+usuário da exchange que tem um. O runner parado entra porque pode ter ordem LIMIT no livro, cujo
+preenchimento só chega pelo stream de usuário, e porque a retomada exige os canais de pé (T53 F23); ele
+continua sem negociar. Runner de outro status com lote aberto também tem o símbolo assinado (T58), só para o
+lote ter preço (drawdown, PnL). Roda 5s depois do boot, a cada 30s (`ctrade.market-data.auto-feed.*`) e logo após `start`/`resume`.
 
 1. `GET /api/boot/status` → esperado `status=SUCCESS`. Senão, ver [boot-not-ready](#boot-not-ready).
 2. Aguardar até 1 minuto e conferir `GET /api/admin/operational-state`: `MARKET_DATA_STALE` e
@@ -89,7 +91,9 @@ tem um. Runner parado com lote aberto também tem o símbolo assinado (T58), só
 Conexão manual (diagnóstico, ou com `ctrade.market-data.auto-feed.enabled=false`):
 `POST /api/websocket/connect`
 `{"exchange":"BINANCE","symbols":[{"baseCurrency":"BTC","quoteCurrency":"USDT","streamType":"TICKER"}]}`
-abre o market data e, se a exchange tiver, o stream de usuário.
+abre o market data e, se a exchange tiver, o stream de usuário. Canal já de pé (`CONNECTED`, `CONNECTING`,
+`RECONNECTING`) fica como está e volta com o status atual, então o pedido serve para reabrir só o canal que
+caiu.
 
 ---
 
@@ -271,6 +275,9 @@ O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a ca
 
 - **Diagnóstico:** `subjects` traz exchange, canal e status (`NOT_OPENED` = nunca aberto desde o boot).
   `CONNECTING`/`RECONNECTING` = a reconexão está trabalhando e o coordenador não interfere: aguardar.
+  CRITICAL = um runner `ACTIVE` precisa do canal. WARN = só runners `HALTED` ou `TERMINATING` precisam:
+  ordens no livro ficam sem acompanhamento e a retomada responde `409 EXCHANGE_UNAVAILABLE` até o canal
+  voltar.
 - **Ação:** o coordenador (T56) reabre a cada 30s. Persistindo, ver os logs `marketData:` e a causa da
   falha de conexão (credencial, rede, chave de listen da Binance); coordenador desligado → conexão
   manual (ver [Partida](#partida-depois-de-um-boot)).
@@ -286,7 +293,8 @@ O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a ca
 - **Ação:** a reconexão é automática: uma fila por canal, com espera de 5s × tentativa (`Scheduling reconnect
   attempt N/10`), e o coordenador a cada 30s. Depois de 10 tentativas seguidas sem conexão (~4,6 min), o ctrade
   registra `Max reconnect attempts` (`ERROR`), para todos os runners (`HALT` automático, falha crítica de conexão) e
-  deixa a reconexão com o coordenador; a contagem recomeça quando o canal conecta. Persistindo, ver os logs
+  deixa a reconexão com o coordenador, que segue pedindo os canais dos runners parados; a contagem recomeça
+  quando o canal conecta. Com a rede de volta e `STREAM_DISCONNECTED` em `OK`, retomar os runners (`resume`). Persistindo, ver os logs
   `Scheduling reconnect`, `marketData:` e [stream-disconnected](#stream-disconnected).
 - **Confirmar:** log `All lost channels reconnected` e a verificação em `OK`.
 

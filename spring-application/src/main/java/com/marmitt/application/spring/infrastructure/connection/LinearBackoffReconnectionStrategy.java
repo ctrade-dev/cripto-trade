@@ -168,15 +168,7 @@ public class LinearBackoffReconnectionStrategy implements ReconnectionStrategyPo
     }
 
     private void reconnectUserStream(String exchangeName, UUID sessionToClose, int attempt) {
-        if (sessionToClose != null) {
-            ConnectionKey key = ConnectionKey.userStream(exchangeName);
-            WebSocketConnectionManager manager = connectionRepository.getConnection(key);
-            UUID currentId = manager.getConnectionResult().connectionId();
-            if (currentId != null && !currentId.equals(sessionToClose)) {
-                log.debug("Skipping stale reconnect task for session={} — stream already moved to connection={}",
-                        sessionToClose, currentId);
-                return;
-            }
+        if (sessionToClose != null && isCurrentUserStreamSession(exchangeName, sessionToClose)) {
             adapterRepository.findActiveSession(sessionToClose).ifPresent(s -> {
                 s.close();
                 adapterRepository.removeActiveSession(sessionToClose);
@@ -190,6 +182,22 @@ public class LinearBackoffReconnectionStrategy implements ReconnectionStrategyPo
         if (response.isFailed()) {
             throw new RuntimeException("User stream reconnect failed: " + response.message());
         }
+    }
+
+    /**
+     * A sessao que falhou ainda e a do stream? Se outra tentativa (o coordenador) ja trocou a conexao, a
+     * sessao antiga nao e fechada aqui, mas a reconexao segue: {@link #attempt} so chega aqui com o canal
+     * fora, entao a conexao nova tambem caiu. Pular a tentativa encerrava a fila do canal (T53 F23).
+     */
+    private boolean isCurrentUserStreamSession(String exchangeName, UUID sessionToClose) {
+        UUID currentId = connectionRepository.getConnection(ConnectionKey.userStream(exchangeName))
+                .getConnectionResult().connectionId();
+        if (currentId != null && !currentId.equals(sessionToClose)) {
+            log.debug("Reconnect task for session={} — stream already moved to connection={}: not closing the old session",
+                    sessionToClose, currentId);
+            return false;
+        }
+        return true;
     }
 
     /** Falhas seguidas de um canal desde a ultima conexao. */

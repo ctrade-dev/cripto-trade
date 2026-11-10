@@ -204,6 +204,38 @@ class LinearBackoffReconnectionStrategyTest {
         assertTrue(published.isEmpty());
     }
 
+    /**
+     * T53 F23: o coordenador trocou a conexao do stream de usuario e ela tambem caiu. A tarefa da sessao
+     * antiga nao fecha nada, mas reconecta: antes ela era pulada e a fila do canal acabava.
+     */
+    @Test
+    void attemptForASupersededSessionStillReconnectsTheDownChannel() throws InterruptedException {
+        UUID failedSession = UUID.randomUUID();
+        UUID coordinatorConnection = UUID.randomUUID();
+        FailedConnections connections = new FailedConnections() {
+            @Override
+            public WebSocketConnectionManager getConnection(ConnectionKey key) {
+                WebSocketConnectionManager mgr = WebSocketConnectionManager.forExchange(key.exchangeName());
+                mgr.setConnectionResult(ConnectionResultDto.failure("Connection refused", coordinatorConnection,
+                        new IllegalStateException("refused")));
+                return mgr;
+            }
+        };
+        CountDownLatch reconnected = new CountDownLatch(1);
+        LinearBackoffReconnectionStrategy strategy = new LinearBackoffReconnectionStrategy(
+                connections, new StubAdapterRepo(), new StubWebSocketRegistry(),
+                (name, req) -> ok(name),
+                name -> {
+                    reconnected.countDown();
+                    return Optional.of(ok(name));
+                },
+                published::add, NO_DELAY, 10);
+
+        strategy.scheduleReconnect(EXCHANGE, StreamChannel.USER_DATA, failedSession);
+
+        assertTrue(reconnected.await(3, TimeUnit.SECONDS), "the down channel must be reconnected");
+    }
+
     private LinearBackoffReconnectionStrategy strategy(ConnectMarketStreamPort market, long delay, int maxAttempts) {
         ConnectUserStreamPort user = name -> Optional.of(ok(name));
         return new LinearBackoffReconnectionStrategy(new FailedConnections(), new StubAdapterRepo(),

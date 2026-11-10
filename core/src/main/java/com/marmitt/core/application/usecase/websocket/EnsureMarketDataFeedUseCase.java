@@ -8,7 +8,6 @@ import com.marmitt.core.dto.connection.ConnectionResultDto;
 import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.ConnectionStatus;
-import com.marmitt.core.enums.RunnerStatus;
 import com.marmitt.core.enums.StreamAction;
 import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.enums.StreamType;
@@ -38,11 +37,11 @@ import java.util.function.Function;
  * Coordenador de demanda de market data (T56). O feed (conexoes, assinaturas) nao sabe de runners e os
  * runners nao sabem do feed; este use case conhece os dois pelos ports e alinha um ao outro.
  *
- * <p><b>Demanda</b> (regra de negocio): runners {@code ACTIVE} e {@code TERMINATING} (ainda vendem)
- * precisam de tick do seu simbolo em cada fonte de {@code allowedMarketDataSources}, e do stream de
- * usuario da sua exchange quando o adapter tem um. Runner parado com lote aberto tambem precisa do
- * tick, so para marcar o lote a mercado (drawdown, PnL; T58): o roteamento do tick continua filtrando por
- * status, entao ele nao negocia. Stream de usuario, nao: lote parado nao gera ordem.
+ * <p><b>Demanda</b> (regra de negocio, {@link StreamDemand}): runners {@code ACTIVE}, {@code TERMINATING} e
+ * {@code HALTED} precisam de tick do seu simbolo em cada fonte de {@code allowedMarketDataSources}, e do
+ * stream de usuario da sua exchange quando o adapter tem um. Runner de outro status com lote aberto tambem
+ * precisa do tick, so para marcar o lote a mercado (drawdown, PnL; T58): o roteamento do tick continua
+ * filtrando por status, entao runner parado nao negocia.
  *
  * <p><b>Evidencia, nao registro:</b> o estado das assinaturas nao e guardado e uma reconexao pode
  * perde-lo, entao a decisao olha o que de fato acontece:
@@ -105,7 +104,7 @@ public class EnsureMarketDataFeedUseCase implements EnsureMarketDataFeedPort {
         Set<String> userStreamExchanges = new TreeSet<>();
         List<StrategyRunner> runners = runnerRepository.findAll();
         for (StrategyRunner runner : runners) {
-            if (runner.getStatus() != RunnerStatus.ACTIVE && runner.getStatus() != RunnerStatus.TERMINATING) {
+            if (!StreamDemand.needsStreams(runner)) {
                 continue;
             }
             demandSymbol(symbolsBySource, runner);

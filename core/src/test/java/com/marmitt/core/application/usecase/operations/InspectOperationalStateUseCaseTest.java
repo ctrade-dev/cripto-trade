@@ -246,6 +246,20 @@ class InspectOperationalStateUseCaseTest {
         assertEquals("NOT_OPENED", disconnected.subjects().getFirst().get("status"));
     }
 
+    /** T53 F23: com todos parados, o stream de usuario caido sumia do estado. */
+    @Test
+    void streamNeededOnlyByHaltedRunnersIsAWarning() {
+        ExchangeAdapterDescriptor binance = mock(ExchangeAdapterDescriptor.class);
+        when(binance.hasUserStream()).thenReturn(true);
+        when(adapters.findAdapter("MOCK")).thenReturn(Optional.of(binance));
+        when(runner.getStatus()).thenReturn(RunnerStatus.HALTED);
+
+        OperationalCheck disconnected = check(useCase.inspect(), "STREAM_DISCONNECTED");
+
+        assertEquals(OperationalSeverity.WARN, disconnected.status());
+        assertEquals("USER_DATA", disconnected.subjects().getFirst().get("channel"));
+    }
+
     /** T53 rodada 11: envio bloqueado com os streams ainda marcados como conectados. */
     @Test
     void blockedOrderDispatchIsCriticalWhateverTheStreamStatusSays() {

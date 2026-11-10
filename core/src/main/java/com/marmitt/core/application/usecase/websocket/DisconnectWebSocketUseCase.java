@@ -5,6 +5,7 @@ import com.marmitt.core.dto.connection.ConnectionResultDto;
 import com.marmitt.core.dto.websocket.mapper.ConnectionResultMapper;
 import com.marmitt.core.dto.websocket.response.WebSocketConnectionResponse;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
+import com.marmitt.core.enums.ConnectionStatus;
 import com.marmitt.core.ports.inbound.websocket.DisconnectWebSocketPort;
 import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
 import com.marmitt.core.ports.outbound.repository.ExchangeAdapterRepositoryPort;
@@ -41,7 +42,7 @@ public class DisconnectWebSocketUseCase implements DisconnectWebSocketPort {
         }
 
         UUID connectionId = manager.getConnectionId();
-        manager.setConnectionResult(ConnectionResultDto.disconnecting("Manual disconnection requested", connectionId));
+        markDisconnecting(manager);
         WebSocketPort webSocket = webSocketRegistry.findByExchangeName(exchangeName)
                 .orElseThrow(() -> new IllegalStateException("No WebSocket registered for exchange: " + exchangeName));
         webSocket.disconnect(exchangeName, connectionId);
@@ -50,7 +51,7 @@ public class DisconnectWebSocketUseCase implements DisconnectWebSocketPort {
             WebSocketConnectionManager userManager = connectionRepository.getConnection(ConnectionKey.userStream(exchangeName));
             if (userManager != null) {
                 UUID userConnectionId = userManager.getConnectionId();
-                userManager.setConnectionResult(ConnectionResultDto.disconnecting("Manual disconnection requested", userConnectionId));
+                markDisconnecting(userManager);
                 adapterRepository.findActiveSession(userConnectionId).ifPresent(s -> {
                     s.close();
                     adapterRepository.removeActiveSession(userConnectionId);
@@ -61,5 +62,17 @@ public class DisconnectWebSocketUseCase implements DisconnectWebSocketPort {
         }
 
         return ConnectionResultMapper.toResponse(manager.getConnectionResult(), exchangeName);
+    }
+
+    /**
+     * So canal conectado passa a {@code DISCONNECTING} (unica transicao valida). Canal em erro ou ja fechado
+     * fica como esta, e o resto do disconnect (sessao, socket) segue: antes, o pedido manual respondia 500 com
+     * o stream de usuario em {@code ERROR} e parava no meio (T53 F24).
+     */
+    private static void markDisconnecting(WebSocketConnectionManager manager) {
+        if (manager.getConnectionResult().status() == ConnectionStatus.CONNECTED) {
+            manager.setConnectionResult(ConnectionResultDto.disconnecting("Manual disconnection requested",
+                    manager.getConnectionId()));
+        }
     }
 }
