@@ -38,10 +38,12 @@ checkpoint() {
   report="$ROUND_DIR/checkpoint-$name.md"
   python3 ../../scripts/round_report.py --start "$START" --end "$now" --env-file .env --portfolio "$PORTFOLIO" \
     > "$report" 2>&1 </dev/null
-  rec=$(curl -s -m 60 -H "X-Admin-Key: $K" "$B/reconciliation?symbol=BTCUSDT&from=$START&to=$now" | python3 -c "
+  rec=$(for s in $SYMBOLS; do
+    curl -s -m 60 -H "X-Admin-Key: $K" "$B/reconciliation?symbol=$s&from=$START&to=$now" | python3 -c "
 import json,sys
 s=json.load(sys.stdin)['summary']
-print(f\"{s['matched']}/{s['total']} divergent={s['divergent']} exchangeOnly={s['exchangeOnly']} localOnly={s['localOnly']}\")" 2>/dev/null || echo indisponivel)
+print(f\"$s {s['matched']}/{s['total']} divergent={s['divergent']} exchangeOnly={s['exchangeOnly']} localOnly={s['localOnly']}\")" 2>/dev/null || echo "$s indisponivel"
+  done | paste -sd';')
   msg="ctrade rodada $N: checkpoint $name: estado=$st errors=${err:-?} fills=$fills conciliacao $rec"
   echo "$(date -u +%FT%H:%M:%SZ) $msg"
   notify "$msg"

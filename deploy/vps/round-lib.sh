@@ -36,7 +36,8 @@ require_round() {
 # Abre o log do teste em $ROUND_DIR/<prefixo>-<nome>-<hora>.log.
 open_log() { LOG="$ROUND_DIR/$1-$(date -u +%Y%m%dT%H%M%SZ).log"; : > "$LOG"; log "inicio: $*"; }
 
-runner_of() { q "select id from strategy_runners where strategy_name='$1' and portfolio_id='$PORTFOLIO' order by created_at limit 1"; }
+# Runner da app no primeiro simbolo da rodada (o unico, fora do teste de carga).
+runner_of() { q "select id from strategy_runners where strategy_name='$1' and portfolio_id='$PORTFOLIO' and symbol='${SYMBOLS%% *}'"; }
 
 wait_api() {
   for _ in $(seq 120); do curl -sf -m 5 -H "X-Admin-Key: $K" "$B/admin/operational-state" >/dev/null && return 0; sleep 5; done
