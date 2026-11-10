@@ -352,6 +352,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 101 | 2026-11-09 | 4, sessão 1 (F4.2, F4.4) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.2 e F4.4 passaram.** WebSockets fora por 2 min: `CRITICAL` com `STREAM_DISCONNECTED`, `MARKET_DATA_STALE` e `ORDER_DISPATCH_BLOCKED`, reconexão 4 s depois da rede voltar, sem `HALT`. Exchange inteira fora por 2 min: watchdog falhou 2 ciclos, Safe Mode seguiu `NORMAL`, tudo voltou sozinho. 192 `ERROR`, todos das tentativas de reconexão provocadas. Fechamento: comparação de 3h com a exchange OK, DLQ vazia. | F19, F20 |
 | Curta 102 | 2026-11-09 | 4, sessão 1 (F4.7, F4.1) | 1h20 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.7 e F4.1 passaram.** App do `SoakTrend` fora por 10 min: 161 `STRATEGY_UNAVAILABLE`, runner `ACTIVE`, volta sem ação manual. Três restarts (10 s, 3 min passando o prazo de 120 s do `SoakBook`, 30 s com lote aberto): boot `SUCCESS`, `phase3` recuperou as ordens em voo, sanidade `OK`. Zero `ERROR`. Conciliação 45 de 45. | F21; F7 de novo |
 | Curta 103 | 2026-11-09 | 4, sessão 2 (F4.5, F4.6) | 1h25 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.5 e F4.6 passaram.** Confirmação perdida: a SELL do `SoakBook` chegou à exchange e ficou `PENDING` do nosso lado; o próprio `SoakBook` a cancelou 2 min depois e o `CANCELED` do stream a conciliou (o watchdog não chegou a agir). Ordem perdida: a SELL nunca chegou à exchange e virou `EXPIRED` pelo watchdog depois da carência, com o lote destravado. 2 `ERROR`, as quedas provocadas do `USER_DATA`. Nenhum `HALT`. | F22 |
+| Curta 104 | 2026-11-09 | 4, sessão 3 (F4.2 de novo, F4.3, F4.9) | 1h50 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #181 | **F4.2 e F4.9 passaram; F4.3 passou no `HALT`, falhou na volta.** F4.2: tentativas 1, 2, 3… com espera crescente e uma fila por canal; os dois canais voltaram 7 e 12 s depois da rede; 18 `ERROR` (eram 95). F4.3: `HALT` automático 4 min 35 s depois do corte; o `MARKET` voltou sozinho, o `USER_DATA` não, e a retomada respondeu `409`; destravado pela API. F4.9: `HALTED` na hora, nenhuma ordem nova em 5 min, retomada um a um sem `ERROR`. Conciliação 54 de 54. | F23, F24 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -745,6 +746,34 @@ arquivo de saída do teste.
   status final.
 - **F4.5 sem o caminho do watchdog:** para exercitá-lo, repetir com a app do `SoakBook` parada logo depois do corte
   (a ordem fica sem pedido de cancelamento até a carência).
+
+
+### Fase 4, sessão 3 — detalhes (2026-11-09, VPS, curta 104)
+
+Primeira sessão com o PR #181 (F19, F20) na VPS.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.2 Queda curta de WebSocket (de novo) | Passou | `fault-ws` 22:49:26Z–22:51:27Z; `Scheduling reconnect attempt 1/10 … 7/10` com espera de 5 s × tentativa, uma fila por canal; `Reconnected after 5 failed attempt(s)` no `USER_DATA` às 22:51:34Z e `after 7` no `MARKET` às 22:51:39Z (o `MARKET` conta também as falhas do coordenador); estado `OK`; 18 `ERROR` |
+| F4.3 Queda longa de WebSocket | `HALT` passou; volta falhou (F23) | `fault-ws` 23:03:29Z–23:09:31Z; `Max reconnect attempts (10)` no `MARKET` e `HALT` dos 5 runners às 23:08:04Z; `MARKET` de volta às 23:09:40Z pelo coordenador (lote aberto); `USER_DATA` em `ERROR` até a intervenção; retomada às 23:17:10Z respondeu `409 Exchange BINANCE is not available`; destravado às 23:18:39Z (ver F24) e retomada às 23:19:02Z; a SELL `ca2e9b61` que estava no livro seguia `NEW` e foi conciliada quando o stream voltou |
+| F4.9 Kill switch e retomada | Passou | `halt` 23:19:38Z, todos `HALTED`; nenhuma ordem nova até a retomada; a SELL LIMIT do `SoakBook` seguiu no livro; retomada de um em um, 23:24:39Z–23:28:04Z, estado `OK`, nenhum `ERROR` novo |
+
+Fechamento: em voo 0, `locked` 0, conciliação 54 de 54. As anomalias do monitor são as quedas provocadas, os `HALT`
+da F4.3 e da F4.9 e os dois 500 da F24.
+
+**Achados:**
+
+- **F23 — Bug (alto): o `HALT` automático por queda longa trava o sistema.** Três coisas se juntam. (1) A última
+  tentativa agendada do `USER_DATA` (8/10, 23:07:48Z) foi descartada como `stale reconnect task` porque a tentativa
+  do coordenador já tinha trocado o id da conexão; com a fila única do PR #181, o descarte encerrou a fila do canal sem
+  agendar a próxima. Antes do `HALT`, o coordenador produzia uma falha nova a cada 30 s e a fila voltava. (2) Depois do
+  `HALT` o coordenador só pede o `USER_DATA` para runner `ACTIVE`, e não há nenhum. (3) A retomada exige a exchange
+  disponível, ou seja, o `USER_DATA` conectado. Ninguém sai disso sozinho, e uma ordem no livro pode encher sem o
+  ctrade ver. O texto do runbook (PR #181) que diz que a reconexão fica com o coordenador vale só para o `MARKET`.
+- **F24 — Bug (médio): a conexão manual do runbook não destrava.** `POST /api/websocket/connect` respondeu 500
+  (`Invalid transition from CONNECTED to CONNECTING`) porque abre o `MARKET` primeiro e ele já estava conectado.
+  `POST /api/websocket/disconnect` respondeu 500 (`Invalid transition from ERROR to DISCONNECTING`) no `USER_DATA`,
+  mas derrubou o `MARKET` antes de falhar; o `connect` seguinte abriu os dois canais.
 
 ## Fontes
 
