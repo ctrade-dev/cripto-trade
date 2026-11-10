@@ -34,6 +34,7 @@ import com.marmitt.core.ports.outbound.repository.PortfolioRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.RemoteStrategyCatalogRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.strategy.StrategyCallHealthPort;
 import com.marmitt.core.ports.outbound.repository.WebSocketConnectionRepositoryPort;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 
@@ -82,6 +83,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
     private final InfrastructureSignalsPort infrastructure;
     private final ExchangeBalanceReconciliation balanceReconciliation;
     private final ReconcileTradesPort tradeReconciliation;
+    private final StrategyCallHealthPort strategyCallHealth;
     private final Thresholds thresholds;
     private final Clock clock;
     private final OpenLotDemand openLotDemand;
@@ -98,6 +100,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
                                           InfrastructureSignalsPort infrastructure,
                                           ExchangeBalanceReconciliation balanceReconciliation,
                                           ReconcileTradesPort tradeReconciliation,
+                                          StrategyCallHealthPort strategyCallHealth,
                                           Thresholds thresholds,
                                           Clock clock) {
         this.portfolioRepository = portfolioRepository;
@@ -112,6 +115,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         this.infrastructure = infrastructure;
         this.balanceReconciliation = balanceReconciliation;
         this.tradeReconciliation = tradeReconciliation;
+        this.strategyCallHealth = strategyCallHealth;
         this.thresholds = thresholds;
         this.clock = clock;
         this.openLotDemand = new OpenLotDemand(runnerRepository);
@@ -144,6 +148,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         checks.add(runnerStuckTerminating(runners, now));
         checks.add(runnerOnHoldStrategyUnusable(active));
         checks.add(strategyVerificationFailed());
+        checks.add(strategyUnavailable(active, now));
         checks.add(marketDataStale(active, runners, now));
         checks.add(streamDisconnected(runners));
         checks.add(orderDispatchBlocked(active));
@@ -354,6 +359,35 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
                 onHold.size() + " ACTIVE runner(s) on HOLD: strategy missing, disabled or not verified",
                 onHold.stream().map(r -> subject("runnerId", r.getId(), "shortCode", r.getShortCode(),
                         "strategyId", r.getStrategyId(), "strategyName", r.getStrategyName())).toList(), null);
+    }
+
+    /**
+     * App de estrategia fora do ar (T53 F21): runner ACTIVE cuja estrategia so falha ha mais que o limiar. O runner
+     * segue ACTIVE em HOLD implicito e a protecao do lote continua; o catalogo segue {@code VERIFIED} ate a
+     * proxima verificacao, entao sem esta checagem a queda so aparecia nas metricas. Falha esporadica seguida de
+     * sucesso nao conta.
+     */
+    private OperationalCheck strategyUnavailable(List<StrategyRunner> active, Instant now) {
+        List<Map<String, Object>> subjects = new ArrayList<>();
+        List<Instant> since = new ArrayList<>();
+        for (StrategyRunner runner : active) {
+            strategyCallHealth.failingSince(runner.getStrategyId())
+                    .filter(failing -> Duration.between(failing.since(), now).compareTo(thresholds.strategyUnavailable()) > 0)
+                    .ifPresent(failing -> {
+                        subjects.add(subject("runnerId", runner.getId(), "shortCode", runner.getShortCode(),
+                                "strategyId", runner.getStrategyId(), "strategyName", runner.getStrategyName(),
+                                "failingSince", failing.since(), "lastReason", failing.lastReason()));
+                        since.add(failing.since());
+                    });
+        }
+        if (subjects.isEmpty()) {
+            return ok("STRATEGY_UNAVAILABLE", "every ACTIVE runner got a decision from its strategy in the last "
+                    + thresholds.strategyUnavailable());
+        }
+        return check("STRATEGY_UNAVAILABLE", OperationalSeverity.WARN,
+                subjects.size() + " ACTIVE runner(s) without a strategy decision for more than "
+                        + thresholds.strategyUnavailable() + ": implicit HOLD, lot protection still on",
+                subjects, oldest(since.stream()));
     }
 
     private OperationalCheck strategyVerificationFailed() {
@@ -637,8 +671,9 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
      * @param watchdogStaleThreshold limiar do watchdog de transacoes
      * @param watchdogInterval       intervalo do watchdog (3 ciclos alem do limiar: CRITICAL)
      * @param terminationTimeout     runner em TERMINATING ha mais que isto (T51)
+     * @param strategyUnavailable    estrategia de runner ACTIVE so falhando ha mais que isto: WARN (T53 F21)
      */
     public record Thresholds(Duration marketDataStale, Duration reservationStale, Duration watchdogStaleThreshold,
-                             Duration watchdogInterval, Duration terminationTimeout) {
+                             Duration watchdogInterval, Duration terminationTimeout, Duration strategyUnavailable) {
     }
 }

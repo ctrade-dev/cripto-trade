@@ -94,6 +94,7 @@ Verificações propostas:
 | `RUNNER_HALTED` / `RUNNER_RECONCILING` / `RUNNER_STUCK_TERMINATING` | Runners fora de operação | Runners (T49/T25) |
 | `RUNNER_ON_HOLD_STRATEGY_UNUSABLE` | Runner `ACTIVE` cuja estratégia não está utilizável | Runners × catálogo (T54) |
 | `STRATEGY_VERIFICATION_FAILED` | Estratégia habilitada sem passar na conferência | Catálogo (T54) |
+| `STRATEGY_UNAVAILABLE` | Runner `ACTIVE` cuja estratégia só falha há mais de 60s (T53 F21) | Chamadas às apps (decorator de métricas) |
 | `MARKET_DATA_STALE` | Sem tick recente para símbolo com runner ativo | Último preço / tick |
 | `STREAM_DISCONNECTED` | Stream de market data ou de usuário desconectado com runner ativo | Conexões websocket |
 | `EXCHANGE_REST_CIRCUIT_OPEN` | Circuit breaker das consultas REST aberto | T24 |

@@ -2,6 +2,7 @@ package com.marmitt.application.spring.config.strategy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.application.spring.adapter.strategy.OkHttpStrategyServiceHttpAdapter;
+import com.marmitt.application.spring.infrastructure.strategy.InMemoryStrategyCallHealth;
 import com.marmitt.application.spring.metrics.MeteredStrategyEvaluationPort;
 import com.marmitt.core.application.usecase.strategy.RemoteStrategyCatalogUseCase;
 import com.marmitt.core.ports.outbound.notification.ErrorNotificationPort;
@@ -20,15 +21,22 @@ import java.time.Duration;
 
 /**
  * Composição das estratégias remotas: transporte OkHttp com timeout rígido, cliente do contrato,
- * métricas (T41) e o catálogo persistido administrado por API (T54).
+ * métricas (T41), a saúde recente das chamadas (T53 F21) e o catálogo persistido administrado por API (T54).
  */
 @Configuration
 public class RemoteStrategyConfiguration {
 
+    /** Sequencia de falhas atual de cada estrategia remota, lida pelo estado consolidado (T53 F21). */
+    @Bean
+    public InMemoryStrategyCallHealth strategyCallHealth() {
+        return new InMemoryStrategyCallHealth(Clock.systemUTC());
+    }
+
     @Bean
     public StrategyEvaluationPort strategyEvaluationPort(RemoteStrategyProperties properties,
                                                          ObjectMapper objectMapper,
-                                                         MeterRegistry meterRegistry) {
+                                                         MeterRegistry meterRegistry,
+                                                         InMemoryStrategyCallHealth strategyCallHealth) {
         Duration timeout = Duration.ofMillis(properties.getTimeoutMs());
         OkHttpClient client = new OkHttpClient.Builder()
                 .callTimeout(timeout)
@@ -37,7 +45,7 @@ public class RemoteStrategyConfiguration {
                 .build();
         RemoteStrategyClient remote = new RemoteStrategyClient(new OkHttpStrategyServiceHttpAdapter(client),
                 objectMapper, Duration.ofMillis(properties.getMaxDecisionAgeMs()), Clock.systemUTC());
-        return new MeteredStrategyEvaluationPort(remote, meterRegistry);
+        return new MeteredStrategyEvaluationPort(remote, meterRegistry, strategyCallHealth);
     }
 
     /**

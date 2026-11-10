@@ -22,6 +22,8 @@ public class OperationalStateProperties {
     private long terminationTimeoutMs = 600_000L;
     /** T55: sem tick há mais que isso, com runner ACTIVE no símbolo, é CRITICAL. */
     private long marketDataStaleMs = 60_000L;
+    /** T53 F21: estrategia de runner ACTIVE sem decisao (so falhas) ha mais que isso e WARN. */
+    private long strategyUnavailableMs = 60_000L;
     /** T55: BUY em voo segurando capital há mais que isso é WARN. */
     private long reservationStaleMs = 86_400_000L;
 }

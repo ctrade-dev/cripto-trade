@@ -1,5 +1,6 @@
 package com.marmitt.application.spring.metrics;
 
+import com.marmitt.application.spring.infrastructure.strategy.InMemoryStrategyCallHealth;
 import com.marmitt.core.domain.strategy.StrategyEndpoint;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
@@ -13,7 +14,8 @@ import java.util.UUID;
 
 /**
  * Métricas da chamada a estratégias remotas (T41): latência por {@code strategyRef} e falhas por
- * motivo. Decorator técnico — a decisão de tratar falha como HOLD é do core.
+ * motivo, e a sequência de falhas atual de cada estratégia para o estado consolidado (T53 F21). Decorator
+ * técnico — a decisão de tratar falha como HOLD é do core.
  */
 public class MeteredStrategyEvaluationPort implements StrategyEvaluationPort {
 
@@ -22,10 +24,13 @@ public class MeteredStrategyEvaluationPort implements StrategyEvaluationPort {
 
     private final StrategyEvaluationPort delegate;
     private final MeterRegistry meterRegistry;
+    private final InMemoryStrategyCallHealth callHealth;
 
-    public MeteredStrategyEvaluationPort(StrategyEvaluationPort delegate, MeterRegistry meterRegistry) {
+    public MeteredStrategyEvaluationPort(StrategyEvaluationPort delegate, MeterRegistry meterRegistry,
+                                         InMemoryStrategyCallHealth callHealth) {
         this.delegate = delegate;
         this.meterRegistry = meterRegistry;
+        this.callHealth = callHealth;
     }
 
     @Override
@@ -33,9 +38,12 @@ public class MeteredStrategyEvaluationPort implements StrategyEvaluationPort {
                                       StrategyContextDto context) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            return delegate.evaluate(strategyRef, endpoint, input, context);
+            StrategyOutputDto output = delegate.evaluate(strategyRef, endpoint, input, context);
+            callHealth.recordSuccess(strategyRef);
+            return output;
         } catch (StrategyUnavailableException e) {
             meterRegistry.counter(FAILURES, "strategyRef", strategyRef.toString(), "reason", e.reason().name()).increment();
+            callHealth.recordFailure(strategyRef, e.reason() + ": " + e.getMessage());
             throw e;
         } finally {
             sample.stop(Timer.builder(LATENCY).tag("strategyRef", strategyRef.toString())
