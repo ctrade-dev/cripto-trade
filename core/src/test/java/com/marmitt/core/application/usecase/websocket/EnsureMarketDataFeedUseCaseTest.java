@@ -67,7 +67,8 @@ class EnsureMarketDataFeedUseCaseTest {
         StrategyRunner active = runner(RunnerStatus.ACTIVE, "BTCUSDT");
         StrategyRunner terminating = runner(RunnerStatus.TERMINATING, "ETHUSDT");
         StrategyRunner halted = runner(RunnerStatus.HALTED, "SOLUSDT");
-        when(runners.findAll()).thenReturn(List.of(active, terminating, halted));
+        StrategyRunner created = runner(RunnerStatus.CREATED, "XRPUSDT");
+        when(runners.findAll()).thenReturn(List.of(active, terminating, halted, created));
     }
 
     @Test
@@ -76,8 +77,8 @@ class EnsureMarketDataFeedUseCaseTest {
 
         ArgumentCaptor<StreamSubscriptionRequest> request = ArgumentCaptor.forClass(StreamSubscriptionRequest.class);
         verify(connectMarket).execute(org.mockito.ArgumentMatchers.eq("BINANCE"), request.capture());
-        assertEquals(List.of("BTC/USDT/TICKER", "ETH/USDT/TICKER"), pairs(request.getValue()),
-                "ACTIVE e TERMINATING, nunca HALTED");
+        assertEquals(List.of("BTC/USDT/TICKER", "ETH/USDT/TICKER", "SOL/USDT/TICKER"), pairs(request.getValue()),
+                "ACTIVE, TERMINATING e HALTED (T53 F23); CREATED nao");
         verify(connectUser).execute("BINANCE");
         verify(send, never()).execute(any());
     }
@@ -101,6 +102,7 @@ class EnsureMarketDataFeedUseCaseTest {
         connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(600));
         when(prices.findUpdatedAt("BTCUSDT")).thenReturn(Optional.of(NOW.minusSeconds(2)));
         when(prices.findUpdatedAt("ETHUSDT")).thenReturn(Optional.of(NOW.minusSeconds(75)));
+        when(prices.findUpdatedAt("SOLUSDT")).thenReturn(Optional.of(NOW.minusSeconds(2)));
 
         useCase.ensure();
 
@@ -178,14 +180,14 @@ class EnsureMarketDataFeedUseCaseTest {
     }
 
     @Test
-    void openLotOfAStoppedRunnerDemandsItsSymbolButNoUserStream() {
-        // T58: lote aberto precisa de preco para drawdown e PnL, mesmo com o runner parado.
+    void openLotOfARunnerOutsideTheStreamDemandAsksForItsSymbolButNoUserStream() {
+        // T58: lote aberto precisa de preco para drawdown e PnL, seja qual for o status do runner.
         UUID portfolioId = UUID.randomUUID();
-        StrategyRunner halted = owned(runner(RunnerStatus.HALTED, "SOLUSDT"), portfolioId);
+        StrategyRunner initializing = owned(runner(RunnerStatus.INITIALIZING, "SOLUSDT"), portfolioId);
         StrategyRunner archived = owned(runner(RunnerStatus.ARCHIVED, "XRPUSDT"), portfolioId);
-        Position solLot = lot(halted);
+        Position solLot = lot(initializing);
         Position xrpLot = lot(archived);
-        when(runners.findAll()).thenReturn(List.of(halted, archived));
+        when(runners.findAll()).thenReturn(List.of(initializing, archived));
         when(runners.findActivePositionsByPortfolioId(portfolioId)).thenReturn(List.of(solLot, xrpLot));
 
         useCase.ensure();
@@ -196,11 +198,29 @@ class EnsureMarketDataFeedUseCaseTest {
         verify(connectUser, never()).execute(anyString());
     }
 
+    /**
+     * T53 F23: depois do HALT automatico de uma queda longa, ninguem reabria o stream de usuario, e a
+     * retomada era recusada por envio bloqueado. Runner parado, mesmo sem lote, mantem os dois canais.
+     */
     @Test
-    void stoppedRunnerWithoutLotDemandsNothing() {
-        UUID portfolioId = UUID.randomUUID();
-        StrategyRunner halted = owned(runner(RunnerStatus.HALTED, "SOLUSDT"), portfolioId);
+    void haltedRunnerWithoutLotKeepsMarketDataAndUserStream() {
+        StrategyRunner halted = runner(RunnerStatus.HALTED, "SOLUSDT");
         when(runners.findAll()).thenReturn(List.of(halted));
+        withStatus(ConnectionKey.market("BINANCE"), ConnectionStatus.ERROR, NOW.minusSeconds(600));
+        withStatus(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), ConnectionStatus.ERROR,
+                NOW.minusSeconds(600));
+
+        useCase.ensure();
+
+        verify(connectMarket).execute(org.mockito.ArgumentMatchers.eq("BINANCE"), any());
+        verify(connectUser).execute("BINANCE");
+    }
+
+    @Test
+    void runnerNotYetStartedWithoutLotDemandsNothing() {
+        UUID portfolioId = UUID.randomUUID();
+        StrategyRunner created = owned(runner(RunnerStatus.CREATED, "SOLUSDT"), portfolioId);
+        when(runners.findAll()).thenReturn(List.of(created));
         when(runners.findActivePositionsByPortfolioId(portfolioId)).thenReturn(List.of());
 
         useCase.ensure();

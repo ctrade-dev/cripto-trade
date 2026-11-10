@@ -107,7 +107,10 @@ Eventos de conexao sao publicados pelo listener convertido:
 acionar reconnect por `ConnectionFailedHandler`, usando historico de request para
 market stream e nova sessao para user data stream. Evento de conexao ja substituida e ignorado
 no handler e no guard de envio (`isSupersededBy`), e a tarefa de reconexao nao age se o coordenador
-(T56) ja recuperou a conexao (T68).
+(T56) ja recuperou a conexao (T68). Se o coordenador trocou a conexao e ela tambem caiu, a tarefa da sessao
+antiga nao a fecha, mas reconecta: pular encerrava a fila do canal (T53 F23). Uma fila por canal, com
+`HALT` automatico depois de `reconnect.max-attempts` falhas seguidas; dai em diante quem reabre e o
+coordenador, que pede os canais de runners `ACTIVE`, `TERMINATING` e `HALTED` (`StreamDemand`).
 
 O mesmo listener atualiza o gauge `websocket.connection.state{exchange,channel}` via
 `WebSocketConnectionStateGauge` (T23 G1): `1` em `WebSocketConnectedEvent`, `0` em

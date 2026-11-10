@@ -2,6 +2,7 @@ package com.marmitt.core.application.usecase.operations;
 
 import com.marmitt.core.application.usecase.exchange.ExchangeBalanceReconciliation;
 import com.marmitt.core.application.usecase.websocket.OpenLotDemand;
+import com.marmitt.core.application.usecase.websocket.StreamDemand;
 import com.marmitt.core.domain.portfolio.GlobalBalance;
 import com.marmitt.core.domain.portfolio.Portfolio;
 import com.marmitt.core.domain.runner.Position;
@@ -144,7 +145,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         checks.add(runnerOnHoldStrategyUnusable(active));
         checks.add(strategyVerificationFailed());
         checks.add(marketDataStale(active, runners, now));
-        checks.add(streamDisconnected(active));
+        checks.add(streamDisconnected(runners));
         checks.add(orderDispatchBlocked(active));
         checks.add(restCircuitOpen());
         if (exchange.enabled()) {
@@ -404,20 +405,33 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
 
     /**
      * Conexao registrada que nao esta conectada, e stream de usuario ausente para exchange que precisa
-     * dele, com runner ACTIVE. Market data parado e coberto por {@code MARKET_DATA_STALE}.
+     * dele, com runner que demanda as conexoes ({@link StreamDemand}). CRITICAL quando um runner ACTIVE
+     * precisa do stream (opera sem ele); WARN quando so runners parados ou terminando precisam: ordens no livro
+     * ficam sem acompanhamento e a retomada pode ser recusada ate o canal voltar (T53 F23). Market data parado e coberto
+     * por {@code MARKET_DATA_STALE}.
      */
-    private OperationalCheck streamDisconnected(List<StrategyRunner> active) {
+    private OperationalCheck streamDisconnected(List<StrategyRunner> runners) {
         Map<ConnectionKey, ConnectionStatus> statuses = new LinkedHashMap<>();
         connections.getAllConnections().forEach((key, manager) -> statuses.put(key,
                 manager.getConnectionResult() == null ? null : manager.getConnectionResult().status()));
 
-        List<Map<String, Object>> subjects = new ArrayList<>();
         Set<String> exchanges = new TreeSet<>();
         Set<String> marketSources = new TreeSet<>();
-        for (StrategyRunner runner : active) {
+        Set<String> activeExchanges = new TreeSet<>();
+        Set<String> activeSources = new TreeSet<>();
+        for (StrategyRunner runner : runners) {
+            if (!StreamDemand.needsStreams(runner)) {
+                continue;
+            }
             exchanges.add(runner.getExchangeId());
             marketSources.addAll(runner.getAllowedMarketDataSources());
+            if (runner.getStatus() == RunnerStatus.ACTIVE) {
+                activeExchanges.add(runner.getExchangeId());
+                activeSources.addAll(runner.getAllowedMarketDataSources());
+            }
         }
+        List<Map<String, Object>> subjects = new ArrayList<>();
+        boolean neededByActive = false;
         for (String exchange : exchanges) {
             boolean needsUserStream = exchangeAdapters.findAdapter(exchange)
                     .map(ExchangeAdapterDescriptor::hasUserStream).orElse(false);
@@ -426,19 +440,25 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
             if (needsUserStream && status != ConnectionStatus.CONNECTED) {
                 subjects.add(subject("exchange", exchange, "channel", StreamChannel.USER_DATA,
                         "status", status == null ? "NOT_OPENED" : status));
+                neededByActive |= activeExchanges.contains(exchange);
             }
         }
         for (String source : marketSources) {
             ConnectionKey key = ConnectionKey.market(source);
             if (statuses.containsKey(key) && statuses.get(key) != ConnectionStatus.CONNECTED) {
                 subjects.add(subject("exchange", source, "channel", StreamChannel.MARKET, "status", statuses.get(key)));
+                neededByActive |= activeSources.contains(source);
             }
         }
         if (subjects.isEmpty()) {
-            return ok("STREAM_DISCONNECTED", "every stream needed by ACTIVE runners is connected");
+            return ok("STREAM_DISCONNECTED", "every stream needed by ACTIVE, TERMINATING or HALTED runners is connected");
         }
-        return check("STREAM_DISCONNECTED", OperationalSeverity.CRITICAL,
-                subjects.size() + " stream(s) needed by ACTIVE runners not connected", subjects, null);
+        if (neededByActive) {
+            return check("STREAM_DISCONNECTED", OperationalSeverity.CRITICAL,
+                    subjects.size() + " stream(s) needed by ACTIVE runners not connected", subjects, null);
+        }
+        return check("STREAM_DISCONNECTED", OperationalSeverity.WARN,
+                subjects.size() + " stream(s) needed by HALTED or TERMINATING runners not connected", subjects, null);
     }
 
     /**

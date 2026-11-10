@@ -15,9 +15,18 @@ import com.marmitt.core.ports.outbound.repository.WebSocketConnectionRepositoryP
 import com.marmitt.core.ports.outbound.websocket.WebSocketPort;
 import com.marmitt.core.ports.outbound.websocket.WebSocketPortRegistryPort;
 
-import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.Optional;
+import java.util.Set;
+
+@Slf4j
 public class ConnectMarketStreamUseCase implements ConnectMarketStreamPort {
+
+    /** Canal de pe ou a caminho: nao ha o que abrir (o mesmo criterio do stream de usuario). */
+    private static final Set<ConnectionStatus> UP_OR_GOING = Set.of(ConnectionStatus.CONNECTED,
+            ConnectionStatus.CONNECTING, ConnectionStatus.RECONNECTING, ConnectionStatus.DISCONNECTING,
+            ConnectionStatus.CLOSING);
 
     private final WebSocketConnectionRepositoryPort connectionRepository;
     private final ExchangeAdapterRepositoryPort adapterRepository;
@@ -40,7 +49,18 @@ public class ConnectMarketStreamUseCase implements ConnectMarketStreamPort {
                     exchangeName);
         }
 
-        WebSocketConnectionManager manager = prepareMarketManager(exchangeName, parameters);
+        ConnectionKey marketKey = ConnectionKey.market(exchangeName);
+        connectionRepository.registerConnection(marketKey);
+        WebSocketConnectionManager current = connectionRepository.getConnection(marketKey);
+        ConnectionStatus status = current.getConnectionResult().status();
+        if (UP_OR_GOING.contains(status)) {
+            // Conectar de novo um canal de pe e transicao invalida (T53 F24): o pedido manual ou de outro
+            // caminho devolve o estado atual, como no stream de usuario.
+            log.debug("Market stream already {} - skipping connect - exchange={}", status, exchangeName);
+            return ConnectionResultMapper.toResponse(current.getConnectionResult(), exchangeName);
+        }
+
+        WebSocketConnectionManager manager = prepareMarketManager(current, parameters);
         ExchangeStreamingPort streaming = adapterOpt.get().streaming();
         String url = streaming.buildConnectionUrl(parameters, exchangeName);
         WebSocketPort webSocket = webSocketRegistry.findByExchangeName(exchangeName)
@@ -50,11 +70,8 @@ public class ConnectMarketStreamUseCase implements ConnectMarketStreamPort {
         return ConnectionResultMapper.toResponse(manager.getConnectionResult(), exchangeName);
     }
 
-    private WebSocketConnectionManager prepareMarketManager(String exchangeName, StreamSubscriptionRequest parameters) {
-        ConnectionKey marketKey = ConnectionKey.market(exchangeName);
-        connectionRepository.registerConnection(marketKey);
-        WebSocketConnectionManager manager = connectionRepository.getConnection(marketKey);
-
+    private WebSocketConnectionManager prepareMarketManager(WebSocketConnectionManager manager,
+                                                            StreamSubscriptionRequest parameters) {
         ConnectionStatus currentStatus = manager.getConnectionResult().status();
         boolean isReconnect = currentStatus == ConnectionStatus.ERROR || currentStatus == ConnectionStatus.CLOSED;
         manager.setConnectionResult(isReconnect
