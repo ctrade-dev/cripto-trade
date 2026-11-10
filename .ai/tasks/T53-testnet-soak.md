@@ -354,6 +354,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 103 | 2026-11-09 | 4, sessão 2 (F4.5, F4.6) | 1h25 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo | **F4.5 e F4.6 passaram.** Confirmação perdida: a SELL do `SoakBook` chegou à exchange e ficou `PENDING` do nosso lado; o próprio `SoakBook` a cancelou 2 min depois e o `CANCELED` do stream a conciliou (o watchdog não chegou a agir). Ordem perdida: a SELL nunca chegou à exchange e virou `EXPIRED` pelo watchdog depois da carência, com o lote destravado. 2 `ERROR`, as quedas provocadas do `USER_DATA`. Nenhum `HALT`. | F22 |
 | Curta 104 | 2026-11-09 | 4, sessão 3 (F4.2 de novo, F4.3, F4.9) | 1h50 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #181 | **F4.2 e F4.9 passaram; F4.3 passou no `HALT`, falhou na volta.** F4.2: tentativas 1, 2, 3… com espera crescente e uma fila por canal; os dois canais voltaram 7 e 12 s depois da rede; 18 `ERROR` (eram 95). F4.3: `HALT` automático 4 min 35 s depois do corte; o `MARKET` voltou sozinho, o `USER_DATA` não, e a retomada respondeu `409`; destravado pela API. F4.9: `HALTED` na hora, nenhuma ordem nova em 5 min, retomada um a um sem `ERROR`. Conciliação 54 de 54. | F23, F24 |
 | Curta 105 | 2026-11-10 | 4, F4.3 de novo | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.3 passou.** WebSockets fora por 6 min: os dois canais esgotaram as 10 tentativas às 13:12:29Z e o `HALT` automático parou os 5 runners; `STREAM_DISCONNECTED` seguiu visível como `WARN`; o coordenador reabriu o `USER_DATA` a cada 30 s com todos parados; os dois canais voltaram sozinhos 29 s depois da rede; retomada `200` sem intervenção nas conexões e estado `OK`. 49 `ERROR`, todos da queda provocada. Conciliação 38 de 38. | F23, F24 resolvidos |
+| Curta 106 | 2026-11-10 | 4, sessão 4 (F4.5 de novo, F4.8, F4.10, F4.11) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.8, F4.10 e F4.11 passaram; a F4.5 não exercitou o watchdog.** F4.5: a SELL ficou `PENDING` com o `SoakBook` parado e foi resolvida pelo fill do stream, não pelo watchdog. F4.8: venda MARKET do lote do `SoakChaos` 1 s depois de `PT5M`. F4.10: `HALT` → `CANCEL_ALL` (3 ordens no livro → 0) → `PANIC_SELL` (2 lotes vendidos a mercado em menos de 10 s) → descida até `NORMAL`. F4.11: SELL LIMIT 1% abaixo do último preço, preenchidas na hora, sem escalar para MARKET. 1 `ERROR`, provocado. Conciliação 135 de 135. | F4.13 confirmado |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -782,6 +783,26 @@ parar); depois do `HALT`, `STREAM_DISCONNECTED` como `WARN` e `marketData: conne
 `Reconnected after 11 failed attempt(s)` nos dois canais às 13:14:25Z e envio liberado; retomada às 13:23:17Z com
 `200` nos 5 runners, sem conexão manual. Duas SELL que estavam no livro encheram durante a queda e foram conciliadas
 na volta. F23 e F24 resolvidos.
+
+### Fase 4, sessão 4 — detalhes (2026-11-10, VPS, curta 106)
+
+Autorizados pelo mantenedor: `PANIC_SELL`, liquidação `LIMIT` e `maxHoldingDuration` `PT5M`.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.5 Confirmação perdida (de novo) | Inconclusivo: resolvida pelo stream | A SELL `6963eeeb` ficou `PENDING` com o `book` parado às 14:50:00Z; às 14:55:27Z o fill chegou pelo stream (`PENDING` → `SUBMITTED` → `FILLED`) antes da carência do watchdog. A busca por `clientOrderId` segue coberta só por teste unitário. As vendas do `SoakBook` enchem rápido demais para a ordem esperar a carência |
+| F4.8 Proteção do lote sem estratégia | Passou | Lote `b6e348ab` do `SoakChaos`, aberto às 14:43:21Z; app parada às 14:59:45Z; `PT5M` às 14:59:46Z; venda MARKET `8877bcc6` (`protection: MAX_HOLDING`) `FILLED` às 14:59:47Z; limite voltou a `null` e a app subiu de novo |
+| F4.10 Drill de Safe Mode, MARKET | Passou | `HALT` às 15:16:05Z: nenhuma BUY nova, uma BUY LIMIT que estava no livro encheu; `CANCEL_ALL` às 15:17:07Z: 3 ordens no livro → 0; `PANIC_SELL` às 15:18:08Z: 2 lotes vendidos a mercado em menos de 10 s, 0 lotes e 0 em voo; descida de um nível por vez até `NORMAL` às 15:21:15Z |
+| F4.11 Drill de Safe Mode, LIMIT | Passou (sem escalada) | `liquidationOrderType=LIMIT` às 15:22:16Z, com 4 lotes abertos; `PANIC_SELL` às 15:24:22Z: SELL LIMIT a 73621.21 (1% abaixo do último preço), executadas a 74364.86 na hora, porque a LIMIT abaixo do mercado já cruza o livro; a escalada para MARKET depois de 3 ticks não foi exercitada; `NORMAL` às 15:28:30Z e liquidação de volta a `MARKET` em todos os runners (conferido no banco) |
+
+Fechamento: em voo 0, `locked` 0, conciliação 135 de 135. Um `ERROR`, da queda do `USER_DATA` provocada na F4.5.
+
+**Observações:**
+
+- As BUY LIMIT do `SoakTrend`, do `SoakBreakout`, do `SoakReversion` e do `SoakChaos` ficaram de 17 a 24 min no
+  livro sem encher. É o que a F4.13 quer corrigir: falta prazo de cancelamento nas compras das apps de soak.
+- Restam dois caminhos sem teste de ponta a ponta: o watchdog por `clientOrderId` (F4.5) e a escalada da liquidação
+  LIMIT (F4.11). Os dois precisam de uma ordem que fique parada. Com a F4.13 isso pode ser provocado de propósito.
 
 ## Fontes
 
