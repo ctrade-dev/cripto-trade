@@ -40,6 +40,9 @@ public class BinanceReceivedMessageProcessor implements ReceivedMessageProcessor
         String correlationId = context.correlationId().toString();
         try {
             JsonNode root = objectMapper.readTree(rawMessage);
+            if (isRequestResponse(root)) {
+                return handleRequestResponse(root, correlationId, rawMessage);
+            }
             JsonNode data = unwrapCombinedStream(root);
 
             JsonNode eventTypeNode = data.get("e");
@@ -67,6 +70,26 @@ public class BinanceReceivedMessageProcessor implements ReceivedMessageProcessor
             log.error("Failed to parse Binance message: correlationId={}", correlationId, e);
             return ProcessingResult.error(correlationId, "Failed to parse message: " + e.getMessage(), rawMessage, e);
         }
+    }
+
+    /**
+     * Resposta a um pedido do socket de market data (SUBSCRIBE, UNSUBSCRIBE): {"result":null,"id":N} quando
+     * aceito, {"error":{"code":..,"msg":..},"id":N} quando recusado. Nao e evento de mercado (T53 F26).
+     */
+    private static boolean isRequestResponse(JsonNode root) {
+        return root.has("id") && (root.has("result") || root.has("error"));
+    }
+
+    private ProcessingResult<? extends ProcessorResponse> handleRequestResponse(
+            JsonNode root, String correlationId, String rawMessage) {
+        String requestId = root.path("id").asText();
+        if (root.has("error")) {
+            JsonNode error = root.get("error");
+            return ProcessingResult.error(correlationId, "Market stream request rejected by Binance: id=" + requestId
+                    + " code=" + error.path("code").asText() + " msg=" + error.path("msg").asText(), rawMessage);
+        }
+        log.debug("Market stream request accepted by Binance: id={} correlationId={}", requestId, correlationId);
+        return ProcessingResult.ignored(correlationId, "stream-request-accepted");
     }
 
     /**

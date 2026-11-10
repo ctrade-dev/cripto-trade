@@ -60,7 +60,7 @@ public class ProcessMessageHandler implements HandlerProcessMessagePort {
 
             if (isMessageProcessable(result)) {
                 result.getData().ifPresent(this::notifyListeners);
-            } else if (manager != null) {
+            } else if (result.isError() && manager != null) {
                 manager.onMessageError(result.getErrorMessage().orElse("No errorMessage error."));
             }
 

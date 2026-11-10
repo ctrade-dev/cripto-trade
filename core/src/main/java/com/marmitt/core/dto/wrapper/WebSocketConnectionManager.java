@@ -7,10 +7,10 @@ import com.marmitt.core.enums.ConnectionStatus;
 import com.marmitt.core.exceptions.IllegalStateTransitionException;
 import lombok.Getter;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class WebSocketConnectionManager {
 
@@ -25,7 +25,7 @@ public class WebSocketConnectionManager {
         this.exchangeName = exchangeName;
         this.currentConnectionResult = connectionResult;
         this.currentConnectionStats = createStatsForExchange();
-        this.requestHistory = new ArrayList<>();
+        this.requestHistory = new CopyOnWriteArrayList<>(); // lido pelo coordenador enquanto outros caminhos assinam
     }
 
     public static WebSocketConnectionManager forExchange(String exchangeName) {

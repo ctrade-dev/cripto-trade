@@ -1,7 +1,9 @@
 package com.marmitt.core.application.usecase.websocket;
 
+import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.domain.runner.Position;
 import com.marmitt.core.domain.runner.StrategyRunner;
+import com.marmitt.core.dto.common.CurrencyPair;
 import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.connection.ConnectionResultDto;
 import com.marmitt.core.dto.websocket.request.MessageRequest;
@@ -9,6 +11,7 @@ import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.ConnectionStatus;
 import com.marmitt.core.enums.RunnerStatus;
+import com.marmitt.core.enums.StreamAction;
 import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.enums.StreamType;
 import com.marmitt.core.ports.inbound.websocket.ConnectMarketStreamPort;
@@ -27,6 +30,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -136,9 +140,41 @@ class EnsureMarketDataFeedUseCaseTest {
 
     @Test
     void freshConnectionGetsTimeForItsFirstTicks() {
-        connected(ConnectionKey.market("BINANCE"), NOW.minusSeconds(10));
+        connected(ConnectionKey.market("BINANCE"), NOW.minusSeconds(10), "BTCUSDT", "ETHUSDT", "SOLUSDT");
         connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(10));
         when(prices.findUpdatedAt(anyString())).thenReturn(Optional.empty());
+
+        useCase.ensure();
+
+        verify(send, never()).execute(any());
+    }
+
+    /**
+     * T53 F27: a conexao abre com o simbolo do primeiro runner iniciado; os simbolos dos runners que entram
+     * logo depois nao podem esperar o limiar, senao a largada passa por MARKET_DATA_STALE.
+     */
+    @Test
+    void symbolNeverRequestedOnAFreshConnectionIsSubscribedRightAway() {
+        connected(ConnectionKey.market("BINANCE"), NOW.minusSeconds(10), "BTCUSDT");
+        connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(10));
+        when(prices.findUpdatedAt(anyString())).thenReturn(Optional.empty());
+
+        useCase.ensure();
+
+        ArgumentCaptor<MessageRequest> request = ArgumentCaptor.forClass(MessageRequest.class);
+        verify(send).execute(request.capture());
+        assertEquals(List.of("ETH/USDT/TICKER", "SOL/USDT/TICKER"), pairs((StreamSubscriptionRequest) request.getValue()),
+                "BTCUSDT ja foi pedido na abertura e ainda tem tempo para o primeiro tick");
+    }
+
+    @Test
+    void symbolAlreadyRequestedIsNotSubscribedAgainBeforeTheThreshold() {
+        connected(ConnectionKey.market("BINANCE"), NOW.minusSeconds(10), "BTCUSDT");
+        connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(10));
+        when(prices.findUpdatedAt(anyString())).thenReturn(Optional.empty());
+        WebSocketConnectionManager market = connections.getConnection(ConnectionKey.market("BINANCE"));
+        List<MessageRequest> history = List.of(subscribe("BTCUSDT"), subscribe("ETHUSDT", "SOLUSDT"));
+        when(market.getRequestHistory()).thenReturn(history);
 
         useCase.ensure();
 
@@ -246,6 +282,21 @@ class EnsureMarketDataFeedUseCaseTest {
 
     private void connected(ConnectionKey key, Instant since) {
         withStatus(key, ConnectionStatus.CONNECTED, since);
+    }
+
+    /** Conexao aberta pedindo {@code symbols}, como faz {@code ConnectMarketStreamUseCase}. */
+    private void connected(ConnectionKey key, Instant since, String... symbols) {
+        connected(key, since);
+        WebSocketConnectionManager manager = connections.getConnection(key);
+        List<MessageRequest> history = List.of(subscribe(symbols));
+        when(manager.getRequestHistory()).thenReturn(history);
+    }
+
+    private static StreamSubscriptionRequest subscribe(String... symbols) {
+        return new StreamSubscriptionRequest("BINANCE", Arrays.stream(symbols)
+                .map(Symbol::of)
+                .map(s -> new CurrencyPair(s.getBaseAsset(), s.getQuoteAsset(), StreamType.TICKER))
+                .toList(), StreamAction.SUBSCRIBE);
     }
 
     private void withStatus(ConnectionKey key, ConnectionStatus status, Instant since) {

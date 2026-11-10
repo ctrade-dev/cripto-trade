@@ -59,6 +59,9 @@ conhecer um ao outro — só o coordenador conhece os dois, pelos ports.
      abrir com **todos** os símbolos demandados daquela fonte;
    - conexão `CONNECTED` e símbolo demandado sem tick há mais que o limiar (o `market-data-stale-ms` da
      T55, 60s) → enviar `SUBSCRIBE` do símbolo;
+   - conexão `CONNECTED` e símbolo demandado que ela nunca recebeu como pedido (histórico de pedidos da
+     própria conexão) → enviar `SUBSCRIBE` na hora, sem esperar o limiar (T53 F27, largada com vários
+     símbolos);
    - stream de usuário demandado ausente ou não conectado → abrir.
    Conexão em `CONNECTING`/`RECONNECTING` é deixada em paz (a reconexão está trabalhando).
 3. **Reconciliador (core use case + scheduler Spring).** `EnsureMarketDataFeedUseCase`: no boot, a cada

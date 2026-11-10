@@ -5,6 +5,7 @@ import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.dto.common.CurrencyPair;
 import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.connection.ConnectionResultDto;
+import com.marmitt.core.dto.websocket.request.MessageRequest;
 import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.ConnectionStatus;
@@ -47,6 +48,9 @@ import java.util.function.Function;
  * perde-lo, entao a decisao olha o que de fato acontece:
  * <ul>
  *   <li>conexao de market data da fonte ausente ou caida: abre com todos os simbolos demandados;</li>
+ *   <li>conexao conectada e simbolo demandado que ela nunca recebeu como pedido (o historico de pedidos da
+ *       propria conexao): assina na hora. A conexao abre com os simbolos dos runners ja ativos; os que
+ *       entram depois, como numa largada com varios simbolos, nao esperam o limiar (T53 F27);</li>
  *   <li>conexao conectada ha mais que o limiar e simbolo sem tick ha mais que o limiar: assina de novo
  *       o simbolo (assinar de novo e inofensivo no MOCK e na Binance);</li>
  *   <li>assinatura recusada pelo socket: a conexao nao esta de pe, seja o que for que o estado diga. Fica
@@ -140,22 +144,40 @@ public class EnsureMarketDataFeedUseCase implements EnsureMarketDataFeedPort {
             }
             return;
         }
-        if (status != ConnectionStatus.CONNECTED || !olderThan(connection.get().timestamp(), now)) {
+        if (status != ConnectionStatus.CONNECTED) {
             return;
         }
-        List<String> stale = symbols.stream()
+        WebSocketConnectionManager manager = connections.getConnection(ConnectionKey.market(source));
+        Set<String> requested = requestedSymbols(manager);
+        boolean settled = olderThan(connection.get().timestamp(), now);
+        List<String> missing = symbols.stream()
                 .filter(symbol -> latestPrices.findUpdatedAt(symbol).map(at -> olderThan(at, now)).orElse(true))
+                .filter(symbol -> settled || !requested.contains(symbol))
                 .toList();
-        if (stale.isEmpty()) {
+        if (missing.isEmpty()) {
             return;
         }
         try {
-            log.info("marketData: subscribing {} on {} - no tick for more than {}", stale, source, staleThreshold);
-            sendMessage.execute(request(source, stale));
+            log.info("marketData: subscribing {} on {} - not requested on this connection or no tick for more than {}",
+                    missing, source, staleThreshold);
+            sendMessage.execute(request(source, missing));
         } catch (RuntimeException e) {
-            log.error("marketData: subscribe failed source={} symbols={} - {}", source, stale, e.getMessage(), e);
+            log.error("marketData: subscribe failed source={} symbols={} - {}", source, missing, e.getMessage(), e);
             markDown(ConnectionKey.market(source), e);
         }
+    }
+
+    /** Simbolos ja pedidos a conexao (abertura e assinaturas), pelo historico que ela mesma guarda. */
+    private static Set<String> requestedSymbols(WebSocketConnectionManager manager) {
+        Set<String> requested = new TreeSet<>();
+        for (MessageRequest request : manager.getRequestHistory()) {
+            if (request instanceof StreamSubscriptionRequest subscription
+                    && subscription.getStreamAction() == StreamAction.SUBSCRIBE) {
+                subscription.getCurrencyPairs()
+                        .forEach(pair -> requested.add(pair.baseCurrency() + pair.quoteCurrency()));
+            }
+        }
+        return requested;
     }
 
     private void markDown(ConnectionKey key, RuntimeException cause) {

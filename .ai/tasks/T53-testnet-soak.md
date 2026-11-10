@@ -857,7 +857,13 @@ vendas descartadas sem lote, todos já conhecidos.
   tem mais de 1 min (`staleThreshold`). Os 3 símbolos ficaram sem tick por ~80 s, e o estado voltou a `OK` às
   19:21:11Z. Para um operador (ou agente) é um alarme falso a cada largada.
 
-As correções esperam o aval do mantenedor.
+- **F28 — Bug (médio, achado na leitura do código da F27): a reconexão do `MARKET` reabre só com o último pedido.**
+  `LinearBackoffReconnectionStrategy` reconecta com `getLastRequestHistory()`. Depois de uma assinatura feita com a
+  conexão aberta (F27, ou a reassinatura de um símbolo sem tick), o último pedido tem só aqueles símbolos: a conexão
+  volta sem os outros, e eles ficam sem tick até o coordenador reassinar (mais de 1 min, `MARKET_DATA_STALE`
+  `CRITICAL`). Com um símbolo só, como nas rodadas até a 107, não aparece. Não testado na VPS; correção à parte.
+
+F26 e F27 corrigidos no PR da branch `fix/f26-f27-market-subscribe`; F28 espera o aval do mantenedor.
 
 ## Fontes
 
