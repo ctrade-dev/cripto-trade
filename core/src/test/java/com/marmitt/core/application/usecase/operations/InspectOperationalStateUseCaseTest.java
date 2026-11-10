@@ -33,6 +33,7 @@ import com.marmitt.core.ports.outbound.repository.PortfolioRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.RemoteStrategyCatalogRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.strategy.StrategyCallHealthPort;
 import com.marmitt.core.ports.outbound.repository.WebSocketConnectionRepositoryPort;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,12 +75,13 @@ class InspectOperationalStateUseCaseTest {
     private final InfrastructureSignalsPort infrastructure = mock(InfrastructureSignalsPort.class);
     private final ExchangeBalanceReconciliation balanceSanity = mock(ExchangeBalanceReconciliation.class);
     private final ReconcileTradesPort tradeReconciliation = mock(ReconcileTradesPort.class);
+    private final StrategyCallHealthPort strategyCallHealth = mock(StrategyCallHealthPort.class);
     private final InspectOperationalStateUseCase.Thresholds thresholds = new InspectOperationalStateUseCase.Thresholds(
             Duration.ofSeconds(60), Duration.ofHours(24), Duration.ofSeconds(30), Duration.ofSeconds(60),
-            Duration.ofMinutes(10));
+            Duration.ofMinutes(10), Duration.ofSeconds(60));
     private final InspectOperationalStateUseCase useCase = new InspectOperationalStateUseCase(portfolios, balances,
             runners, deadLetters, strategies, catalog, prices, connections, adapters, infrastructure, balanceSanity,
-            tradeReconciliation, thresholds, Clock.fixed(NOW, ZoneOffset.UTC));
+            tradeReconciliation, strategyCallHealth, thresholds, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private Portfolio portfolio;
     private StrategyRunner runner;
@@ -110,7 +112,7 @@ class InspectOperationalStateUseCaseTest {
         OperationalStateReport report = useCase.inspect();
 
         assertEquals(OperationalSeverity.OK, report.status());
-        assertEquals(16, report.checks().size());
+        assertEquals(17, report.checks().size());
         assertTrue(report.checks().stream().allMatch(c -> c.status() == OperationalSeverity.OK), report.toString());
         assertEquals("docs/OPERATIONS_RUNBOOK.md#dlq-unresolved", check(report, "DLQ_UNRESOLVED").runbook());
     }
@@ -244,6 +246,27 @@ class InspectOperationalStateUseCaseTest {
         OperationalCheck disconnected = check(useCase.inspect(), "STREAM_DISCONNECTED");
         assertEquals(OperationalSeverity.CRITICAL, disconnected.status());
         assertEquals("NOT_OPENED", disconnected.subjects().getFirst().get("status"));
+    }
+
+    /** T53 F21: app de estrategia fora do ar nao aparecia no estado. */
+    @Test
+    void strategyFailingForLongerThanTheThresholdIsAWarning() {
+        assertEquals(OperationalSeverity.OK, check(useCase.inspect(), "STRATEGY_UNAVAILABLE").status());
+
+        when(strategyCallHealth.failingSince(runner.getStrategyId())).thenReturn(Optional.of(
+                new StrategyCallHealthPort.FailingSince(NOW.minusSeconds(30), "UNREACHABLE: connection refused")));
+        assertEquals(OperationalSeverity.OK, check(useCase.inspect(), "STRATEGY_UNAVAILABLE").status(),
+                "a short failure streak is not reported");
+
+        when(strategyCallHealth.failingSince(runner.getStrategyId())).thenReturn(Optional.of(
+                new StrategyCallHealthPort.FailingSince(NOW.minusSeconds(90), "UNREACHABLE: connection refused")));
+        OperationalCheck unavailable = check(useCase.inspect(), "STRATEGY_UNAVAILABLE");
+        assertEquals(OperationalSeverity.WARN, unavailable.status());
+        assertEquals("UNREACHABLE: connection refused", unavailable.subjects().getFirst().get("lastReason"));
+
+        when(runner.getStatus()).thenReturn(RunnerStatus.HALTED);
+        assertEquals(OperationalSeverity.OK, check(useCase.inspect(), "STRATEGY_UNAVAILABLE").status(),
+                "a stopped runner does not ask its strategy");
     }
 
     /** T53 F23: com todos parados, o stream de usuario caido sumia do estado. */

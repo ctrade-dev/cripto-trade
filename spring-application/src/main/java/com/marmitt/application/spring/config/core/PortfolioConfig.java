@@ -21,6 +21,7 @@ import com.marmitt.core.ports.inbound.operations.InspectOperationalStatePort;
 import com.marmitt.core.ports.inbound.operations.QueryEventTimelinePort;
 import com.marmitt.core.ports.inbound.portfolio.CreatePortfolioPort;
 import com.marmitt.core.ports.inbound.reconciliation.ReconcileTradesPort;
+import com.marmitt.core.ports.outbound.strategy.StrategyCallHealthPort;
 import com.marmitt.core.ports.inbound.portfolio.EvaluateDrawdownPort;
 import com.marmitt.core.ports.inbound.portfolio.EvaluateExchangeBalancePort;
 import com.marmitt.core.ports.inbound.portfolio.EvaluateOperationalTriggersPort;
@@ -165,6 +166,7 @@ public class PortfolioConfig {
             InfrastructureSignalsPort infrastructureSignals,
             ExchangeBalanceReconciliation exchangeBalanceReconciliation,
             ObjectProvider<ReconcileTradesPort> reconcileTrades,
+            StrategyCallHealthPort strategyCallHealth,
             OperationalStateProperties operationalStateProperties,
             RunnerTransactionRecoveryProperties transactionRecoveryProperties
     ) {
@@ -173,13 +175,14 @@ public class PortfolioConfig {
         return new InspectOperationalStateUseCase(portfolioRepository, globalBalanceRepository,
                 strategyRunnerRepository, deadLetterEntryRepository, strategyRepository, remoteStrategyCatalog,
                 latestPrices, webSocketConnections, exchangeAdapters, infrastructureSignals,
-                exchangeBalanceReconciliation, reconcileTrades.getIfAvailable(),
+                exchangeBalanceReconciliation, reconcileTrades.getIfAvailable(), strategyCallHealth,
                 new InspectOperationalStateUseCase.Thresholds(
                         Duration.ofMillis(operationalStateProperties.getMarketDataStaleMs()),
                         Duration.ofMillis(operationalStateProperties.getReservationStaleMs()),
                         Duration.ofMillis(transactionRecoveryProperties.getStaleThresholdMs()),
                         Duration.ofMillis(transactionRecoveryProperties.getIntervalMs()),
-                        Duration.ofMillis(operationalStateProperties.getTerminationTimeoutMs())),
+                        Duration.ofMillis(operationalStateProperties.getTerminationTimeoutMs()),
+                        Duration.ofMillis(operationalStateProperties.getStrategyUnavailableMs())),
                 Clock.systemUTC());
     }
 

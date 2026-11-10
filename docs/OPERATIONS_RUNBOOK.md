@@ -238,6 +238,21 @@ O runner está em HOLD: não compra nem vende pela estratégia (a proteção do 
   → reabilitar só se o motivo do `DISABLED` (em `.../events`) já não vale.
 - **Confirmar:** `usable=true` e a verificação em `OK`.
 
+<a id="strategy-unavailable"></a>
+### STRATEGY_UNAVAILABLE — estratégia sem decisão há mais de 60s
+
+Runner `ACTIVE` cuja estratégia só falhou desde `failingSince` (T53 F21): em HOLD implícito, sem comprar nem vender
+pela estratégia; a proteção do lote continua. Falha esporádica seguida de sucesso não aparece. O catálogo só
+percebe na próxima conferência, então esta verificação costuma vir antes de
+[strategy-verification-failed](#strategy-verification-failed).
+
+- **Diagnóstico:** `lastReason` em `subjects` (`UNREACHABLE` = app fora ou endereço errado; `ERROR_RESPONSE` =
+  app de pé respondendo erro; `TIMEOUT`); log `priceUpdate: strategy unavailable`; métrica
+  `strategy.remote.failures`.
+- **Ação:** app fora → subir de novo a app (fora do ctrade); erro de resposta → ver o log da app. O ctrade volta
+  sozinho na primeira resposta boa, sem ação no runner.
+- **Confirmar:** a verificação em `OK` e decisões `HOLD`/`BUY`/`SELL` de novo em `signal.evaluated.total`.
+
 <a id="strategy-verification-failed"></a>
 ### STRATEGY_VERIFICATION_FAILED — estratégia remota habilitada e inutilizável
 
