@@ -173,8 +173,7 @@ class EnsureMarketDataFeedUseCaseTest {
         connected(new ConnectionKey("BINANCE", StreamChannel.USER_DATA), NOW.minusSeconds(10));
         when(prices.findUpdatedAt(anyString())).thenReturn(Optional.empty());
         WebSocketConnectionManager market = connections.getConnection(ConnectionKey.market("BINANCE"));
-        List<MessageRequest> history = List.of(subscribe("BTCUSDT"), subscribe("ETHUSDT", "SOLUSDT"));
-        when(market.getRequestHistory()).thenReturn(history);
+        when(market.accumulatedSubscription()).thenReturn(Optional.of(subscribe("BTCUSDT", "ETHUSDT", "SOLUSDT")));
 
         useCase.ensure();
 
@@ -288,8 +287,7 @@ class EnsureMarketDataFeedUseCaseTest {
     private void connected(ConnectionKey key, Instant since, String... symbols) {
         connected(key, since);
         WebSocketConnectionManager manager = connections.getConnection(key);
-        List<MessageRequest> history = List.of(subscribe(symbols));
-        when(manager.getRequestHistory()).thenReturn(history);
+        when(manager.accumulatedSubscription()).thenReturn(Optional.of(subscribe(symbols)));
     }
 
     private static StreamSubscriptionRequest subscribe(String... symbols) {

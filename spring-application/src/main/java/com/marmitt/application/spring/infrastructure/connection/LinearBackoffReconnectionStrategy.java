@@ -2,7 +2,6 @@ package com.marmitt.application.spring.infrastructure.connection;
 
 import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.events.WebSocketFailedEvent;
-import com.marmitt.core.dto.websocket.request.MessageRequest;
 import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.websocket.response.WebSocketConnectionResponse;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
@@ -20,6 +19,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -154,17 +154,14 @@ public class LinearBackoffReconnectionStrategy implements ReconnectionStrategyPo
     private void reconnectMarketStream(String exchangeName, int attempt) {
         ConnectionKey key = ConnectionKey.market(exchangeName);
         WebSocketConnectionManager manager = connectionRepository.getConnection(key);
-        if (manager.getRequestHistory().isEmpty()) {
-            log.warn("No request history for market reconnect - exchange={}", exchangeName);
+        Optional<StreamSubscriptionRequest> subscription = manager.accumulatedSubscription();
+        if (subscription.isEmpty()) {
+            log.warn("No subscription in request history for market reconnect - exchange={}", exchangeName);
             return;
         }
-        MessageRequest lastRequest = manager.getLastRequestHistory();
-        if (!(lastRequest instanceof StreamSubscriptionRequest subscriptionRequest)) {
-            log.warn("Last request is not a StreamSubscriptionRequest - exchange={}", exchangeName);
-            return;
-        }
-        log.info("Reconnecting market stream - exchange={} attempt={}", exchangeName, attempt);
-        connectMarketStreamPort.execute(exchangeName, subscriptionRequest);
+        log.info("Reconnecting market stream - exchange={} attempt={} pairs={}", exchangeName, attempt,
+                subscription.get().getCurrencyPairs().size());
+        connectMarketStreamPort.execute(exchangeName, subscription.get());
     }
 
     private void reconnectUserStream(String exchangeName, UUID sessionToClose, int attempt) {
