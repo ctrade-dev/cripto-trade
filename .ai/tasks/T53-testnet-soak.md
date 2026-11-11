@@ -315,7 +315,7 @@ reprovado vira achado, depois task, e o teste se repete com a correção.
 
 | # | Teste | Desenvolvimento antes | Esperado | Duração |
 |---|---|---|---|---|
-| F4.12 | Cliente desconectado | ctrade: `GlobalExceptionHandler` deixa de registrar `ERROR` (e de responder 500) quando o cliente fecha a conexão | Ler `/transactions` e fechar no meio: nenhum `ERROR` | ~15 min |
+| F4.12 | Cliente desconectado | ctrade: `GlobalExceptionHandler` deixa de registrar `ERROR` (e de responder 500) quando o cliente fecha a conexão | Ler `/transactions` e fechar no meio: nenhum `ERROR`. Código no PR da branch `fix/f4.12-client-disconnect` (`DisconnectedClientHelper`: `DEBUG`, sem corpo) | ~15 min |
 | F4.13 | Calibração das apps de soak | ctrade-strategies: prazo de cancelamento nas compras do `SoakTrend` e do `SoakBreakout`, a partir de `requestedAt`, e uma venda do `SoakBook` que acompanhe o preço | Nenhuma ordem parada além do prazo; fills por hora sem buracos longos | ~2h |
 | F4.14 | Carga | `round-start.sh` com `SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT"`: um runner por app em cada símbolo (20 no total, 4 streams de mercado), com alocação dividida (F25) | Latência de avaliação e mailbox estáveis; sem tick descartado por atraso; os 8 critérios | ~1h |
 

@@ -24,6 +24,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 import java.time.Instant;
 
@@ -48,6 +49,9 @@ import java.time.Instant;
  *   <tr><td>ErrorResponse (exceções MVC do Spring: 404/405/415...)</td><td>status original</td></tr>
  *   <tr><td>Exception (fallback)</td><td>500</td></tr>
  * </table>
+ *
+ * <p>Cliente que fechou a conexão no meio da resposta (Broken pipe, connection reset) não é falha do
+ * ctrade: não há a quem responder, então nada é escrito e o registro é {@code DEBUG} (T53 F4.12).
  */
 @Slf4j
 @RestControllerAdvice
@@ -112,6 +116,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception ex, HttpServletRequest request) {
+        if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+            log.debug("client disconnected path={} reason={}", request.getRequestURI(), ex.getMessage());
+            return null;
+        }
         // Exceções padrão do Spring MVC (ex.: HttpRequestMethodNotSupportedException → 405,
         // NoResourceFoundException → 404, HttpMediaTypeNotSupportedException → 415) implementam
         // ErrorResponse e já carregam o status HTTP correto. Preserva esse status em vez de
