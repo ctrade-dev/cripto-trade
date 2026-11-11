@@ -883,7 +883,10 @@ Fechamento: em voo 0, `locked` 0 nos cinco ativos, conciliação 43 de 43 (BTC),
 então, a partir do primeiro ciclo durante a queda (até 30 s), a reconexão já reabre com todos os símbolos. A janela
 restante é a reconexão que dá certo na primeira tentativa, antes de qualquer ciclo: o caso real é a desconexão que a
 Binance força a cada 24h, que o `fault.sh` não imita. Nessa janela, os símbolos fora do último pedido ficam mais de
-1 min em `MARKET_DATA_STALE` `CRITICAL`. Correção à parte, com aval do mantenedor.
+1 min em `MARKET_DATA_STALE` `CRITICAL`. Corrigido no PR da branch `fix/f28-market-reconnect-subscription`:
+a reconexão reabre com a assinatura acumulada da conexão (`WebSocketConnectionManager.accumulatedSubscription()`, todos
+os `SUBSCRIBE` do histórico menos os `UNSUBSCRIBE` posteriores), a mesma que o coordenador lê para saber o que já foi
+pedido. Validado por teste unitário; não há como provocar a janela na VPS.
 
 ## Fontes
 

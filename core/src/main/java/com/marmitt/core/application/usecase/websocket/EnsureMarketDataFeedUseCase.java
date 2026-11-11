@@ -5,7 +5,6 @@ import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.dto.common.CurrencyPair;
 import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.connection.ConnectionResultDto;
-import com.marmitt.core.dto.websocket.request.MessageRequest;
 import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.ConnectionStatus;
@@ -167,16 +166,11 @@ public class EnsureMarketDataFeedUseCase implements EnsureMarketDataFeedPort {
         }
     }
 
-    /** Simbolos ja pedidos a conexao (abertura e assinaturas), pelo historico que ela mesma guarda. */
+    /** Simbolos ja pedidos a conexao (abertura e assinaturas), pela assinatura acumulada que ela mesma guarda. */
     private static Set<String> requestedSymbols(WebSocketConnectionManager manager) {
         Set<String> requested = new TreeSet<>();
-        for (MessageRequest request : manager.getRequestHistory()) {
-            if (request instanceof StreamSubscriptionRequest subscription
-                    && subscription.getStreamAction() == StreamAction.SUBSCRIBE) {
-                subscription.getCurrencyPairs()
-                        .forEach(pair -> requested.add(pair.baseCurrency() + pair.quoteCurrency()));
-            }
-        }
+        manager.accumulatedSubscription().ifPresent(subscription -> subscription.getCurrencyPairs()
+                .forEach(pair -> requested.add(pair.baseCurrency() + pair.quoteCurrency())));
         return requested;
     }
 

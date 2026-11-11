@@ -1,5 +1,6 @@
 package com.marmitt.application.spring.infrastructure.connection;
 
+import com.marmitt.core.dto.common.CurrencyPair;
 import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.connection.ConnectionResultDto;
 import com.marmitt.core.dto.events.WebSocketFailedEvent;
@@ -8,6 +9,7 @@ import com.marmitt.core.dto.websocket.response.WebSocketConnectionResponse;
 import com.marmitt.core.dto.wrapper.WebSocketConnectionManager;
 import com.marmitt.core.enums.StreamAction;
 import com.marmitt.core.enums.StreamChannel;
+import com.marmitt.core.enums.StreamType;
 import com.marmitt.core.ports.inbound.websocket.ConnectMarketStreamPort;
 import com.marmitt.core.ports.inbound.websocket.ConnectUserStreamPort;
 import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
@@ -170,6 +172,40 @@ class LinearBackoffReconnectionStrategyTest {
         assertEquals(1, published.size());
     }
 
+    /**
+     * T53 F28: a conexao abriu com um simbolo e os outros entraram por assinaturas depois. A reconexao reabre
+     * com todos, nao so com o ultimo pedido.
+     */
+    @Test
+    void marketReconnectReopensWithEverySymbolRequested() throws InterruptedException {
+        WebSocketConnectionManager manager = WebSocketConnectionManager.forExchange(EXCHANGE);
+        manager.addRequestToHistory(new StreamSubscriptionRequest(EXCHANGE, List.of(pair("BTC")), StreamAction.SUBSCRIBE));
+        manager.addRequestToHistory(new StreamSubscriptionRequest(EXCHANGE, List.of(pair("ETH"), pair("SOL")), StreamAction.SUBSCRIBE));
+        manager.setConnectionResult(ConnectionResultDto.failure("test", "test"));
+        FailedConnections connections = new FailedConnections() {
+            @Override
+            public WebSocketConnectionManager getConnection(ConnectionKey key) {
+                return manager;
+            }
+        };
+        AtomicReference<StreamSubscriptionRequest> reopened = new AtomicReference<>();
+        CountDownLatch connected = new CountDownLatch(1);
+        LinearBackoffReconnectionStrategy strategy = new LinearBackoffReconnectionStrategy(
+                connections, new StubAdapterRepo(), new StubWebSocketRegistry(),
+                (name, req) -> {
+                    reopened.set(req);
+                    connected.countDown();
+                    return ok(name);
+                },
+                name -> Optional.of(ok(name)),
+                published::add, NO_DELAY, 10);
+
+        strategy.scheduleReconnect(EXCHANGE, StreamChannel.MARKET, UUID.randomUUID());
+
+        assertTrue(connected.await(3, TimeUnit.SECONDS));
+        assertEquals(List.of(pair("BTC"), pair("ETH"), pair("SOL")), reopened.get().getCurrencyPairs());
+    }
+
     /** O coordenador de market data chegou antes: a tarefa nao abre outro socket nem escala para falha critica (T68). */
     @Test
     void scheduledAttemptDoesNothingWhenTheConnectionIsAlreadyBack() throws InterruptedException {
@@ -240,6 +276,10 @@ class LinearBackoffReconnectionStrategyTest {
         ConnectUserStreamPort user = name -> Optional.of(ok(name));
         return new LinearBackoffReconnectionStrategy(new FailedConnections(), new StubAdapterRepo(),
                 new StubWebSocketRegistry(), market, user, published::add, delay, maxAttempts);
+    }
+
+    private static CurrencyPair pair(String base) {
+        return new CurrencyPair(base, "USDT", StreamType.TICKER);
     }
 
     private static WebSocketConnectionResponse ok(String name) {

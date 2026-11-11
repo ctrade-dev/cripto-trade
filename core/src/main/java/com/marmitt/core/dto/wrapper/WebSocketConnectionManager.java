@@ -1,13 +1,18 @@
 package com.marmitt.core.dto.wrapper;
 
 import com.marmitt.core.dto.connection.ConnectionResultDto;
+import com.marmitt.core.dto.common.CurrencyPair;
 import com.marmitt.core.dto.connection.ConnectionStatsDto;
 import com.marmitt.core.dto.websocket.request.MessageRequest;
+import com.marmitt.core.dto.websocket.request.StreamSubscriptionRequest;
 import com.marmitt.core.enums.ConnectionStatus;
+import com.marmitt.core.enums.StreamAction;
 import com.marmitt.core.exceptions.IllegalStateTransitionException;
 import lombok.Getter;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -60,6 +65,30 @@ public class WebSocketConnectionManager {
 
     public MessageRequest getLastRequestHistory() {
         return requestHistory.getLast();
+    }
+
+    /**
+     * A assinatura acumulada da conexao: os pares de todos os SUBSCRIBE do historico, na ordem em que
+     * entraram, menos os que um UNSUBSCRIBE posterior tirou. E o que uma reconexao precisa reabrir: o ultimo
+     * pedido sozinho pode ser a assinatura de um simbolo so (T53 F28). Vazio quando nada foi assinado.
+     */
+    public Optional<StreamSubscriptionRequest> accumulatedSubscription() {
+        LinkedHashSet<CurrencyPair> pairs = new LinkedHashSet<>();
+        String exchange = null;
+        for (MessageRequest request : requestHistory) {
+            if (request instanceof StreamSubscriptionRequest subscription) {
+                exchange = subscription.getExchangeName();
+                if (subscription.getStreamAction() == StreamAction.SUBSCRIBE) {
+                    pairs.addAll(subscription.getCurrencyPairs());
+                } else {
+                    subscription.getCurrencyPairs().forEach(pairs::remove);
+                }
+            }
+        }
+        if (exchange == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new StreamSubscriptionRequest(exchange, List.copyOf(pairs), StreamAction.SUBSCRIBE));
     }
 
     public UUID getConnectionId() {
