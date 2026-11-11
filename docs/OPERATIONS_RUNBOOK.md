@@ -275,7 +275,10 @@ Cada `subject` traz `demand`:
 - `OPEN_LOT` (WARN, T58): só lote aberto de runner parado. Ninguém negocia (`halt` não negocia nada),
   mas o drawdown pula o portfolio e o PnL flutuante sai parcial (`unpricedPositions`).
 
-O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a cada 30s.
+O coordenador (T56) reabre a conexão caída e reassina o símbolo sem tick a cada 30s. Símbolo de runner que
+entrou com a conexão já aberta é assinado no mesmo ciclo, sem esperar os 60s (T53 F27); a confirmação da Binance
+(`{"result":null,"id":N}`) não gera log de erro (F26). Uma recusa (`Market stream request rejected by Binance`)
+continua `ERROR`: o símbolo ou o pedido está errado.
 
 - **Diagnóstico:** logs `marketData:` (o coordenador está tentando? `no adapter for market data
   source` = a fonte do runner não tem adapter registrado); `GET /api/websocket/all` para o estado da
