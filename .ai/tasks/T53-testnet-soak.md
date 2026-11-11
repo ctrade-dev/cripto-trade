@@ -357,6 +357,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 106 | 2026-11-10 | 4, sessão 4 (F4.5 de novo, F4.8, F4.10, F4.11) | 2h30 | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #183 | **F4.8, F4.10 e F4.11 passaram; a F4.5 não exercitou o watchdog.** F4.5: a SELL ficou `PENDING` com o `SoakBook` parado e foi resolvida pelo fill do stream, não pelo watchdog. F4.8: venda MARKET do lote do `SoakChaos` 1 s depois de `PT5M`. F4.10: `HALT` → `CANCEL_ALL` (3 ordens no livro → 0) → `PANIC_SELL` (2 lotes vendidos a mercado em menos de 10 s) → descida até `NORMAL`. F4.11: SELL LIMIT 1% abaixo do último preço, preenchidas na hora, sem escalar para MARKET. 1 `ERROR`, provocado. Conciliação 135 de 135. | F4.13 confirmado |
 | Curta 107 | 2026-11-10 | 4, sessão 5 (F4.7 de novo; F4.14 não abriu) | 45 min | 5 apps / BTCUSDT, VPS Oracle ARM, banco limpo, com PR #184 | **F4.7 passou.** `SoakTrend` fora por 10 min: `STRATEGY_UNAVAILABLE` como `WARN` cerca de 60 s depois da primeira falha, com runner, estratégia, `failingSince` e motivo; runner `ACTIVE` o tempo todo; estado `OK` 21 s depois da volta e decisões normais sem ação manual. A F4.14 não abriu: `RUNNERS_PER_APP=4` bate no índice único de runner ativo por estratégia, símbolo, exchange e portfólio (F25). 0 `ERROR`. Conciliação 52 de 52. | F21 resolvido; F25 |
 | Curta 108 | 2026-11-10 | 4, F4.14 (carga) | 1h15 | 5 apps × 4 símbolos (BTC, ETH, BNB, SOL / USDT) = 20 runners, VPS Oracle ARM, banco limpo, com PR #185 | **F4.14 passou.** Cerca de 5 avaliações/s; tempo médio de avaliação entre 14,5 e 17,9 ms por amostra de 5 min, máximo de 398 ms; p95 da chamada às apps 43 ms; filas dos executores de market data, user data e avaliação em 0; nenhum tick descartado; CPU do processo de 1 a 2%; heap entre 45 e 99 MB. Estado `OK` da largada + 80 s até o fim. 1 `ERROR` (F26). Conciliação 66/66, 68/68, 27/27 e 47/47. | F26, F27 |
+| Curta 109 | 2026-11-11 | 4, F26/F27 na VPS e F4.2 com 4 símbolos | 40 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #186 | **F26, F27 e F4.2 passaram; F28 não se reproduziu.** Largada: ETH, BNB e SOL assinados 1,3 s depois da conexão, confirmação da Binance em `DEBUG`, estado `OK` desde a primeira amostra. F4.2: 2 min sem os dois canais; voltaram às 12:06:09Z com os 4 símbolos e estado `OK` às 12:06:36Z. 30 `ERROR`, todos das quedas provocadas. Conciliação 43/43, 31/31, 16/16 e 27/27. | F26, F27 resolvidos; F28 reclassificado |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -864,6 +865,25 @@ vendas descartadas sem lote, todos já conhecidos.
   `CRITICAL`). Com um símbolo só, como nas rodadas até a 107, não aparece. Não testado na VPS; correção à parte.
 
 F26 e F27 corrigidos no PR da branch `fix/f26-f27-market-subscribe`; F28 espera o aval do mantenedor.
+
+### Fase 4, curta 109 — detalhes (2026-11-11, VPS)
+
+Primeira sessão com o PR #186 (F26, F27), `SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT"`.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| Largada com 4 símbolos (F26, F27) | Passou | `connecting BINANCE for [BTCUSDT]` às 12:00:39.835Z; `subscribing [BNBUSDT, ETHUSDT, SOLUSDT] ... not requested on this connection` às 12:00:41.133Z; `Market stream request accepted by Binance` em `DEBUG`; estado `OK` em todas as amostras de 10 s até 12:03:45Z; 20 runners `ACTIVE` |
+| F4.2 Queda curta de WebSocket, 4 símbolos | Passou | `fault-ws` de 2 min a partir de 12:03:56Z; `STREAM_DISCONNECTED` e `ORDER_DISPATCH_BLOCKED` `CRITICAL`, depois `MARKET_DATA_STALE` dos 4 símbolos; o coordenador reabriu com `[BNBUSDT, BTCUSDT, ETHUSDT, SOLUSDT]` a cada 30 s; `Reconnected after 7 failed attempt(s)` nos dois canais às 12:06:09Z; estado `OK` às 12:06:36Z; nenhum `HALT` |
+| F28 (quedas curtas só do `MARKET`) | Não reproduzido | Duas quedas (`fault.sh ws 8 market` às 12:13:39Z e `ws 3 market` às 12:16:32Z): nas duas, a primeira tentativa de reconexão (+5 s) ainda falhou e o ciclo do coordenador (12:13:44Z, 12:16:46Z) reabriu com os 4 símbolos antes; estado `OK` 30 a 40 s depois de cada queda |
+
+Fechamento: em voo 0, `locked` 0 nos cinco ativos, conciliação 43 de 43 (BTC), 31 de 31 (ETH), 16 de 16 (BNB) e 27 de
+27 (SOL). 30 `ERROR`, todos `WebSocket failure` das quedas provocadas.
+
+**F28 reclassificado (baixo, não confirmado na VPS).** O pedido de abertura do coordenador entra no histórico da conexão,
+então, a partir do primeiro ciclo durante a queda (até 30 s), a reconexão já reabre com todos os símbolos. A janela
+restante é a reconexão que dá certo na primeira tentativa, antes de qualquer ciclo: o caso real é a desconexão que a
+Binance força a cada 24h, que o `fault.sh` não imita. Nessa janela, os símbolos fora do último pedido ficam mais de
+1 min em `MARKET_DATA_STALE` `CRITICAL`. Correção à parte, com aval do mantenedor.
 
 ## Fontes
 
