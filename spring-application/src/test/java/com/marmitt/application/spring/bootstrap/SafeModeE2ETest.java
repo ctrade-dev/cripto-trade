@@ -225,6 +225,22 @@ class SafeModeE2ETest extends ScenarioStrategyE2ETestSupport {
         assertEquals(0, balance(portfolioId).reserved().signum());
     }
 
+    /** T53 F29: afastamento abaixo de 0.0001 (SELL praticamente no ultimo preco) e guardado sem arredondar. */
+    @Test
+    void limitPolicyKeepsASlippageBelowOneBasisPoint() {
+        UUID runnerId = activateScenario(
+                new FilledBuyRestingSellCancelStrategy(ScenarioStrategyConfig.boundedConfig(1)));
+        BigDecimal slippage = new BigDecimal("0.000001");
+
+        runnerLifecycle.updateLimits(runnerId, new UpdateRunnerLimitsRequest(null, null, null, null, null,
+                OrderType.LIMIT, slippage, 3));
+
+        BigDecimal stored = jdbcTemplate.queryForObject(
+                "SELECT liquidation_max_slippage_percent FROM strategy_runners WHERE id = ?",
+                BigDecimal.class, runnerId);
+        assertEquals(0, slippage.compareTo(stored), "afastamento guardado: " + stored);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void useLimitLiquidation(UUID runnerId, int escalationTicks) {

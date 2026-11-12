@@ -927,6 +927,7 @@ Fechamento: em voo 0, `locked` 0, conciliação 120/120, 139/139, 46/46 e 97/97.
   `maxSlippagePercent` em (0, 1), mas `liquidation_max_slippage_percent` é `NUMERIC(5, 4)` (V16): 0.000001 vira 0.0000,
   a constraint recusa, e o PATCH responde 500 com `ERROR` em vez de 400. Também impede a F4.11 com a SELL perto do
   último preço, a única forma de ela ficar parada no livro da testnet.
+  Correção na branch `fix/f29-liquidation-slippage-scale`: migration V21, coluna em `NUMERIC(10, 8)`, a escala dos preços.
 
 **Pendente:** a F4.11 (escalada LIMIT→MARKET) depois da correção da F29. O driver da rodada deve parar se o PATCH da
 política não responder 200.
