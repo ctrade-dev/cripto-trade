@@ -359,6 +359,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 108 | 2026-11-10 | 4, F4.14 (carga) | 1h15 | 5 apps × 4 símbolos (BTC, ETH, BNB, SOL / USDT) = 20 runners, VPS Oracle ARM, banco limpo, com PR #185 | **F4.14 passou.** Cerca de 5 avaliações/s; tempo médio de avaliação entre 14,5 e 17,9 ms por amostra de 5 min, máximo de 398 ms; p95 da chamada às apps 43 ms; filas dos executores de market data, user data e avaliação em 0; nenhum tick descartado; CPU do processo de 1 a 2%; heap entre 45 e 99 MB. Estado `OK` da largada + 80 s até o fim. 1 `ERROR` (F26). Conciliação 66/66, 68/68, 27/27 e 47/47. | F26, F27 |
 | Curta 109 | 2026-11-11 | 4, F26/F27 na VPS e F4.2 com 4 símbolos | 40 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #186 | **F26, F27 e F4.2 passaram; F28 não se reproduziu.** Largada: ETH, BNB e SOL assinados 1,3 s depois da conexão, confirmação da Binance em `DEBUG`, estado `OK` desde a primeira amostra. F4.2: 2 min sem os dois canais; voltaram às 12:06:09Z com os 4 símbolos e estado `OK` às 12:06:36Z. 30 `ERROR`, todos das quedas provocadas. Conciliação 43/43, 31/31, 16/16 e 27/27. | F26, F27 resolvidos; F28 reclassificado |
 | Curta 110 | 2026-11-11 | 4, F28, F4.12 e F4.13 na VPS | 60 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PRs #187, #188 e ctrade-strategies #6 | **F28, F4.12 e F4.13 passaram.** F28: a 1ª tentativa de reconexão do `MARKET` (+5 s, antes do ciclo do coordenador) reabriu com `pairs=4`, com a conexão aberta só com BTCUSDT e os outros 3 assinados depois. F4.12: 6 leituras de `/transactions` fechadas no meio, 0 `ERROR`. F4.13: 309 ordens, nenhuma em voo por mais de 136 s; 0 com mais de 150 s. 4 `ERROR`, todos da queda provocada. Conciliação 66/66, 69/69, 25/25 e 49/49. | F28, F4.12, F4.13 resolvidos |
+| Curta 111 | 2026-11-11 | 4, F4.5 e F4.11 com ordem parada de propósito | 2h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, `BOOK_OFFSET=0.01` só nesta rodada | **F4.5 passou; F4.11 não foi exercitada (F29).** F4.5: a BUY `365a26a4` do `SoakBook` ficou `PENDING` 10 min 46 s e o watchdog a achou na exchange por `clientOrderId` (`PENDING->SUBMITTED`); duas BUY que não chegaram à exchange viraram `EXPIRED` com a reserva devolvida. F4.11: o PATCH com `liquidationMaxSlippagePercent=0.000001` respondeu 500 nos 20 runners (a coluna guarda 4 casas e o valor virou 0), a política ficou MARKET e os dois `PANIC_SELL` venderam a mercado. 41 `ERROR`: 40 dos PATCH, 1 da queda provocada. Conciliação 120/120, 139/139, 46/46 e 97/97. | F29 |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -907,6 +908,28 @@ BNBUSDT 25/25, SOLUSDT 49/49. 4 `ERROR`, todos `WebSocket failure` do `MARKET` n
 
 **Pendente:** o watchdog por `clientOrderId` (F4.5) e a escalada LIMIT→MARKET da liquidação (F4.11) seguem só com
 teste unitário. Agora dá para provocar a ordem parada de propósito, com `*_MAX_ORDER_SECONDS` longo ou `BOOK_OFFSET` alto.
+
+### Fase 4, curta 111 — detalhes (2026-11-11 23:16:40Z → 2026-11-12 01:16:40Z, VPS)
+
+Autorizados pelo mantenedor: `PANIC_SELL`, liquidação LIMIT a 0.000001 durante o teste, descida do Safe Mode e
+retomada dos runners. Rodada sem acompanhamento: driver na VPS (`~/s13.sh`) e `docker-compose.override.yml` com
+`BOOK_OFFSET=0.01`, removido pelo driver no fim.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.5 Confirmação perdida | Passou | `fault.sh lost-ack 60` às 23:27:04Z; a BUY `365a26a4` do `SoakBook` (73022.80, 1% abaixo) saiu às 23:27:07Z e ficou `PENDING`; `book` parado às 23:27:21Z. Às 23:37:53Z, depois da carência, o watchdog a achou na exchange por `clientOrderId` e aplicou `PENDING->SUBMITTED` (`exchangeOrderId` 12801117). Com o `book` de volta, cancelada às 23:39:26Z e `CANCELED` pelo stream. No mesmo ciclo, as BUY `a15f5974` e `ca76e0bc` do `SoakReversion`, enviadas na conexão já cortada, não existiam na exchange e viraram `EXPIRED`, com a reserva devolvida. Nenhuma ordem só na exchange no fim |
+| F4.11 Drill de Safe Mode, LIMIT | Não exercitada | `PATCH /admin/runners/{id}` com `liquidationMaxSlippagePercent=0.000001` respondeu 500 nos 20 runners (F29); a política ficou `MARKET/0.0100/3`, e os dois `PANIC_SELL` (23:44:25Z e 23:51:06Z) venderam os lotes a mercado. Descida até `NORMAL`, política conferida no banco e 20 runners `ACTIVE` depois de cada drill |
+
+Fechamento: em voo 0, `locked` 0, conciliação 120/120, 139/139, 46/46 e 97/97. 41 `ERROR`: 40 dos PATCH da F4.11
+(20 por tentativa) e 1 da queda provocada do `USER_DATA`.
+
+- **F29 — Bug (baixo): o domínio aceita um afastamento que a coluna não guarda.** `LiquidationPolicy` aceita
+  `maxSlippagePercent` em (0, 1), mas `liquidation_max_slippage_percent` é `NUMERIC(5, 4)` (V16): 0.000001 vira 0.0000,
+  a constraint recusa, e o PATCH responde 500 com `ERROR` em vez de 400. Também impede a F4.11 com a SELL perto do
+  último preço, a única forma de ela ficar parada no livro da testnet.
+
+**Pendente:** a F4.11 (escalada LIMIT→MARKET) depois da correção da F29. O driver da rodada deve parar se o PATCH da
+política não responder 200.
 
 ## Fontes
 
