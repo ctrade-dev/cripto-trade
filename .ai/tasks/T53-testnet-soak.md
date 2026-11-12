@@ -360,6 +360,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 109 | 2026-11-11 | 4, F26/F27 na VPS e F4.2 com 4 símbolos | 40 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #186 | **F26, F27 e F4.2 passaram; F28 não se reproduziu.** Largada: ETH, BNB e SOL assinados 1,3 s depois da conexão, confirmação da Binance em `DEBUG`, estado `OK` desde a primeira amostra. F4.2: 2 min sem os dois canais; voltaram às 12:06:09Z com os 4 símbolos e estado `OK` às 12:06:36Z. 30 `ERROR`, todos das quedas provocadas. Conciliação 43/43, 31/31, 16/16 e 27/27. | F26, F27 resolvidos; F28 reclassificado |
 | Curta 110 | 2026-11-11 | 4, F28, F4.12 e F4.13 na VPS | 60 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PRs #187, #188 e ctrade-strategies #6 | **F28, F4.12 e F4.13 passaram.** F28: a 1ª tentativa de reconexão do `MARKET` (+5 s, antes do ciclo do coordenador) reabriu com `pairs=4`, com a conexão aberta só com BTCUSDT e os outros 3 assinados depois. F4.12: 6 leituras de `/transactions` fechadas no meio, 0 `ERROR`. F4.13: 309 ordens, nenhuma em voo por mais de 136 s; 0 com mais de 150 s. 4 `ERROR`, todos da queda provocada. Conciliação 66/66, 69/69, 25/25 e 49/49. | F28, F4.12, F4.13 resolvidos |
 | Curta 111 | 2026-11-11 | 4, F4.5 e F4.11 com ordem parada de propósito | 2h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, `BOOK_OFFSET=0.01` só nesta rodada | **F4.5 passou; F4.11 não foi exercitada (F29).** F4.5: a BUY `365a26a4` do `SoakBook` ficou `PENDING` 10 min 46 s e o watchdog a achou na exchange por `clientOrderId` (`PENDING->SUBMITTED`); duas BUY que não chegaram à exchange viraram `EXPIRED` com a reserva devolvida. F4.11: o PATCH com `liquidationMaxSlippagePercent=0.000001` respondeu 500 nos 20 runners (a coluna guarda 4 casas e o valor virou 0), a política ficou MARKET e os dois `PANIC_SELL` venderam a mercado. 41 `ERROR`: 40 dos PATCH, 1 da queda provocada. Conciliação 120/120, 139/139, 46/46 e 97/97. | F29 |
+| Curta 112 | 2026-11-12 | 4, F4.11 com a F29 corrigida | 75 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #189 | **F4.11 passou.** Política LIMIT a 0.000001 aplicada nos 20 runners (200). Com 3 ticks, as 3 SELL de liquidação encheram na hora; com 1 tick, a SELL do lote `798756c2` (SOLUSDT, 81.39) ficou parada, foi cancelada 4 s depois e o lote saiu a MARKET (81.23). Política de volta a `MARKET/0.01/3` e 20 runners `ACTIVE`. 0 `ERROR`. Conciliação 120/120, 99/99, 49/49 e 95/95. | F29 resolvido; fase 4 completa |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -929,8 +930,24 @@ Fechamento: em voo 0, `locked` 0, conciliação 120/120, 139/139, 46/46 e 97/97.
   último preço, a única forma de ela ficar parada no livro da testnet.
   Correção na branch `fix/f29-liquidation-slippage-scale`: migration V21, coluna em `NUMERIC(10, 8)`, a escala dos preços.
 
-**Pendente:** a F4.11 (escalada LIMIT→MARKET) depois da correção da F29. O driver da rodada deve parar se o PATCH da
-política não responder 200.
+**F29 corrigida no PR #189** (V21, coluna `NUMERIC(10, 8)`).
+
+### Fase 4, curta 112 — detalhes (2026-11-12 13:04:32Z → 14:19:32Z, VPS)
+
+Autorizados pelo mantenedor: `PANIC_SELL`, liquidação LIMIT a 0.000001 durante o teste, descida do Safe Mode e
+retomada dos runners. Driver na VPS (`~/s14.sh`), que para se o PATCH da política não responder 200 em todos os runners.
+
+| Teste | Resultado | Evidência |
+|---|---|---|
+| F4.11 Drill de Safe Mode, LIMIT | Passou | Tentativa 1 (13:07Z, `escalationTicks=3`): `LIMIT/0.00000100/3` no banco, 20 de 20 com 200; as 3 SELL de liquidação (ETH, SOL, BNB) no último preço encheram na hora, sem escalada. Tentativa 2 (13:14Z, `escalationTicks=1`): SELL LIMIT `c4ac4534` do lote `798756c2` (SOLUSDT) a 81.39 às 13:16:28Z; `PANIC_SELL LIMIT unfilled - canceling to escalate to MARKET` às 13:16:32Z; `CANCELED` e SELL MARKET `f69fff8c` `FILLED` a 81.23 às 13:16:40Z; as outras 6 SELL LIMIT encheram. Depois de cada drill: descida até `NORMAL`, `MARKET/0.01000000/3` no banco e 20 runners `ACTIVE` |
+
+Fechamento: em voo 0, `locked` 0, conciliação 120/120, 99/99, 49/49 e 95/95, 0 `ERROR`. O `round-watch` acusou
+`SAFE_MODE_ACTIVE` durante os drills (esperado) e um `STRATEGY_UNAVAILABLE` isolado às 13:10Z, sem `ERROR` nem log
+correspondente; o estado voltou a `OK` às 13:20Z.
+
+**Fase 4 completa:** os 14 testes passaram de ponta a ponta nas curtas 101 a 112. A escalada com o prazo padrão de 3
+ticks não ficou parada na testnet (o livro enche a SELL no último preço em menos de 3 ticks); o caminho é o mesmo e
+segue coberto pelo `SafeModeE2ETest`.
 
 ## Fontes
 
