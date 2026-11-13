@@ -949,6 +949,23 @@ correspondente; o estado voltou a `OK` às 13:20Z.
 ticks não ficou parada na testnet (o livro enche a SELL no último preço em menos de 3 ticks); o caminho é o mesmo e
 segue coberto pelo `SafeModeE2ETest`.
 
+### Rodada 13 (72h) — em andamento (2026-11-12 18:05:59Z → 2026-11-15 18:05:59Z, VPS)
+
+`develop` com o PR #189, banco limpo, 5 apps × 4 símbolos = 20 runners, sem falha provocada.
+
+| Hora (UTC) | Evento | Leitura |
+|---|---|---|
+| 11-12 19:37Z–19:42Z | Queda brusca do ETH na testnet (~2010 → ~1600 em segundos); `MARKET_DATA_STALE` por um ciclo | O `SoakReversion` de ETHUSDT comprou 0.0142 a 1744.84; a SELL MARKET executou 0.0126 e terminou `CANCELED`; o resto de 0.0016 (~2,6 USDT) ficou abaixo do `minNotional` de 5, as 5 SELL seguintes foram recusadas na validação e o `ConsecutiveRejectionGuard` parou o runner (F30) |
+| 11-13 02:40Z–02:43Z | Timeouts da testnet em consultas e cancelamentos (~60 em 3 min) | A SELL `405d4599` (BTCUSDT) ficou 3 ciclos do watchdog sem resposta: `HALT` automático do portfólio (`WATCHDOG_STUCK`) às 02:43:02Z; a ordem virou `CANCELED` às 02:43:08Z. Comportamento desenhado; o portfólio ficou sem compras por 9h40 |
+| 11-13 12:25Z | `HALT` → `NORMAL`, autorizado pelo mantenedor | Ordens novas no minuto seguinte; o `SoakReversion` de ETHUSDT segue `HALTED` até a correção da F30 (19 de 20 runners) |
+
+- **F30 — Bug (médio): resto de lote abaixo do `minNotional` não é baixado.** O `SellableQuantityPolicy` só trata como
+  invendável o resto que normaliza para zero no `stepSize`. Um resto acima do passo e abaixo do `minNotional` ao preço
+  atual fica `OPEN`, a estratégia tenta vendê-lo, cada SELL é recusada e o guarda de rejeições para o runner. Retomar o
+  runner sem a correção repete o ciclo.
+- **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
+  (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Avaliar no fechamento da rodada.
+
 ## Fontes
 
 - `docs/GO_LIVE_CHECKLIST.md` (item 10), `docs/TESTING_ROADMAP.md` (§4 e §5)
