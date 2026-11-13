@@ -40,4 +40,10 @@ public interface OrderQuantityNormalizerPort {
      * @param side lado da ordem; obrigatório, pois define a direção do arredondamento
      */
     BigDecimal normalizePrice(String symbol, OrderSide side, BigDecimal price);
+
+    /**
+     * Menor valor (quantidade x preco, na moeda de cotacao) que a exchange aceita numa ordem do simbolo
+     * (ex.: {@code NOTIONAL.minNotional} na Binance). Retorna zero quando nao houver regra aplicavel.
+     */
+    BigDecimal minNotional(String symbol);
 }

@@ -66,4 +66,9 @@ public class BinanceOrderNormalizer implements OrderQuantityNormalizerPort {
         }
         return aligned;
     }
+
+    @Override
+    public BigDecimal minNotional(String symbol) {
+        return filterCache.getFilters(symbol).minNotional();
+    }
 }

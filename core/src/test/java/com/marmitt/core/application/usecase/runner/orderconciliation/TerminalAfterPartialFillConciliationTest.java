@@ -17,6 +17,7 @@ import com.marmitt.core.enums.TransactionType;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.exchange.rest.OrderQuantityNormalizerPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -51,7 +52,7 @@ class TerminalAfterPartialFillConciliationTest {
 
     @Test
     void sellExpiredAfterPartialFillIsCanceledAndUnlocksTheRestOfTheLot() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
         Position lot = lockedLot(sell, "0.00154000", "119.23884280");
         conciliation.processFill(sell, event(sell, OrderDataDto.OrderSide.SELL,
@@ -71,7 +72,7 @@ class TerminalAfterPartialFillConciliationTest {
     @Test
     void sellCanceledAfterPartialFillWritesOffAnUnsellableRest() {
         ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher,
-                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.001"))));
+                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.001"))), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
         Position lot = lockedLot(sell, "0.00154000", "119.23884280");
         conciliation.processFill(sell, event(sell, OrderDataDto.OrderSide.SELL,
@@ -88,9 +89,64 @@ class TerminalAfterPartialFillConciliationTest {
         assertTrue(writeOff.totalCost().signum() > 0);
     }
 
+    /**
+     * T53 F30: o resto passa no stepSize, mas ao ultimo preco vale menos que o minimo de ordem da exchange.
+     * Nenhuma SELL dele seria aceita; sem a baixa, a estrategia tentaria vender e o guarda de rejeicoes
+     * pararia o runner.
+     */
+    @Test
+    void sellCanceledAfterPartialFillWritesOffARestBelowTheMinimumOrderValue() {
+        ConciliationOrderUpdate conciliation = conciliationWithMinimumOrderValue("10000.00");
+        Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
+        Position lot = lockedLot(sell, "0.00154000", "119.23884280");
+        conciliation.processFill(sell, event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.PARTIALLY_FILLED, "0.00107000", "63998.18700935"), false);
+
+        conciliation.execute(event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.CANCELED, "0.00107000", "63998.18700935"));
+
+        assertEquals(TransactionStatus.CANCELED, sell.getStatus());
+        assertEquals(PositionStatus.CLOSED, lot.getStatus());
+        ExecutionConfirmation writeOff = lastConfirmation();
+        assertAmount("0.00047000", writeOff.executedQuantity());
+        assertAmount(writeOff.totalCost().negate().toPlainString(), writeOff.pnlRealized());
+    }
+
+    @Test
+    void sellCanceledAfterPartialFillKeepsARestWorthTheMinimumOrderValue() {
+        ConciliationOrderUpdate conciliation = conciliationWithMinimumOrderValue("63998.18");
+        Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
+        Position lot = lockedLot(sell, "0.00154000", "119.23884280");
+        conciliation.processFill(sell, event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.PARTIALLY_FILLED, "0.00107000", "63998.18700935"), false);
+
+        conciliation.execute(event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.CANCELED, "0.00107000", "63998.18700935"));
+
+        assertEquals(PositionStatus.OPEN, lot.getStatus());
+        assertAmount("0.00047000", lot.getQuantity());
+    }
+
+    /** Sem preco conhecido (ex.: logo apos um restart) so a regra do stepSize decide; o resto fica. */
+    @Test
+    void restIsKeptWhenNoPriceIsKnown() {
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher,
+                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.00001"), new BigDecimal("5"))),
+                mock(LatestPricePort.class));
+        Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
+        Position lot = lockedLot(sell, "0.00154000", "119.23884280");
+        conciliation.processFill(sell, event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.PARTIALLY_FILLED, "0.00107000", "63998.18700935"), false);
+
+        conciliation.execute(event(sell, OrderDataDto.OrderSide.SELL,
+                OrderDataDto.OrderStatus.CANCELED, "0.00107000", "63998.18700935"));
+
+        assertEquals(PositionStatus.OPEN, lot.getStatus());
+    }
+
     @Test
     void buyExpiredAfterPartialFillReleasesOnlyTheUnexecutedReservation() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction buy = submitted(TransactionType.BUY, "2.50000000", "10.00000000");
         buy.partialFill(new BigDecimal("1.00000000"), new BigDecimal("10.00000000"));
         when(repository.findTransactionByClientOrderId(buy.getClientOrderId())).thenReturn(Optional.of(buy));
@@ -106,7 +162,7 @@ class TerminalAfterPartialFillConciliationTest {
 
     @Test
     void executionReportedOnlyWithTheTerminalEventIsAppliedBeforeClosing() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
         Position lot = lockedLot(sell, "0.00154000", "119.23884280");
 
@@ -122,7 +178,7 @@ class TerminalAfterPartialFillConciliationTest {
 
     @Test
     void expiredWithoutExecutionStaysExpired() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction buy = submitted(TransactionType.BUY, "2.50000000", "10.00000000");
         when(repository.findTransactionByClientOrderId(buy.getClientOrderId())).thenReturn(Optional.of(buy));
 
@@ -137,7 +193,7 @@ class TerminalAfterPartialFillConciliationTest {
 
     @Test
     void repeatedTerminalEventIsIgnored() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00259000", "69810.17000000");
         sell.expire();
         when(repository.findTransactionByClientOrderId(sell.getClientOrderId())).thenReturn(Optional.of(sell));
@@ -148,6 +204,15 @@ class TerminalAfterPartialFillConciliationTest {
         assertEquals(TransactionStatus.EXPIRED, sell.getStatus());
         verify(repository, never()).saveTransaction(any());
         verify(publisher, never()).publishEvent(any());
+    }
+
+    /** stepSize 0.00001 e minimo de 5 USDT; o resto de 0.00047 vale 4.70 a 10000 e 30.08 a 63998.18. */
+    private ConciliationOrderUpdate conciliationWithMinimumOrderValue(String latestPrice) {
+        LatestPricePort latestPrices = mock(LatestPricePort.class);
+        when(latestPrices.find("BTCUSDT")).thenReturn(Optional.of(new BigDecimal(latestPrice)));
+        return new ConciliationOrderUpdate(repository, publisher,
+                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.00001"), new BigDecimal("5"))),
+                latestPrices);
     }
 
     private Position lockedLot(Transaction sell, String quantity, String cost) {
@@ -192,8 +257,13 @@ class TerminalAfterPartialFillConciliationTest {
                 () -> "expected " + expected + " but was " + actual);
     }
 
-    /** Normalizador com floor ao stepSize, como o da Binance. */
-    private record StepSizeNormalizer(String exchangeName, BigDecimal stepSize) implements OrderQuantityNormalizerPort {
+    /** Normalizador com floor ao stepSize e valor minimo de ordem, como o da Binance. */
+    private record StepSizeNormalizer(String exchangeName, BigDecimal stepSize, BigDecimal minNotional)
+            implements OrderQuantityNormalizerPort {
+        StepSizeNormalizer(String exchangeName, BigDecimal stepSize) {
+            this(exchangeName, stepSize, BigDecimal.ZERO);
+        }
+
         @Override
         public String getExchangeName() {
             return exchangeName;
@@ -202,6 +272,11 @@ class TerminalAfterPartialFillConciliationTest {
         @Override
         public BigDecimal normalizeQuantity(String symbol, BigDecimal quantity) {
             return quantity.divide(stepSize, 0, RoundingMode.FLOOR).multiply(stepSize);
+        }
+
+        @Override
+        public BigDecimal minNotional(String symbol) {
+            return minNotional;
         }
 
         @Override

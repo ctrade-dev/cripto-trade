@@ -16,6 +16,7 @@ import com.marmitt.core.enums.TransactionType;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.exchange.rest.OrderQuantityNormalizerPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -47,7 +48,7 @@ class FeeAccountingConciliationTest {
 
     @Test
     void buyFeeInBaseAssetOpensLotWithNetQuantityAtPaidCost() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         when(repository.trySavePosition(any())).thenReturn(true);
         Transaction buy = submitted(TransactionType.BUY, "0.00100000", "66300.00000000");
 
@@ -62,7 +63,7 @@ class FeeAccountingConciliationTest {
 
     @Test
     void buyFeeInThirdAssetIsNotAccountedAndKeepsExecutedQuantity() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         when(repository.trySavePosition(any())).thenReturn(true);
         Transaction buy = submitted(TransactionType.BUY, "0.00100000", "66300.00000000");
 
@@ -75,7 +76,7 @@ class FeeAccountingConciliationTest {
     @Test
     void finalSellLeavingUnsellableRemainderWritesItOffAndReleasesItsCost() {
         ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher,
-                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.00001"))));
+                List.of(new StepSizeNormalizer("BINANCE", new BigDecimal("0.00001"))), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00099000", "66400.00000000");
         Position lot = Position.open(runnerId, "BTCUSDT", new BigDecimal("0.000999"), new BigDecimal("66.23370000"));
         lot.associateBuyTransaction(UUID.randomUUID());
@@ -101,7 +102,7 @@ class FeeAccountingConciliationTest {
     @Test
     void finalSellLeavingSellableRemainderKeepsLotOpen() {
         // Sem normalizador (ex.: MOCK) qualquer quantidade e vendavel: nada e baixado.
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00099000", "66400.00000000");
         Position lot = Position.open(runnerId, "BTCUSDT", new BigDecimal("0.000999"), new BigDecimal("66.23370000"));
         lot.associateBuyTransaction(UUID.randomUUID());
@@ -120,7 +121,7 @@ class FeeAccountingConciliationTest {
 
     @Test
     void sellFeeInThirdAssetIsRecordedPendingConversionAndKeptOutOfPnl() {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00100000", "66400.00000000");
         Position lot = Position.open(runnerId, "BTCUSDT", new BigDecimal("0.001"), new BigDecimal("66.30000000"));
         lot.associateBuyTransaction(UUID.randomUUID());
@@ -190,6 +191,11 @@ class FeeAccountingConciliationTest {
         @Override
         public BigDecimal normalizeQuantity(String symbol, BigDecimal quantity) {
             return quantity.divide(stepSize, 0, RoundingMode.FLOOR).multiply(stepSize);
+        }
+
+        @Override
+        public BigDecimal minNotional(String symbol) {
+            return BigDecimal.ZERO;
         }
 
         @Override

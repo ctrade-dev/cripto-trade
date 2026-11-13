@@ -962,7 +962,8 @@ segue coberto pelo `SafeModeE2ETest`.
 - **F30 — Bug (médio): resto de lote abaixo do `minNotional` não é baixado.** O `SellableQuantityPolicy` só trata como
   invendável o resto que normaliza para zero no `stepSize`. Um resto acima do passo e abaixo do `minNotional` ao preço
   atual fica `OPEN`, a estratégia tenta vendê-lo, cada SELL é recusada e o guarda de rejeições para o runner. Retomar o
-  runner sem a correção repete o ciclo.
+  runner sem a correção repete o ciclo. Correção em `fix/f30-remainder-below-min-notional`: o resto que, ao último
+  preço, vale menos que o `minNotional` também é baixado como perda.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
   (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Avaliar no fechamento da rodada.
 
