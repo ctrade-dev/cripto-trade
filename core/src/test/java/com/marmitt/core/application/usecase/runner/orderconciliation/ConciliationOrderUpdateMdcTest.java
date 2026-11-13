@@ -8,6 +8,7 @@ import com.marmitt.core.enums.OrderType;
 import com.marmitt.core.enums.TransactionType;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -39,7 +40,7 @@ class ConciliationOrderUpdateMdcTest {
     void putsTransactionIdInMdcDuringRoutingAndClearsAfter() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         when(repository.findTransactionByClientOrderId(transaction.getClientOrderId()))

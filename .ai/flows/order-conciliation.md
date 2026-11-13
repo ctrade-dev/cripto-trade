@@ -94,7 +94,8 @@ aplicando o incremento.
 5. Publica `ExecutionConfirmedEvent` com `totalCost` vindo do `cost_basis` da posicao (fracao
    proporcional; restante exato quando a venda zera a posicao).
 6. No fill final, se sobrar quantidade que a exchange nao aceita vender (`SellableQuantityPolicy`,
-   via `OrderQuantityNormalizerPort`), baixa o residuo como perda (`Position.writeOffDust`), fecha a
+   via `OrderQuantityNormalizerPort`: o resto normaliza para zero no `stepSize` ou, ao ultimo preco do
+   `LatestPricePort`, vale menos que o `minNotional`; sem preco conhecido so o passo decide, T53 F30), baixa o residuo como perda (`Position.writeOffDust`), fecha a
    posicao e publica um segundo `ExecutionConfirmedEvent` (custo do residuo, PnL = -custo,
    `matchId` deterministico por posicao). A baixa mora em `UnsellableRemainderWriteOff` e vale
    tambem para a SELL interrompida depois de executar em parte (`TerminationHandler`, T67).

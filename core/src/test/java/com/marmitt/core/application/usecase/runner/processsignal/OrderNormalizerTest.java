@@ -96,6 +96,11 @@ class OrderNormalizerTest {
         }
 
         @Override
+        public BigDecimal minNotional(String symbol) {
+            return BigDecimal.ZERO;
+        }
+
+        @Override
         public BigDecimal normalizePrice(String symbol, OrderSide side, BigDecimal price) {
             if (price == null) {
                 return null;

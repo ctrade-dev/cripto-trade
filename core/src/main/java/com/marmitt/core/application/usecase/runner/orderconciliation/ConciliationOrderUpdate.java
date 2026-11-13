@@ -5,6 +5,7 @@ import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.dto.websocket.data.OrderDataDto;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.exchange.rest.OrderQuantityNormalizerPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -46,15 +47,18 @@ public class ConciliationOrderUpdate {
     /**
      * @param orderNormalizers normalizadores de quantidade por exchange, usados para decidir se o
      *                         residuo de uma posicao ainda e vendavel (T46)
+     * @param latestPrices     ultimo preco por simbolo, para comparar o residuo com o valor minimo de
+     *                         ordem da exchange (T53 F30)
      */
     public ConciliationOrderUpdate(StrategyRunnerRepositoryPort strategyRunnerRepository,
                                    EventPublisherPort eventPublisher,
-                                   List<OrderQuantityNormalizerPort> orderNormalizers) {
+                                   List<OrderQuantityNormalizerPort> orderNormalizers,
+                                   LatestPricePort latestPrices) {
         this.strategyRunnerRepository = strategyRunnerRepository;
         MarginReleaseBuilder marginReleaseBuilder = new MarginReleaseBuilder();
         FeeResolver feeResolver = new FeeResolver();
         UnsellableRemainderWriteOff remainderWriteOff = new UnsellableRemainderWriteOff(
-                strategyRunnerRepository, new SellableQuantityPolicy(orderNormalizers));
+                strategyRunnerRepository, new SellableQuantityPolicy(orderNormalizers, latestPrices));
         this.fillCalculator = new FillCalculator();
         this.buyFillHandler = new BuyFillHandler(
                 strategyRunnerRepository, eventPublisher, marginReleaseBuilder, feeResolver);

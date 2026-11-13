@@ -82,9 +82,10 @@ public class RunnerConfig {
     public ConciliationOrderUpdate conciliationOrderUpdate(
             StrategyRunnerRepositoryPort strategyRunnerRepository,
             EventPublisherPort eventPublisher,
-            List<OrderQuantityNormalizerPort> orderNormalizers
+            List<OrderQuantityNormalizerPort> orderNormalizers,
+            LatestPricePort latestPrices
     ) {
-        return new ConciliationOrderUpdate(strategyRunnerRepository, eventPublisher, orderNormalizers);
+        return new ConciliationOrderUpdate(strategyRunnerRepository, eventPublisher, orderNormalizers, latestPrices);
     }
 
     @Bean

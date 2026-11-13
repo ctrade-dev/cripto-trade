@@ -12,6 +12,7 @@ import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.enums.TransactionType;
 import com.marmitt.core.ports.outbound.events.EventPublisherPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -38,7 +39,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeSkipsInvalidClientOrderId() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         OrderDataDto orderData = orderData(
                 "invalid-client-order-id",
@@ -56,7 +57,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeNewTransitionsPendingTransactionAndCallsSubmitAction() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         String clientOrderId = transaction.getClientOrderId();
@@ -84,7 +85,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeNewIgnoresAlreadySubmittedTransaction() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         transaction.submit("PREVIOUS_EX_ORDER");
@@ -111,7 +112,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeFilledRoutesToFillActionWithFinalFlag() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         String clientOrderId = transaction.getClientOrderId();
@@ -145,7 +146,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executePartiallyFilledRoutesToFillActionWithPartialFlag() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         String clientOrderId = transaction.getClientOrderId();
@@ -177,7 +178,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeSkipsWhenTransactionNotFoundForValidClientOrderId() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         String validClientOrderId = ClientOrderId.generate("x1", TransactionType.BUY);
         when(repository.findTransactionByClientOrderId(validClientOrderId)).thenReturn(Optional.empty());
@@ -203,7 +204,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void processFillIgnoresDuplicatePartiallyFilledWhenQuantityDidNotIncrease() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         transaction.submit("EX_ORDER_1");
@@ -230,7 +231,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void processFillIgnoresDuplicateFilledWhenAlreadyFinal() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         transaction.submit("EX_ORDER_1");
@@ -257,7 +258,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void processFillFinalBuyBelowLimitPublishesExcessReleaseOnce() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         when(repository.trySavePosition(any())).thenReturn(true);
 
         // Reserva 2.5 x 10.00 = 25.00; executada a 9.80 -> 24.50; excedente 0.50.
@@ -281,7 +282,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void processFillPartialBuyDoesNotReleaseExcess() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         when(repository.trySavePosition(any())).thenReturn(true);
 
         Transaction transaction = newBuyTransaction();
@@ -300,7 +301,7 @@ class ConciliationOrderUpdateIdempotencyTest {
         // T67: terminal nunca muda; um encerramento atrasado ou repetido nao gera erro nem nova liberacao.
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         transaction.submit("EX_ORDER_1");
@@ -327,7 +328,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeCanceledCallsReleaseActionAndTransitionsStatus() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         when(repository.findTransactionByClientOrderId(transaction.getClientOrderId()))
@@ -352,7 +353,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeExpiredCallsReleaseActionAndTransitionsStatus() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         when(repository.findTransactionByClientOrderId(transaction.getClientOrderId()))
@@ -377,7 +378,7 @@ class ConciliationOrderUpdateIdempotencyTest {
     void executeRejectedCallsReleaseActionAndTransitionsStatus() {
         StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
         EventPublisherPort publisher = mock(EventPublisherPort.class);
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
 
         Transaction transaction = newBuyTransaction();
         when(repository.findTransactionByClientOrderId(transaction.getClientOrderId()))

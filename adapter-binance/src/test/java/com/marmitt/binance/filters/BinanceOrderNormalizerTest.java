@@ -51,6 +51,11 @@ class BinanceOrderNormalizerTest {
     }
 
     @Test
+    void minNotional_comesFromTheSymbolFilter() {
+        assertSameValue("10.00", normalizer.minNotional(SYMBOL));
+    }
+
+    @Test
     void normalizeQuantity_floorsToStepSize() {
         // stepSize=0.00001 → 0.001234 / 0.00001 = 123.4 → floor=123 → 0.00123
         assertSameValue("0.00123", normalizer.normalizeQuantity(SYMBOL, new BigDecimal("0.001234")));

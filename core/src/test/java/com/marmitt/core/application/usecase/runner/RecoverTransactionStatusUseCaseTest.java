@@ -26,6 +26,7 @@ import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderQueryPort;
 import com.marmitt.core.ports.outbound.repository.DeadLetterEntryRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.ExchangeAdapterRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
+import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -466,7 +467,7 @@ class RecoverTransactionStatusUseCaseTest {
     }
 
     private static ConciliationOrderUpdateExecutor newExecutor(StrategyRunnerRepositoryPort repository) {
-        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, mock(EventPublisherPort.class), List.of());
+        ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, mock(EventPublisherPort.class), List.of(), mock(LatestPricePort.class));
         return new ConciliationOrderUpdateExecutor() {
             @Override
             public void execute(OrderDataDto orderData) {

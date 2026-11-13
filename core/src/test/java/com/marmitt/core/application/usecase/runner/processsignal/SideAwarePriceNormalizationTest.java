@@ -93,6 +93,11 @@ class SideAwarePriceNormalizationTest {
         }
 
         @Override
+        public BigDecimal minNotional(String symbol) {
+            return BigDecimal.ZERO;
+        }
+
+        @Override
         public BigDecimal normalizePrice(String symbol, OrderSide side, BigDecimal price) {
             return price.setScale(2, side == OrderSide.BUY ? RoundingMode.FLOOR : RoundingMode.CEILING);
         }
