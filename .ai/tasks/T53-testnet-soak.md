@@ -960,6 +960,7 @@ segue coberto pelo `SafeModeE2ETest`.
 | 11-13 12:25Z | `HALT` → `NORMAL`, autorizado pelo mantenedor | Ordens novas no minuto seguinte; o `SoakReversion` de ETHUSDT segue `HALTED` até a correção da F30 (19 de 20 runners) |
 | 11-14 02:57Z | SELL MARKET de 0.00067 BTC do `SoakTrend` de BTCUSDT executou 0.00066 a preço médio 55178 (último 67630: livro raso da testnet) e terminou `CANCELED` | Resto de 0.00001 BTC (~0,68 USDT) passou no `stepSize` e ficou abaixo do `minNotional`: 5 SELL recusadas e o runner parou. Segundo caso da F30, já corrigida no #190 (não implantada durante a rodada); 18 de 20 runners |
 | 11-14 18:51Z | SELL LIMIT de 0.362 SOL do `SoakBook` de SOLUSDT executou 0.346 e foi cancelada pela estratégia (ordem parada no livro) | Resto de 0.016 SOL (~1,15 USDT) abaixo do `minNotional`: 5 SELL recusadas e o runner parou às 18:53Z. Terceiro caso da F30, agora por cancelamento de LIMIT parcial; mesmo caminho (`TerminationHandler`) coberto pelo #190; 17 de 20 runners |
+| 11-14 19:13Z | SELL LIMIT de 0.044 BNB do `SoakBook` de BNBUSDT executou 0.042 e foi cancelada pela estratégia | Resto de 0.002 BNB (~1,18 USDT): runner parado às 19:14Z. Quarto caso da F30; 16 de 20 runners |
 
 - **F30 — Bug (médio): resto de lote abaixo do `minNotional` não é baixado.** O `SellableQuantityPolicy` só trata como
   invendável o resto que normaliza para zero no `stepSize`. Um resto acima do passo e abaixo do `minNotional` ao preço
