@@ -1011,7 +1011,8 @@ segue coberto pelo `SafeModeE2ETest`.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
   (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Decisão do mantenedor
   (2026-11-15): o `HALT` causado por falha da exchange volta sozinho depois de N minutos de exchange saudável; os
-  demais motivos continuam só com retomada manual. Vira tarefa própria.
+  demais motivos continuam só com retomada manual. Tarefa T71 (N = 5 min de exchange saudável, no máximo 3 retomadas
+  automáticas por portfólio em 24h).
 
 ## Fontes
 

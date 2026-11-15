@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T25 (gatilhos automáticos), T43 (drawdown), T45 (níveis do Safe Mode), T66 (motivo da falha)
-**Status:** Spec para revisão do mantenedor (2026-11-15)
+**Status:** Spec aprovada (2026-11-15); implementação a combinar
 
 ---
 
@@ -71,9 +71,11 @@ Isso muda uma regra escrita: hoje "gatilho automático só aciona `HALT`; a reto
      `AUTO_RESUME EXCHANGE_UNAVAILABLE: exchange healthy for <N>m`. Registra a métrica e notifica, como o `HALT`.
 - Configuração em `ctrade.safe-mode.auto-resume.*`: `enabled`, `healthy-minutes` e `max-per-24h`.
 
-### Decisão de negócio pendente (parâmetros de risco)
+### Parâmetros de risco
 
-| Parâmetro | Proposta | Motivo |
+**Decisão registrada (2026-11-15):** o mantenedor aprovou N = 5 e M = 3, com a retomada ligada por padrão.
+
+| Parâmetro | Valor | Motivo |
 |---|---|---|
 | `healthy-minutes` (N) | 5 | Maior que os 3 min de falha que disparam o `HALT`; cobre a oscilação vista na testnet |
 | `max-per-24h` (M) | 3 | Exchange que cai e volta várias vezes no dia pede olho humano |
@@ -125,11 +127,10 @@ Isso muda uma regra escrita: hoje "gatilho automático só aciona `HALT`; a reto
 
 ## Ordem de entrega
 
-1. Confirmação dos parâmetros N e M pelo mantenedor.
-2. Domínio: gatilho novo, `safeModeTrigger` no portfólio, regra de descida automática, migration.
-3. Watchdog classificando o gatilho.
-4. Use case de retomada e agendamento.
-5. Docs, PR em rascunho, CI e espera por comentários; merge pelo mantenedor; teste na VPS.
+1. Domínio: gatilho novo, `safeModeTrigger` no portfólio, regra de descida automática, migration.
+2. Watchdog classificando o gatilho.
+3. Use case de retomada e agendamento.
+4. Docs, PR em rascunho, CI e espera por comentários; merge pelo mantenedor; teste na VPS.
 
 ## Fontes
 
