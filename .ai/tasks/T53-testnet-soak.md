@@ -962,12 +962,22 @@ segue coberto pelo `SafeModeE2ETest`.
 | 11-14 18:51Z | SELL LIMIT de 0.362 SOL do `SoakBook` de SOLUSDT executou 0.346 e foi cancelada pela estratégia (ordem parada no livro) | Resto de 0.016 SOL (~1,15 USDT) abaixo do `minNotional`: 5 SELL recusadas e o runner parou às 18:53Z. Terceiro caso da F30, agora por cancelamento de LIMIT parcial; mesmo caminho (`TerminationHandler`) coberto pelo #190; 17 de 20 runners |
 | 11-14 19:13Z | SELL LIMIT de 0.044 BNB do `SoakBook` de BNBUSDT executou 0.042 e foi cancelada pela estratégia | Resto de 0.002 BNB (~1,18 USDT): runner parado às 19:14Z. Quarto caso da F30; 16 de 20 runners |
 | 11-14 22:57Z | SELL LIMIT de 0.074 BNB do `SoakTrend` de BNBUSDT executou 0.072 e terminou `CANCELED` | Resto de 0.002 BNB (~1,15 USDT): runner parado às 22:57Z. Quinto caso da F30; 15 de 20 runners |
+| 11-15 02:52Z | `EXECUTION_CONFIRMED` da SELL `d3f9d7de` (`SoakBook` ETHUSDT, lote inteiro, 25.574 USDT) falhou com `Insufficient reserved balance` e foi para a DLQ (`e5192c82`, `RETRY_EXHAUSTED`); `DLQ_UNRESOLVED` | F31: `reserved` estava 42.19605650 abaixo do reconstruído pelo ledger, exatamente o `total` da BUY `a8dc5e73`, reservada às 02:36:05.209, 1 ms antes de uma confirmação concorrente gravar o saldo lido antes. DLQ mantida sem reprocessar para a análise |
 
 - **F30 — Bug (médio): resto de lote abaixo do `minNotional` não é baixado.** O `SellableQuantityPolicy` só trata como
   invendável o resto que normaliza para zero no `stepSize`. Um resto acima do passo e abaixo do `minNotional` ao preço
   atual fica `OPEN`, a estratégia tenta vendê-lo, cada SELL é recusada e o guarda de rejeições para o runner. Retomar o
   runner sem a correção repete o ciclo. Correção em `fix/f30-remainder-below-min-notional`: o resto que, ao último
   preço, vale menos que o `minNotional` também é baixado como perda.
+- **F31 — Bug (alto): reserva de capital perdida por atualização concorrente do saldo.** `reserveAtomic` é um `UPDATE`
+  direto em `global_balances` que não incrementa `version`; confirmação e liberação leem o `GlobalBalance`, alteram e
+  gravam com `@Version`. Uma reserva que entra entre a leitura e a gravação não muda a versão, a gravação passa e
+  sobrescreve `reserved` e `available` com os valores antigos: a reserva some de `reserved` e volta para `available`
+  (o total não muda, então o equity e o drawdown não são afetados). Efeitos: confirmações recusadas quando `reserved`
+  fica baixo (DLQ) e capital disponível fantasma, que permite reservar além do capital. Reconstrução da rodada 13:
+  reservas, liberações e confirmações batem uma a uma com o banco e o log; a única diferença é a reserva de
+  `a8dc5e73` (42.19605650) perdida às 02:36:05.209 contra a confirmação do match `359507f1` às 02:36:05.210.
+  Correção proposta: `reserveAtomic` também incrementar `version`, para a gravação concorrente falhar e repetir.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
   (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Avaliar no fechamento da rodada.
 
