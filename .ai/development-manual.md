@@ -298,7 +298,8 @@ switch sao refeitas **dentro** da transacao (`persistBuyAndReserve` re-le o runn
 - `<Agregado>Entity` (Spring Data JDBC) + `<Agregado>EntityMapper` com `toDomain`/`toEntity`
   estaticos + `<Agregado>JdbcRepository`.
 - Operacoes financeiras concorrentes sao atomicas em SQL (CAS: `reserveAtomic` retorna
-  linhas afetadas), nunca read-modify-write em memoria.
+  linhas afetadas), nunca read-modify-write em memoria. Um `UPDATE` direto numa linha com
+  `@Version` tambem incrementa `version`, senao a gravacao otimista concorrente o sobrescreve.
 - Log `trace` com tempo: `[REPO] <agregado>.<operacao>(args) - Xms` (`RepoTiming`).
 - Schema so por migration Flyway nova (`db/migration/V<n>__descricao.sql`); nunca editar
   migration ja aplicada.

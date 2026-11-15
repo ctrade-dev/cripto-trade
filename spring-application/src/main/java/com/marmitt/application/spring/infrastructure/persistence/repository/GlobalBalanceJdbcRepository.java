@@ -21,13 +21,17 @@ public interface GlobalBalanceJdbcRepository extends CrudRepository<GlobalBalanc
      * <p>
      * Retorna {@code 1} se a reserva foi aplicada, {@code 0} se saldo insuficiente.
      * O caller deve interpretar {@code == 1} como sucesso.
+     * <p>
+     * Incrementa {@code version}: quem leu o saldo antes da reserva (confirmacao, liberacao) falha no
+     * {@code save} otimista e repete com o valor atual, em vez de gravar por cima a reserva (F31).
      */
     @Modifying
     @Query("""
             UPDATE global_balances
                SET available_balance = available_balance - :amount,
                    reserved_balance  = reserved_balance  + :amount,
-                   updated_at        = NOW()
+                   updated_at        = NOW(),
+                   version           = version + 1
              WHERE portfolio_id = :portfolioId
                AND available_balance >= :amount
             """)
