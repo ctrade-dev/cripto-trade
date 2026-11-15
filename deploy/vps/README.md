@@ -97,10 +97,11 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
 
 1. **Largada:** `./round-start.sh <número> <duração>`, em horas (`72`) ou minutos (`45m`); `SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT"`
    cria um runner por app em cada símbolo, com a alocação dividida entre eles (teste de carga, F4.14); o padrão é
-   `BTCUSDT`. O ctrade permite um só runner ativo por estratégia, símbolo e portfolio. Recusa se houver rodada sem `CLOSED` ou saldo
-   `locked` na exchange (ordem no livro de antes da limpeza vira trade só na exchange). Para o ctrade,
+   `BTCUSDT`. O ctrade permite um só runner ativo por estratégia, símbolo e portfolio. Recusa se houver rodada sem `CLOSED`, saldo
+   `locked` na exchange (ordem no livro de antes da limpeza vira trade só na exchange) ou USDT livre abaixo do
+   capital (o portfolio diria ter mais que a conta, e a conferência de saldo o poria em `HALT`). Para o ctrade,
    limpa o banco (`./reset-testnet-db.sh`, só testnet), sobe tudo, cadastra as apps, cria o portfolio de
-   1000 USDT e um runner por app em cada símbolo com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
+   `CAPITAL` USDT (padrão 1000; ex.: `CAPITAL=500 ./round-start.sh 15 6`) e um runner por app em cada símbolo com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
    1 ordem pendente, perda máxima de 5% por lote) e liga os runners. Os limites e o roteiro completo
    estão na T53 (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60").
 2. **Durante:** a largada deixa `./round-watch.sh` rodando até o fim, desacoplado. A cada 5 min ele grava em

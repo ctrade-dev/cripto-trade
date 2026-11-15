@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Largada de uma rodada da T53 na VPS (T63): banco limpo, apps cadastradas, portfolio de 1000 USDT e um
+# Largada de uma rodada da T53 na VPS (T63): banco limpo, apps cadastradas, portfolio de CAPITAL USDT e um
 # runner por app e por simbolo com os limites da rodada 7. Grava a rodada em $ROUND_DIR/round.env e deixa
 # ./round-close.sh dormindo ate o fim, desacoplado da sessao que chamou.
 #
 # Uso:  ./round-start.sh <numero> <duracao>      duracao em horas (72) ou minutos (45m); ROUND_DIR padrao: ~/round
 #       SYMBOLS="BTCUSDT ETHUSDT BNBUSDT SOLUSDT" ./round-start.sh ...
+#       CAPITAL=500 ./round-start.sh ...    capital do portfolio em USDT (padrao: 1000)
 #                                                um runner por app em cada simbolo (padrao: BTCUSDT), com a alocacao
 #                                                da rodada 7 dividida entre eles: teste de carga (F4.14). O ctrade
 #                                                permite um so runner ativo por estrategia, simbolo e portfolio.
 #
 # So vale para a testnet: apaga o banco (./reset-testnet-db.sh). Recusa comecar com saldo `locked` na
-# exchange: uma ordem que descansa no livro de antes da limpeza vira trade so na exchange.
+# exchange: uma ordem que descansa no livro de antes da limpeza vira trade so na exchange. Recusa tambem
+# USDT livre abaixo do CAPITAL: o portfolio diria ter mais que a conta, e a conferencia de saldo poe o
+# portfolio em HALT assim que o capital e usado (rodada 14).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -20,6 +23,7 @@ case $DUR in
   *)  MINUTES=$(( DUR * 60 )) ;;
 esac
 SYMBOLS=${SYMBOLS:-BTCUSDT}
+CAPITAL=${CAPITAL:-1000}
 PER=$(wc -w <<< "$SYMBOLS")
 ASSETS="$(for s in $SYMBOLS; do printf '%s ' "${s%USDT}"; done)USDT"
 ROUND_DIR=${ROUND_DIR:-$HOME/round}
@@ -34,6 +38,8 @@ for a in $ASSETS; do
   locked=$(curl -sf -H "X-Admin-Key: $K" "$B/exchanges/BINANCE/balances?asset=$a" | python3 -c "import json,sys;print(json.load(sys.stdin)['balances'][0]['locked'])")
   python3 -c "import sys;sys.exit(0 if float('$locked')==0 else 1)" || { echo "locked $a=$locked: cancelar as ordens antes" >&2; exit 1; }
 done
+free=$(curl -sf -H "X-Admin-Key: $K" "$B/exchanges/BINANCE/balances?asset=USDT" | python3 -c "import json,sys;print(json.load(sys.stdin)['balances'][0]['free'])")
+python3 -c "import sys;sys.exit(0 if float('$free')>=float('$CAPITAL') else 1)" || { echo "USDT livre $free abaixo do CAPITAL $CAPITAL: use CAPITAL menor" >&2; exit 1; }
 
 docker compose stop ctrade-app
 ./reset-testnet-db.sh --force
@@ -42,7 +48,7 @@ for _ in $(seq 60); do curl -sf -H "X-Admin-Key: $K" $B/admin/operational-state 
 
 START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 END=$(date -u -d "$START + $MINUTES minutes" +%Y-%m-%dT%H:%M:%SZ)
-PID=$(api inicio POST /portfolios "{\"name\":\"soak-t53-r$N\",\"initialCapitalAmount\":1000,\"currency\":\"USDT\"}" | python3 -c "import json,sys;print(json.load(sys.stdin)['portfolioId'])")
+PID=$(api inicio POST /portfolios "{\"name\":\"soak-t53-r$N\",\"initialCapitalAmount\":$CAPITAL,\"currency\":\"USDT\"}" | python3 -c "import json,sys;print(json.load(sys.stdin)['portfolioId'])")
 RUNNERS=""
 for n in 1 2 3 4 5; do
   ref=c7a1b2d3-000$n-4000-8000-00000000000$n
