@@ -963,6 +963,7 @@ segue coberto pelo `SafeModeE2ETest`.
 | 11-14 19:13Z | SELL LIMIT de 0.044 BNB do `SoakBook` de BNBUSDT executou 0.042 e foi cancelada pela estratégia | Resto de 0.002 BNB (~1,18 USDT): runner parado às 19:14Z. Quarto caso da F30; 16 de 20 runners |
 | 11-14 22:57Z | SELL LIMIT de 0.074 BNB do `SoakTrend` de BNBUSDT executou 0.072 e terminou `CANCELED` | Resto de 0.002 BNB (~1,15 USDT): runner parado às 22:57Z. Quinto caso da F30; 15 de 20 runners |
 | 11-15 02:52Z | `EXECUTION_CONFIRMED` da SELL `d3f9d7de` (`SoakBook` ETHUSDT, lote inteiro, 25.574 USDT) falhou com `Insufficient reserved balance` e foi para a DLQ (`e5192c82`, `RETRY_EXHAUSTED`); `DLQ_UNRESOLVED` | F31: `reserved` estava 42.19605650 abaixo do reconstruído pelo ledger, exatamente o `total` da BUY `a8dc5e73`, reservada às 02:36:05.209, 1 ms antes de uma confirmação concorrente gravar o saldo lido antes. DLQ mantida sem reprocessar para a análise |
+| 11-15 08:01Z | SELL LIMIT de 0.00066 BTC do `SoakBreakout` de BTCUSDT executou 0.00059 e terminou `CANCELED` | Resto de 0.00007 BTC (~4,48 USDT, logo abaixo do `minNotional` de 5): runner parado às 08:02Z. Sexto caso da F30; 14 de 20 runners. Sem DLQ nova |
 
 - **F30 — Bug (médio): resto de lote abaixo do `minNotional` não é baixado.** O `SellableQuantityPolicy` só trata como
   invendável o resto que normaliza para zero no `stepSize`. Um resto acima do passo e abaixo do `minNotional` ao preço
