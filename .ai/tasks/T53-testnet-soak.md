@@ -949,9 +949,30 @@ correspondente; o estado voltou a `OK` às 13:20Z.
 ticks não ficou parada na testnet (o livro enche a SELL no último preço em menos de 3 ticks); o caminho é o mesmo e
 segue coberto pelo `SafeModeE2ETest`.
 
-### Rodada 13 (72h) — em andamento (2026-11-12 18:05:59Z → 2026-11-15 18:05:59Z, VPS)
+### Rodada 13 (72h) — detalhes (2026-11-12 18:05:59Z → 2026-11-15 18:05:59Z, VPS)
 
-`develop` com o PR #189, banco limpo, 5 apps × 4 símbolos = 20 runners, sem falha provocada.
+`develop` com o PR #189, banco limpo, 5 apps × 4 símbolos = 20 runners, sem falha provocada. Portfolio `25a0362b`
+(1000 USDT). Relatório e logs da rodada em `~/round-13` na VPS.
+
+**Resultado: reprovada.** Dois bugs de dinheiro (F30 e F31), os dois com causa confirmada e corrigidos em `develop`
+(#190 e #191) sem implantação durante a rodada. A validação das correções fica para a rodada curta seguinte.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | 13910 fills (BTC 4668, ETH 3078, BNB 1882, SOL 4282), todos iguais à exchange; `EXCHANGE_TRADE_DIVERGENCE` `OK` em 72h | OK |
+| 2 | DLQ | 1: `EXECUTION_CONFIRMED` da SELL `d3f9d7de` (F31) | Falha (F31) |
+| 3 | Capital | `reserved` 168.8658222 contra 185.4878627 de custo dos 11 lotes abertos, sem BUY em voo: faltam 16.6220405 = 42.19605650 da reserva perdida (F31) − 25.57401600 da confirmação que ficou na DLQ. `CAPITAL_RESERVED_WITHOUT_ORDER` não pega falta, só sobra | Falha (F31) |
+| 4 | Transação presa | 0 em voo no fechamento; a SELL `405d4599` presa por timeouts da testnet virou `HALT` em 3 ciclos, como desenhado | OK |
+| 5 | Safe Mode / halt | 1 `HALT` automático (`WATCHDOG_STUCK`, 11-13 02:43Z) com causa explicada; 9h40 sem compras até a retomada manual. 6 runners parados pelo guarda de rejeições (F30) | OK (explicado); F30 |
+| 6 | `ERROR` | 51: 41 `Order cancellation failed: timeout` entre 02:41 e 02:43Z de 11-13 (testnet), 1 `HALT` acima, 6 do guarda (F30), 1 da DLQ (F31), 2 de versão desatualizada no `EXPIRED` com execução (F32) | Explicado; F32 |
+| 7 | Estabilidade | heap mínimo 47.2 → 44.2 MB, threads 49 → 49, avaliação média 16.7 → 15.9 ms, máximo 471.8 → 445.8 ms | OK |
+| 8 | Saldo no restart | Restart na implantação de F30 e F31, antes da rodada curta | Pendente |
+
+- **Fluxo:** 13910 fills nos 16 runners das 4 apps de mercado. O `SoakChaos` respondeu
+  13162 falhas provocadas (erro 500, JSON quebrado, decisão incoerente, desconexão, timeout), todas viraram `HOLD`
+  sem `ERROR`. Resultado realizado de -167.15 USDT: giro das apps de soak, sem relação com os bugs.
+- **2 `WARN` sem linha no Loki** (11-12 18:06–20:30 e 11-13 20:32–11-15 18:05): o log do container já tinha rodado
+  e não dá para conferir. Sem efeito nos critérios.
 
 | Hora (UTC) | Evento | Leitura |
 |---|---|---|
@@ -981,8 +1002,16 @@ segue coberto pelo `SafeModeE2ETest`.
   Correção em `fix/f31-reserve-bumps-balance-version`: `reserveAtomic` também incrementa `version`, então a gravação
   baseada em leitura anterior falha com `OptimisticLockingFailureException` e o `CapitalEventListener` repete com o
   saldo atual.
+- **F32 — Bug (baixo): `EXPIRED` com execução embutida falha com versão desatualizada.** Às 19:42:28Z de 11-12 a SELL
+  MARKET `52334095` (ETHUSDT) recebeu `PARTIALLY_FILLED` e logo `EXPIRED` com mais quantidade executada. O `EXPIRED`
+  aplicou o fill, destravou o lote e falhou ao gravar a `Transaction` (`OptimisticLockingFailureException` em
+  `RunnerTransactionEntity`, na mesma thread). A resposta da WS API trouxe o mesmo `EXPIRED` em seguida e a ordem
+  fechou certa (`CANCELED`, 0.0134 executado, fills iguais à exchange). Sem a entrega repetida, a ordem ficaria para o
+  watchdog. Causa provável: o término grava um objeto lido antes do fill. A investigar.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
-  (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Avaliar no fechamento da rodada.
+  (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Decisão do mantenedor
+  (2026-11-15): o `HALT` causado por falha da exchange volta sozinho depois de N minutos de exchange saudável; os
+  demais motivos continuam só com retomada manual. Vira tarefa própria.
 
 ## Fontes
 
