@@ -3,7 +3,7 @@
 **Complexidade:** Alta
 **Responsável:** Claude
 **Dependências:** T41 (estratégia remota), T56 (demanda de market data), T69 (contrato 2.0, `requirements`)
-**Status:** Spec para revisão do mantenedor (2026-11-15). Não implementar antes da aprovação.
+**Status:** Spec aprovada (decisões 1 a 6 em 2026-11-15); implementação a combinar.
 
 ---
 
@@ -64,9 +64,10 @@ A saída já funciona em qualquer prazo, porque `openLots[]` traz `entryPrice`, 
     na moeda base).
 - **Sem lacunas:** a série é contínua, um candle por intervalo. Se o ctrade não tiver a série completa e contínua, não
   chama a app (`WAITING_HISTORY`, como os ticks).
-- **Estratégia sem candles:** o campo `input.candles` não é enviado, e nada muda para as apps 2.0.
-- **Versão:** quem declara `candles` declara `contractVersion` 2.1 ou maior. O ctrade 2.1 recusa na conferência
-  `candles` com `contractVersion` 2.0.
+- **Estratégia sem candles:** recebe `input.candles` vazio, como `priceHistory` vazio para quem não declara ticks.
+  O campo é sempre enviado (obrigatório no `MarketInput`).
+- **Versão:** 2.1.0, mesma rota `/v2`, sem regra de versão menor na conferência. Não há estratégia de produção
+  consumindo o contrato; as apps do `ctrade-strategies` sincronizam o contrato junto com a entrega.
 - As regras atuais de requisito continuam: gravado no catálogo na primeira conferência, conferido a cada
   verificação, e mudar requisito exige novo `strategyId`.
 
@@ -129,7 +130,7 @@ intervalo, o que dá 1 por minuto na série de `1m`. `StreamType.KLINE` continua
 - `InMemoryCandleRepository` implementa o `CandleHistoryPort`: série por chave, limitada ao maior `count` da
   demanda.
 - Wiring em `MarketDataFeedConfig` e na config que monta o catálogo remoto; nada de regra no Spring.
-- `adapter-strategy-remote`: DTO de fio de `input.candles`, que não é enviado quando não declarado, e leitura de
+- `adapter-strategy-remote`: DTO de fio de `input.candles`, sempre enviado (vazio quando não declarado), e leitura de
   `requirements.candles`.
 
 ### 6. Documentação
@@ -144,7 +145,7 @@ intervalo, o que dá 1 por minuto na série de `1m`. `StreamType.KLINE` continua
 | # | Decisão | Recomendação | Motivo | Depende do mantenedor? |
 |---|---|---|---|---|
 | 1 | Candle em formação | **Só fechados** | Decisão determinística e reproduzível; o preço ao vivo já vem em `currentPrice` e nos ticks. Com o candle em formação, a mesma série muda a cada tick e a app teria de saber disso | Sim, confirmar |
-| 2 | Versão do contrato | **2.1, aditiva, sem `/v3`** | O `additionalProperties: false` de `Requirements` só restringe o que a app manda. Uma app 2.0 continua igual, porque o ctrade não envia `candles` a quem não declarou. Uma app 2.1 contra um ctrade 2.0 falha na conferência e não é usada, o que é seguro. Nada já consumido quebra, e a regra "incompatível muda o caminho" não se aplica | **Sim**: muda contrato público |
+| 2 | Versão do contrato | ~~2.1 aditiva, escondendo `candles` de quem não declara~~ | **Decisão registrada (2026-11-15):** não há estratégia de produção, então o contrato muda sem garantia de compatibilidade. `input.candles` é sempre enviado (vazio quando não declarado), versão 2.1.0 na mesma rota `/v2`, sem regra de versão menor | Decidido |
 | 3 | Persistir ou recarregar | **Só memória, recarga pela exchange** | A exchange é a fonte de verdade de dado público. A série máxima é 3 × 1000 candles por símbolo, e a carga é uma chamada por série. Persistir traria schema, migração e uma segunda fonte de verdade para sincronizar. Se a exchange não responder no boot, a estratégia espera (`WAITING_HISTORY`), que é o lado seguro | Não |
 | 4 | Buracos | **Nunca entregar série com buraco** | O ctrade só chama a app com a série contínua. O buraco por queda é coberto pela própria consulta seguinte, que pede desde o último candle. Na Binance, minuto sem negócio vem como candle de volume 0 (a confirmar), então a série da exchange não tem buraco. Símbolo novo com menos histórico que o declarado nunca completa: o estado operacional precisa mostrar runner esperando histórico há muito tempo | Não |
 | 5 | Proteção do lote em prazo longo | **Configurável hoje; falta orientação e um alerta** | `maxLossPercentPerLot` aceita até 0,99 e `maxHoldingDuration` aceita semanas (ISO-8601, nulo desliga), os dois por runner. Um position trade com stop de 20% funciona com `PATCH` de 0,20. Faltam três coisas: o padrão de 5% vale para todo runner novo, e quem cria um runner de prazo longo precisa lembrar de mudar; a venda da proteção é sempre a mercado; o drawdown do portfólio (10% em 24h) pode dar `HALT` de compras com posições longas oscilando, sem vender nada | **Sim**: se o padrão continua 5% e se o drawdown precisa de regra para prazo longo |
@@ -184,9 +185,9 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 ## Critérios de aceite
 
 1. `/meta` com `candles` válidos é aceito e gravado; intervalo fora da lista, `count` fora de 1..1000, mais de 3
-   séries, intervalo repetido ou `contractVersion` 2.0 com `candles` falham a conferência.
+   séries ou intervalo repetido falham a conferência.
 2. Mudar `candles` sem novo `strategyId` falha a conferência.
-3. App sem `candles` recebe o mesmo request de hoje, sem `input.candles`.
+3. App sem `candles` recebe `input.candles` vazio; o resto do request não muda.
 4. App com `candles` só é chamada com todas as séries completas e contínuas; antes disso, `WAITING_HISTORY`.
 5. Série entregue: do mais antigo para o mais novo, `count` exato, só fechados, último fechado antes do tick.
 6. Queda e volta: a série é recomposta pela consulta seguinte, sem buraco entregue à app.
@@ -203,11 +204,10 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 
 ## Ordem de entrega
 
-1. Decisões 1, 2, 5 e 6 confirmadas pelo mantenedor.
-2. Contrato (openapi e CONTRACT) e `StrategyRequirements` no `core`, migrando os chamadores de `priceHistoryTicks`.
-3. `CandleHistoryPort`, `ExchangeCandleQueryPort`, `EnsureCandleSeriesUseCase` e o portão de histórico.
-4. Binance e mock; repositório em memória; wiring.
-5. Cliente remoto, migration, docs, PR em rascunho, CI e espera por comentários; merge pelo mantenedor; teste na
+1. Contrato (openapi e CONTRACT) e `StrategyRequirements` no `core`, migrando os chamadores de `priceHistoryTicks`.
+2. `CandleHistoryPort`, `ExchangeCandleQueryPort`, `EnsureCandleSeriesUseCase` e o portão de histórico.
+3. Binance e mock; repositório em memória; wiring.
+4. Cliente remoto, migration, docs, PR em rascunho, CI e espera por comentários; merge pelo mantenedor; teste na
    VPS.
 
 ## O que foi verificado e o que é suposição
@@ -247,6 +247,9 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 -  version: 2.0.0
 +  version: 2.1.0
 @@ MarketInput
+-      required: [symbol, currentPrice, timestamp, priceHistory]
++      required: [symbol, currentPrice, timestamp, priceHistory, candles]
+@@
          priceHistory:
            type: array
            maxItems: 1000
@@ -260,7 +263,7 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 +          items: { $ref: '#/components/schemas/CandleSeries' }
 +          description: >
 +            (2.1) Uma serie por intervalo declarado em requirements.candles, na mesma
-+            ordem. Ausente quando a estrategia nao declara candles.
++            ordem. Vazio quando a estrategia nao declara candles.
          additionalData:
 @@ PricePoint
 +    CandleInterval:
@@ -313,9 +316,7 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
          contractVersion:
            type: string
 -          description: Versao do contrato implementada, ex. "2.0.0".
-+          description: >
-+            Versao do contrato implementada, ex. "2.1.0". Declarar requirements.candles
-+            exige 2.1 ou maior.
++          description: Versao do contrato implementada, ex. "2.1.0".
 @@ Requirements
        description: >
 -        O que a estrategia precisa em cada interacao. Sem os ticks declarados o
@@ -346,8 +347,8 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 ### `docs/strategy-service/CONTRACT.md`
 
 ```diff
-+> **Versão 2.1 (T72):** `requirements.candles` e `input.candles`, só candles fechados. Aditiva: app 2.0
-+> continua igual, rotas seguem em `/v2`.
++> **Versão 2.1 (T72):** `requirements.candles` e `input.candles` (sempre presente, vazio sem declaração), só
++> candles fechados. Rotas seguem em `/v2`.
 +>
  > **Versão 2.0 (T69, 2026-11-05):** apps stateless e caminho unilateral; `requirements` em `/meta`,
 @@ ### Request (`EvaluateRequest`)
@@ -356,7 +357,7 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 +- `input.candles` (2.1) — uma série por intervalo declarado em `requirements.candles`, na mesma ordem. Cada
 +  série tem exatamente `count` candles **fechados** (`openTime`, `open`, `high`, `low`, `close`, `volume`),
 +  do mais antigo para o mais novo, contínuos, terminando no último já fechado antes do tick. O candle em
-+  formação não entra: o preço ao vivo é `currentPrice`. Ausente quando a estratégia não declara candles.
++  formação não entra: o preço ao vivo é `currentPrice`. Vazio quando a estratégia não declara candles.
 @@ ## Requisitos
  ```json
 -{ "requirements": { "priceHistory": { "ticks": 20 } } }
@@ -368,7 +369,7 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 @@
  - `priceHistory.ticks` vai de 0 a 1000.
 +- `candles` (2.1): até 3 séries, intervalos `1m`, `5m`, `15m`, `1h`, `4h`, `1d`, `1w`, sem repetir intervalo,
-+  `count` de 1 a 1000. Declarar `candles` exige `contractVersion` 2.1 ou maior.
++  `count` de 1 a 1000.
 +- Os candles vêm da exchange de market data do runner. Se ela não oferece o intervalo, o runner fica sem
 +  decisão, e o estado operacional mostra o motivo.
 @@
@@ -379,9 +380,6 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 +  responder `400` a um request incompleto.
 @@ ## Versionamento e identidade
    `version` da estratégia. O caminho é versionado (`/v2`); mudança incompatível de contrato ⇒ `/v2`.
-+- Mudança aditiva sobe a versão menor (2.0 → 2.1) e mantém o caminho. O ctrade aceita apps de qualquer
-+  versão menor do mesmo principal; um recurso novo só pode ser declarado por app que declara a versão
-+  menor que o introduziu.
 ```
 
 ## Fontes
