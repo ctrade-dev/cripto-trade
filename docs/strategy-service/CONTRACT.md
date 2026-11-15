@@ -143,6 +143,25 @@ genérico: são dados que o ctrade **envia** já validados, não saída remota n
   ctrade descarta o sinal (`REJECTED_PRICE_DEVIATION`, T50).
 - `quantity` é **absoluta** (ex.: `"0.05"` BTC), não percentual.
 
+### Urgência da execução: expressa pelo `limitPrice`
+
+O contrato não tem tipo de ordem. Toda decisão da app vira uma ordem `LIMIT` que fica no livro até executar ou ser
+cancelada (`GTC`). `MARKET` fica para as saídas que o próprio ctrade decide (fechar posição, proteção do lote,
+`PANIC_SELL`). A app escolhe entre esperar e executar já pelo preço que informa:
+
+| Intenção | `limitPrice` | Comportamento |
+|---|---|---|
+| Passiva: quero este preço, posso esperar | Abaixo do mercado no `SHOULD_BUY`, acima no `SHOULD_SELL` | A ordem fica no livro até o mercado chegar ao preço. |
+| Imediata, com teto: quero executar agora, até este preço | Um pouco além do mercado (ex.: tick +0,5% no `SHOULD_BUY`, -0,5% no `SHOULD_SELL`) | Executa na hora contra o livro, ao preço das ofertas e nunca pior que o limite. Funciona como uma `MARKET` com teto de slippage. |
+| Sem preferência | `null` | Usa o preço do tick: executa se o livro estiver no preço, senão fica esperando. |
+
+- O teto é a proteção: livro raso não executa a qualquer preço. O ctrade ainda descarta limite a mais de 10% do
+  tick (ver acima).
+- A reserva de capital do `SHOULD_BUY` usa `limitPrice × quantity`. O que executar mais barato volta ao saldo
+  disponível quando a ordem termina.
+- Parte não executada dentro do limite continua no livro. Se a app não quiser esperar, ela mesma a cancela com
+  `SHOULD_CANCEL` (a ordem aparece em `pendingOrders`), por exemplo depois de um tempo máximo.
+
 ---
 
 ## Requisitos
