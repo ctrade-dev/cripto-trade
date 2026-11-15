@@ -978,7 +978,9 @@ segue coberto pelo `SafeModeE2ETest`.
   fica baixo (DLQ) e capital disponível fantasma, que permite reservar além do capital. Reconstrução da rodada 13:
   reservas, liberações e confirmações batem uma a uma com o banco e o log; a única diferença é a reserva de
   `a8dc5e73` (42.19605650) perdida às 02:36:05.209 contra a confirmação do match `359507f1` às 02:36:05.210.
-  Correção proposta: `reserveAtomic` também incrementar `version`, para a gravação concorrente falhar e repetir.
+  Correção em `fix/f31-reserve-bumps-balance-version`: `reserveAtomic` também incrementa `version`, então a gravação
+  baseada em leitura anterior falha com `OptimisticLockingFailureException` e o `CapitalEventListener` repete com o
+  saldo atual.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
   (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Avaliar no fechamento da rodada.
 

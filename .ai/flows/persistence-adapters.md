@@ -84,6 +84,10 @@ Ponto critico:
   saldo de `available_balance` para `reserved_balance` apenas quando existe saldo
   suficiente.
 - Saldo insuficiente nao e excecao: o contrato retorna `false`.
+- O `UPDATE` incrementa `version`: confirmacao e liberacao leem o saldo e gravam com
+  `@Version`, entao uma gravacao baseada em leitura anterior a reserva falha com
+  `OptimisticLockingFailureException` e e repetida pelo `CapitalEventListener`, em vez de
+  sobrescrever a reserva (F31).
 - Concorrencia financeira deve continuar passando por esse ponto de
   serializacao.
 
