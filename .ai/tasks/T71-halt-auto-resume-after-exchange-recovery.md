@@ -131,7 +131,9 @@ Isso muda uma regra escrita: hoje "gatilho automático só aciona `HALT`; a reto
 5. Auditoria: `safe_mode_changes` mostra o `HALT` e a retomada, com origem, gatilho e motivo.
 6. VPS, cerca de 30 min: desconectar o ctrade da rede por cerca de 4 min com uma ordem em voo, ver o `HALT`
    `EXCHANGE_UNAVAILABLE`, reconectar e ver a volta a `NORMAL` depois de N minutos, com compras retomadas e 0
-   `ERROR` fora da queda provocada.
+   `ERROR` fora da queda provocada. **OK na curta 116:** `HALT` `EXCHANGE_UNAVAILABLE` às 17:34:45Z, rede liberada
+   às 17:36:05Z, `NORMAL` automático às 17:42:47Z; nenhuma BUY no `HALT`, 11 BUY depois; 37 `ERROR`, todos de
+   17:32Z a 17:35Z.
 7. Docs do item 4 atualizados.
 
 ## Validação
