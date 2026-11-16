@@ -598,7 +598,7 @@ O Safe Mode opera em **três níveis escaláveis**, onde cada nível inclui toda
 | **2 — Cancel All** | Cancelamento em Massa | Além do Halt, envia cancelamento para todas as ordens LIMIT em voo (`PENDING`/`SUBMITTED`/`PARTIAL`) dos Runners operacionais. A estratégia deixa de ser consultada. | Requer confirmação explícita (`confirm=true` na API). |
 | **3 — Panic Sell** | Liquidação Total | Além do Cancel All, gera ordens de fechamento a mercado (Market Orders) para todas as `Positions` abertas. | Requer confirmação explícita com motivo registrado em auditoria. |
 
-* **Acionamento Automático:** Os gatilhos da seção 11.1.A acionam automaticamente o **Nível 1 (Halt)**. A escalação para Níveis 2 e 3 é exclusivamente manual.
+* **Acionamento Automático:** Os gatilhos da seção 11.1.A acionam automaticamente o **Nível 1 (Halt)**. A escalação para Níveis 2 e 3 é exclusivamente manual. A retomada é manual, exceto o HALT por exchange fora do ar (11.1.C, T71).
 * **Implementação (T45):** `GET/PUT /api/admin/portfolios/{id}/safe-mode`; a execução dos níveis 2 e 3 é reaplicada a cada tick do runner (convergente e retomável após restart). Runners parados pelo kill switch não são conduzidos. A liquidação do nível 3 usa MARKET sem proteção de preço nesta versão (proteção LIMIT: T48).
 * **Execução Assíncrona com Feedback:** O comando é disparado de forma assíncrona. O operador acompanha o progresso via status, que mostra o que ainda falta (ordens LIMIT a cancelar, vendas de liquidação em voo, posições abertas, runners fora de operação). O sistema não bloqueia a API administrativa aguardando conclusão.
 * **Persistência de Estado:** O nível ativo do Safe Mode é persistido no banco de dados para sobreviver a restarts.
@@ -610,6 +610,7 @@ O Safe Mode opera em **três níveis escaláveis**, onde cada nível inclui toda
    * O sistema não retoma automaticamente após um Circuit Breaker de Drawdown ou Divergência.
    * Exige uma **limpeza de estado manual** (auditoria na DLQ) e um comando de "Reset de Risco" para voltar ao estado operacional.
    * Para bloqueios por latência, o sistema pode tentar uma retomada gradual (Warm-up) após $X$ minutos de estabilidade.
+   * **Implementação (T71):** o HALT automático por exchange fora do ar (`EXCHANGE_UNAVAILABLE`: o watchdog ficou 3 ciclos sem resposta da exchange) volta a NORMAL sozinho depois de 5 minutos seguidos de exchange saudável (circuito REST fechado, envio liberado, streams conectados, watchdog sem falha), no máximo 3 vezes por portfolio em 24h. É a única retomada automática; qualquer mudança do operador depois do HALT a desliga.
    * A retomada segue o caminho inverso dos níveis: o operador deve reduzir o nível (3→2→1→Normal) explicitamente, garantindo validação em cada etapa.
 
 #### D. Implicações Arquiteturais

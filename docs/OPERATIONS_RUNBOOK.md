@@ -120,13 +120,16 @@ caiu.
   `GET /api/admin/portfolios/<id>/safe-mode` mostra o progresso (`restingOrders`, `liquidatingOrders`,
   `openPositions`, `idleRunners`).
   - `origin=AUTOMATIC`: um gatilho disparou (motivo em `reason`: `MAX_DRAWDOWN_EXCEEDED`,
-    `DLQ_THRESHOLD`, `BALANCE_DIVERGENCE`, `WATCHDOG_STUCK`). Tratar a causa primeiro (seção
-    [Gatilhos](#ref-gatilhos)).
+    `DLQ_THRESHOLD`, `BALANCE_DIVERGENCE`, `WATCHDOG_STUCK`, `EXCHANGE_UNAVAILABLE`). Tratar a causa primeiro
+    (seção [Gatilhos](#ref-gatilhos)). `EXCHANGE_UNAVAILABLE` volta sozinho com a exchange saudável
+    ([Retomada automática](#ref-auto-resume)): não descer à mão.
   - `origin=MANUAL`: conferir em `GET /api/admin/operator-actions?pathContains=<portfolioId>` quem
     subiu e por quê.
 - **Ação:** descer **um nível por vez** depois que a causa estiver resolvida:
   `PUT /api/admin/portfolios/<id>/safe-mode` `{"level":"<um abaixo>","confirm":false}` + `X-Reason`.
-  Descer de HALT **automático** exige confirmação do mantenedor ([Limites](#limites-de-autonomia)).
+  Descer de HALT **automático** exige confirmação do mantenedor ([Limites](#limites-de-autonomia)), exceto o
+  `EXCHANGE_UNAVAILABLE`, que o próprio sistema retoma. Mexer no Safe Mode de um HALT `EXCHANGE_UNAVAILABLE`
+  desliga a retomada automática dele (a origem vira `MANUAL`).
 - **Esperado:** `202` com o novo nível; `409 SAFE_MODE_STEP_TOO_LARGE` se pular nível.
 - **Confirmar:** nível `NORMAL` e a verificação em `OK`.
 
@@ -160,8 +163,10 @@ O watchdog consulta a exchange e resolve sozinho na maioria dos casos. `CRITICAL
 - **Diagnóstico:** `EXCHANGE_REST_CIRCUIT_OPEN` e `STREAM_DISCONNECTED` estão `OK`? Se não, tratá-los
   primeiro (o watchdog depende deles). `GET /api/runners/<runnerId>/transactions` para o histórico.
 - **Ação:** com a exchange acessível, aguardar 1 ciclo do watchdog (60s). Persistindo `CRITICAL`, o
-  portfolio vai para HALT automático (`WATCHDOG_STUCK`). **Escalar** com o `clientOrderId`.
-- **Motivo do HALT (T66):** o motivo do `WATCHDOG_STUCK` termina em `lastFailure=<FailureReason>: <mensagem>`,
+  portfolio vai para HALT automático: `EXCHANGE_UNAVAILABLE` se os 3 ciclos falharam só por exchange fora do
+  ar (volta sozinho, [Retomada automática](#ref-auto-resume)), senão `WATCHDOG_STUCK`. No `WATCHDOG_STUCK`,
+  **escalar** com o `clientOrderId`.
+- **Motivo do HALT (T66):** o motivo do `WATCHDOG_STUCK` e do `EXCHANGE_UNAVAILABLE` termina em `lastFailure=<FailureReason>: <mensagem>`,
   a última falha da consulta. `EXCHANGE_QUERY_RETRYABLE_FAILURE` com `circuit open` ou `HTTP 5xx` = exchange
   instável; `HTTP 429`/`418` = limite de peso estourado pelo próprio ctrade (o IP fica banido por um tempo).
   `INVALID_EXCHANGE_RESPONSE` = a exchange respondeu, mas a conciliação recusou a resposta: é bug do
@@ -439,10 +444,29 @@ Gauges `circuit_breaker.drawdown.current`, `.peak_24h`, `circuit_breaker.equity.
 |---|---|---|
 | `DLQ_THRESHOLD` | ≥ 3 entradas não resolvidas | [dlq-unresolved](#dlq-unresolved) |
 | `BALANCE_DIVERGENCE` | Soma dos portfolios de uma exchange acima da conta (`DEFICIT`), no boot ou em 2 leituras seguidas da avaliação periódica (5 min); HALT de todos os portfolios da exchange | [exchange-balance-divergence](#exchange-balance-divergence); escalar |
-| `WATCHDOG_STUCK` | Mesma transação sem resolver em 3 ciclos | [transaction-stuck](#transaction-stuck) |
+| `WATCHDOG_STUCK` | Mesma transação sem resolver em 3 ciclos, com alguma falha que não é exchange fora do ar | [transaction-stuck](#transaction-stuck) |
+| `EXCHANGE_UNAVAILABLE` | Mesma transação sem resolver em 3 ciclos, todos por exchange fora do ar (timeout, 5xx, limite de peso) | Nada: volta sozinho ([Retomada automática](#ref-auto-resume)) |
 
-Runner: 5 rejeições seguidas param só ele (`[RUNNER_AUTO_HALTED]`). Retomada sempre manual.
-`safe-mode.auto.*` (cada gatilho com `enabled`).
+Runner: 5 rejeições seguidas param só ele (`[RUNNER_AUTO_HALTED]`). Retomada manual, exceto o HALT
+`EXCHANGE_UNAVAILABLE` do portfolio. `safe-mode.auto.*` (cada gatilho com `enabled`; `EXCHANGE_UNAVAILABLE`
+liga com `watchdog.enabled`).
+
+<a id="ref-auto-resume"></a>
+### Retomada automática do HALT por exchange fora do ar (T71)
+
+O HALT `EXCHANGE_UNAVAILABLE` volta a NORMAL sozinho quando, por 5 minutos seguidos: o circuito REST está
+fechado, o envio de ordens liberado, os streams que os runners precisam conectados e o watchdog sem falha nos
+runners do portfolio. No máximo 3 retomadas automáticas por portfolio em 24h.
+
+- **Log e alerta:** `autoResume: HALT -> NORMAL ...` (`WARN`), Discord `SAFE_MODE_AUTO_RESUMED`, contador
+  `circuit_breaker.auto_resumes.total{trigger}`. Auditoria em `GET /api/admin/events` (`SAFE_MODE_CHANGED`,
+  origem `AUTOMATIC`, motivo `AUTO_RESUME EXCHANGE_UNAVAILABLE: exchange healthy for 5m`).
+- **Teto atingido:** `autoResume: HALT kept ... auto-resume limit reached` (`ERROR`) e Discord. A exchange caiu e
+  voltou 3 vezes em 24h: conferir a instabilidade (`EXCHANGE_REST_CIRCUIT_OPEN`, `STREAM_DISCONNECTED`) e descer
+  à mão com a confirmação do mantenedor.
+- **Não volta depois de 5 min:** a exchange segue não saudável para algum runner do portfolio. Ver
+  `autoResume: exchange unhealthy again ... - <motivo>` (`INFO`) e o estado operacional.
+- **Desligar:** `safe-mode.auto.resume.enabled=false` (reinício). Ajustes: `healthy-minutes`, `max-per24h`.
 
 ### Ciclo de vida do runner (T49)
 

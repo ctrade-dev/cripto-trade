@@ -3850,6 +3850,7 @@ RunnerCircuitBreaker (Portfolio, event-driven):
 | Métrica                                  | Tipo    | Descrição                                                      |
 |------------------------------------------|---------|----------------------------------------------------------------|
 | `circuit_breaker.activations.total`      | Counter | Total de ativações (por nível e motivo)                        |
+| `circuit_breaker.auto_resumes.total`     | Counter | Retomadas automáticas do HALT, por portfolio e gatilho (T71)   |
 | `circuit_breaker.current_level`          | Gauge   | Nível atual do Safe Mode (0=Normal, 1=Halt, 2=Cancel, 3=Panic) |
 | `circuit_breaker.duration.active`        | Timer   | Tempo total em Safe Mode (por nível)                           |
 | `circuit_breaker.drawdown.current`       | Gauge   | Drawdown atual (%)                                             |
