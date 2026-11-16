@@ -17,6 +17,8 @@ import com.marmitt.core.application.usecase.portfolio.ManageDeadLetterUseCase;
 import com.marmitt.core.application.usecase.portfolio.ManageSafeModeUseCase;
 import com.marmitt.core.application.usecase.portfolio.QueryPortfolioUseCase;
 import com.marmitt.core.application.usecase.portfolio.ReportOperationalStateUseCase;
+import com.marmitt.core.application.usecase.portfolio.ResumeSafeModeAfterExchangeRecoveryUseCase;
+import com.marmitt.core.application.usecase.runner.WatchdogFailures;
 import com.marmitt.core.ports.inbound.operations.InspectOperationalStatePort;
 import com.marmitt.core.ports.inbound.operations.QueryEventTimelinePort;
 import com.marmitt.core.ports.inbound.portfolio.CreatePortfolioPort;
@@ -29,6 +31,7 @@ import com.marmitt.core.ports.inbound.portfolio.ManageDeadLetterPort;
 import com.marmitt.core.ports.inbound.portfolio.ManageSafeModePort;
 import com.marmitt.core.ports.inbound.portfolio.QueryPortfolioPort;
 import com.marmitt.core.ports.inbound.portfolio.ReportOperationalStatePort;
+import com.marmitt.core.ports.inbound.portfolio.ResumeSafeModeAfterExchangeRecoveryPort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import com.marmitt.core.ports.outbound.metrics.CircuitBreakerMetricsPort;
 import com.marmitt.core.ports.outbound.metrics.OperationalMetricsPort;
@@ -137,6 +140,27 @@ public class PortfolioConfig {
     ) {
         return new EvaluateOperationalTriggersUseCase(portfolioRepository, deadLetterEntryRepository,
                 automaticSafeModeTrigger, autoSafeModeProperties.getDlq().getThreshold());
+    }
+
+    /** Retomada automatica do HALT por exchange fora do ar (T71). */
+    @Bean
+    public ResumeSafeModeAfterExchangeRecoveryPort resumeSafeModeAfterExchangeRecovery(
+            PortfolioRepositoryPort portfolioRepository,
+            StrategyRunnerRepositoryPort strategyRunnerRepository,
+            ManageSafeModePort manageSafeMode,
+            InfrastructureSignalsPort infrastructureSignals,
+            ExchangeAdapterRepositoryPort exchangeAdapters,
+            WebSocketConnectionRepositoryPort webSocketConnections,
+            WatchdogFailures watchdogFailures,
+            CircuitBreakerMetricsPort circuitBreakerMetrics,
+            ErrorNotificationPort errorNotification,
+            AutoSafeModeProperties autoSafeModeProperties
+    ) {
+        AutoSafeModeProperties.Resume resume = autoSafeModeProperties.getResume();
+        return new ResumeSafeModeAfterExchangeRecoveryUseCase(portfolioRepository, strategyRunnerRepository,
+                manageSafeMode, infrastructureSignals, exchangeAdapters, webSocketConnections, watchdogFailures,
+                circuitBreakerMetrics, errorNotification, Clock.systemUTC(),
+                Duration.ofMinutes(resume.getHealthyMinutes()), resume.getMaxPer24h());
     }
 
     @Bean

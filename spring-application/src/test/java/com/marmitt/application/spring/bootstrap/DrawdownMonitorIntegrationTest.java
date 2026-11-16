@@ -57,7 +57,7 @@ class DrawdownMonitorIntegrationTest extends ScenarioStrategyE2ETestSupport {
         assertEquals("HALT", safeModeStatus(portfolioId));
 
         manageSafeMode.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.NORMAL, "perda analisada, retomando", false));
+                ChangeSafeModeRequest.manual(SafeModeStatus.NORMAL, "perda analisada, retomando", false));
         evaluateDrawdown.evaluate();
 
         assertEquals("NORMAL", safeModeStatus(portfolioId),

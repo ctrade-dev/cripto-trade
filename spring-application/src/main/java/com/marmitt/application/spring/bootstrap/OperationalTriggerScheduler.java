@@ -2,26 +2,31 @@ package com.marmitt.application.spring.bootstrap;
 
 import com.marmitt.core.ports.inbound.portfolio.EvaluateExchangeBalancePort;
 import com.marmitt.core.ports.inbound.portfolio.EvaluateOperationalTriggersPort;
+import com.marmitt.core.ports.inbound.portfolio.ResumeSafeModeAfterExchangeRecoveryPort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Dispara a avaliação periódica dos gatilhos operacionais de Safe Mode (T25) e da conferência de saldo por
- * exchange (T57, intervalo próprio: uma consulta de conta por exchange). Só agenda; a regra fica no core.
+ * Dispara a avaliação periódica dos gatilhos operacionais de Safe Mode (T25), da retomada automática do HALT por
+ * exchange fora do ar (T71, mesmo tick) e da conferência de saldo por exchange (T57, intervalo próprio: uma
+ * consulta de conta por exchange). Só agenda; a regra fica no core.
  */
 @Slf4j
 @Component
 public class OperationalTriggerScheduler {
 
     private final EvaluateOperationalTriggersPort evaluateOperationalTriggers;
+    private final ResumeSafeModeAfterExchangeRecoveryPort resumeAfterExchangeRecovery;
     private final EvaluateExchangeBalancePort evaluateExchangeBalance;
     private final AutoSafeModeProperties properties;
 
     public OperationalTriggerScheduler(EvaluateOperationalTriggersPort evaluateOperationalTriggers,
+                                       ResumeSafeModeAfterExchangeRecoveryPort resumeAfterExchangeRecovery,
                                        EvaluateExchangeBalancePort evaluateExchangeBalance,
                                        AutoSafeModeProperties properties) {
         this.evaluateOperationalTriggers = evaluateOperationalTriggers;
+        this.resumeAfterExchangeRecovery = resumeAfterExchangeRecovery;
         this.evaluateExchangeBalance = evaluateExchangeBalance;
         this.properties = properties;
     }
@@ -38,6 +43,14 @@ public class OperationalTriggerScheduler {
             evaluateOperationalTriggers.evaluate();
         } catch (RuntimeException e) {
             log.error("autoSafeMode: evaluation cycle failed - {}", e.getMessage(), e);
+        }
+        if (!properties.getResume().isEnabled()) {
+            return;
+        }
+        try {
+            resumeAfterExchangeRecovery.evaluate();
+        } catch (RuntimeException e) {
+            log.error("autoResume: evaluation cycle failed - {}", e.getMessage(), e);
         }
     }
 

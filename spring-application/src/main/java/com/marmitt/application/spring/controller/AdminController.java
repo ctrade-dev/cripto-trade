@@ -130,7 +130,7 @@ public class AdminController {
                                                             @RequestBody SafeModeChange body,
                                                             @RequestHeader(OperatorCommandInterceptor.REASON) String reason) {
         return ResponseEntity.accepted().body(manageSafeMode.change(id, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(body.level(), reason, body.confirm())));
+                ChangeSafeModeRequest.manual(body.level(), reason, body.confirm())));
     }
 
     /**

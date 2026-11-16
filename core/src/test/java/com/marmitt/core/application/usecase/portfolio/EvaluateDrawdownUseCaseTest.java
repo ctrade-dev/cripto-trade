@@ -203,7 +203,7 @@ class EvaluateDrawdownUseCaseTest {
 
     private void portfolioAt(SafeModeStatus status, Instant changedAt) {
         portfolio = new Portfolio(portfolioId, "p", true, Instant.parse("2026-01-01T00:00:00Z"), status,
-                CapitalPoolingMode.SHARED, changedAt == null ? null : SafeModeOrigin.MANUAL,
+                CapitalPoolingMode.SHARED, changedAt == null ? null : SafeModeOrigin.MANUAL, null,
                 changedAt == null ? null : "setup", changedAt, 0L);
         when(portfolioRepository.findAll()).thenReturn(List.of(portfolio));
         when(portfolioRepository.findById(portfolioId)).thenReturn(Optional.of(portfolio));

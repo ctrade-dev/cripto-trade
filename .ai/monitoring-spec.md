@@ -245,6 +245,7 @@
 
 ### ✅ Entregue pela T51 (estado operacional)
 - `circuit_breaker.current_level`, `circuit_breaker.duration.active.seconds`, `circuit_breaker.runner.suspended.count` por portfolio
+- `circuit_breaker.auto_resumes.total{portfolioId,trigger}`: retomadas automáticas do HALT por exchange fora do ar (T71)
 - `capital.utilization.global` (portfolio), `capital.utilization.runner` e `capital.reservation.oldest.age.seconds` (runner). Desde a T62, `capital.utilization.runner` = exposição (custo do lote ativo + BUY em voo) ÷ teto do runner; antes contava só as ordens em voo
 - `runner.lifecycle.transitions.total`, `runner.lifecycle.current_state`, `runner.lifecycle.terminating.duration`, `runner.lifecycle.termination.stuck`
 - Health `/actuator/health` com o componente `safeMode` (nível por portfolio)

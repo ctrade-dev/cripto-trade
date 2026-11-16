@@ -83,8 +83,9 @@ normal do CANCELED/FILLED, sem atalho. Runners fora de operacao (kill switch) na
 
 Todo HALT automatico do portfolio passa pelo `AutomaticSafeModeTrigger` (core): so age com o portfolio
 em NORMAL (sem repetir mudanca, metrica, log ou alerta), muda o nivel pelo `ManageSafeModePort` com
-origem `AUTOMATIC`, conta `circuit_breaker.activations.total{reason}` e notifica o Discord. Gatilhos
-(`SafeModeTrigger`), cada um desligavel em `safe-mode.auto.*`:
+origem `AUTOMATIC` e o gatilho (gravado em `portfolios.safe_mode_trigger` e `safe_mode_changes.trigger`, T71),
+conta `circuit_breaker.activations.total{reason}` e notifica o Discord. Gatilhos (`SafeModeTrigger`), cada um
+desligavel em `safe-mode.auto.*`:
 
 - `MAX_DRAWDOWN_EXCEEDED` — drawdown 24h (T43, chave propria).
 - `DLQ_THRESHOLD` — `EvaluateOperationalTriggersUseCase` (a cada 30s): >= 3 entradas nao resolvidas.
@@ -92,11 +93,33 @@ origem `AUTOMATIC`, conta `circuit_breaker.activations.total{reason}` e notifica
   `ExchangeBalanceReconciliation`, T57): no boot (`RunBootSequenceUseCase`) e na avaliacao periodica
   (`EvaluateExchangeBalanceUseCase`, 5 min, 2 leituras seguidas). HALT de todos os portfolios da exchange.
 - `WATCHDOG_STUCK` — mesma transacao `FAILED` em 3 ciclos seguidos do watchdog
-  (`RecoverStaleTransactionsUseCase`, contagem em memoria).
+  (`RecoverStaleTransactionsUseCase`, contagem em memoria), com alguma falha que nao e exchange fora do ar.
+- `EXCHANGE_UNAVAILABLE` (T71) — o mesmo, com os 3 ciclos falhando so por `EXCHANGE_QUERY_RETRYABLE_FAILURE`
+  (timeout, 5xx, limite de peso). Ligado junto com o `WATCHDOG_STUCK` (`safe-mode.auto.watchdog.enabled`).
+
+### Retomada automatica do HALT por exchange fora do ar (T71)
+
+Unica excecao a retomada manual. `ResumeSafeModeAfterExchangeRecoveryUseCase`, no mesmo tick de 30s do
+`OperationalTriggerScheduler`, para cada portfolio em HALT `AUTOMATIC` de gatilho `autoResumable()`
+(so `EXCHANGE_UNAVAILABLE`):
+
+1. Exchange saudavel agora: circuito REST fechado e envio de ordens liberado nas exchanges dos runners, streams
+   que eles precisam conectados (`StreamGaps`, a mesma regra do `STREAM_DISCONNECTED`) e nenhum runner do
+   portfolio com transacao sem resolver no ultimo ciclo do watchdog (`WatchdogFailures`).
+2. Saudavel por `healthy-minutes` (5) seguidos; tick nao saudavel zera. Contagem em memoria: restart recomeca.
+3. No maximo `max-per24h` (3) retomadas automaticas por portfolio em 24h, contadas em `safe_mode_changes`. No
+   teto, o HALT fica para o operador, com `ERROR` e Discord uma vez.
+
+Atendidas as tres, `ManageSafeModePort` muda para NORMAL com origem `AUTOMATIC`, o mesmo gatilho e motivo
+`AUTO_RESUME EXCHANGE_UNAVAILABLE: exchange healthy for 5m`; conta `circuit_breaker.auto_resumes.total{trigger}`
+e notifica (`SAFE_MODE_AUTO_RESUMED`). A regra de quem pode descer mora no `Portfolio.changeSafeMode`: `AUTOMATIC`
+so desce HALT -> NORMAL com o HALT atual automatico do mesmo gatilho retomavel. Qualquer mudanca do operador
+depois do HALT deixa a origem `MANUAL` e a retomada automatica e recusada. Config `safe-mode.auto.resume.*`.
 
 Por runner, fora do Safe Mode: `ConsecutiveRejectionGuard` (na `OrderConciliationUseCase`) para o runner
 apos 5 ordens distintas rejeitadas seguidas (`HaltRunnerPort`, alerta `RUNNER_AUTO_HALTED`); ordem
-aceita zera a sequencia. Retomada sempre manual (portfolio pela API do Safe Mode, runner pelo `resume`).
+aceita zera a sequencia. Retomada manual (portfolio pela API do Safe Mode, runner pelo `resume`), exceto o HALT
+`EXCHANGE_UNAVAILABLE` do portfolio (acima).
 
 ## Reserva Para BUY
 

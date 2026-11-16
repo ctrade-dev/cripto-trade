@@ -75,7 +75,7 @@ class PositionProtectionE2ETest extends ScenarioStrategyE2ETestSupport {
                 "lote aberto", runnerId);
 
         manageSafeMode.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.HALT, "t44 e2e", false));
+                ChangeSafeModeRequest.manual(SafeModeStatus.HALT, "t44 e2e", false));
 
         tickUntil(() -> positionCount(runnerId, "CLOSED") == 1, CRASH_PRICE, "lote vendido sob HALT", runnerId);
         awaitStable(runnerId, QUIET_WINDOW);

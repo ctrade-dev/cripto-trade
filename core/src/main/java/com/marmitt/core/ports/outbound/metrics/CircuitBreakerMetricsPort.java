@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Métricas do monitor de drawdown (T43, IG §11.7).
+ * Métricas do monitor de drawdown (T43, IG §11.7) e do HALT automático (T25, T71).
  */
 public interface CircuitBreakerMetricsPort {
 
@@ -13,4 +13,7 @@ public interface CircuitBreakerMetricsPort {
 
     /** Ativação automática do Safe Mode pelo monitor. */
     void recordActivation(UUID portfolioId, String reason);
+
+    /** Retomada automática do HALT, com o gatilho que o causou (T71). */
+    void recordAutoResume(UUID portfolioId, String trigger);
 }

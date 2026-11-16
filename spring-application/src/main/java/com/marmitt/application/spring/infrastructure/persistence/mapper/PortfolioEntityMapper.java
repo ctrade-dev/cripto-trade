@@ -15,6 +15,7 @@ public class PortfolioEntityMapper {
                 .safeModeStatus(domain.getSafeModeStatus())
                 .capitalPoolingMode(domain.getCapitalPoolingMode())
                 .safeModeOrigin(domain.getSafeModeOrigin())
+                .safeModeTrigger(domain.getSafeModeTrigger())
                 .safeModeReason(domain.getSafeModeReason())
                 .safeModeChangedAt(domain.getSafeModeChangedAt())
                 .createdAt(domain.getCreatedAt())
@@ -33,6 +34,7 @@ public class PortfolioEntityMapper {
                 entity.getSafeModeStatus(),
                 entity.getCapitalPoolingMode(),
                 entity.getSafeModeOrigin(),
+                entity.getSafeModeTrigger(),
                 entity.getSafeModeReason(),
                 entity.getSafeModeChangedAt(),
                 entity.getVersion()

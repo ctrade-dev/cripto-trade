@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T25 (gatilhos automáticos), T43 (drawdown), T45 (níveis do Safe Mode), T66 (motivo da falha)
-**Status:** Spec aprovada (2026-11-15); implementação a combinar
+**Status:** Implementada em `feature/t71-halt-auto-resume` (2026-11-16); teste na VPS depois do merge
 
 ---
 
@@ -69,7 +69,7 @@ Isso muda uma regra escrita: hoje "gatilho automático só aciona `HALT`; a reto
      `safe_mode_changes`. Passou do teto, o `HALT` fica manual e o alerta diz por quê.
   4. Atendidas as três, muda para `NORMAL` com origem `AUTOMATIC` e motivo
      `AUTO_RESUME EXCHANGE_UNAVAILABLE: exchange healthy for <N>m`. Registra a métrica e notifica, como o `HALT`.
-- Configuração em `ctrade.safe-mode.auto-resume.*`: `enabled`, `healthy-minutes` e `max-per-24h`.
+- Configuração em `safe-mode.auto.resume.*`: `enabled`, `healthy-minutes` e `max-per24h`.
 
 ### Parâmetros de risco
 
@@ -87,6 +87,20 @@ Isso muda uma regra escrita: hoje "gatilho automático só aciona `HALT`; a reto
   condições e como desligar.
 - Javadoc de `SafeModeTrigger`, `SafeModeOrigin` e `Portfolio.changeSafeMode`.
 - `.ai/flows/` do Safe Mode (`portfolio-capital.md` ou o flow aplicável): novo passo da retomada.
+
+### Decisões registradas na implementação (2026-11-16)
+
+- **Chave de configuração:** `safe-mode.auto.resume.*`, junto dos demais gatilhos (`safe-mode.auto.*`), em vez de
+  `ctrade.safe-mode.auto-resume.*`. Com `safe-mode.auto.enabled=false` o tick não roda e nada volta sozinho.
+- **O gatilho viaja no pedido:** `ChangeSafeModeRequest` ganhou `trigger` (`manual(...)` e `automatic(...)`), e
+  `Portfolio.changeSafeMode` exige o gatilho com origem `AUTOMATIC` e o recusa com `MANUAL`. A descida automática
+  exige o mesmo gatilho do HALT atual.
+- **Saúde da exchange:** só das exchanges dos runners do portfolio que precisam dos streams (`StreamDemand`). A
+  regra dos streams foi extraída do estado consolidado para `StreamGaps`, usada pelos dois (um fluxo, um caminho).
+- **Watchdog → retomada:** `WatchdogFailures` (core, bean único) guarda os runners com transação sem resolver no
+  último ciclo; o watchdog publica, a retomada lê.
+- **Teto atingido:** `ERROR` e Discord uma vez por HALT; o HALT fica para o operador.
+- **Restart:** a contagem de minutos saudáveis é em memória e recomeça; o teto vem do banco.
 
 ## Fora de escopo
 

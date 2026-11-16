@@ -14,6 +14,7 @@ import com.marmitt.core.application.usecase.runner.QueryRunnerUseCase;
 import com.marmitt.core.application.usecase.runner.RecoverStaleTransactionsUseCase;
 import com.marmitt.core.application.usecase.runner.RecoverTransactionStatusUseCase;
 import com.marmitt.core.application.usecase.runner.RunnerBootRecoveryUseCase;
+import com.marmitt.core.application.usecase.runner.WatchdogFailures;
 import com.marmitt.core.application.usecase.runner.orderconciliation.ConciliationOrderUpdate;
 import com.marmitt.core.application.usecase.runner.orderconciliation.ConciliationOrderUpdateExecutor;
 import com.marmitt.core.application.usecase.runner.processsignal.ProcessTradeSignalUseCase;
@@ -239,17 +240,25 @@ public class RunnerConfig {
         );
     }
 
+    /** Runners com transacao sem resolver no ultimo ciclo do watchdog, lidos pela retomada automatica (T71). */
+    @Bean
+    public WatchdogFailures watchdogFailures() {
+        return new WatchdogFailures();
+    }
+
     @Bean
     public RecoverStaleTransactionsPort recoverStaleTransactionsPort(
             StrategyRunnerRepositoryPort strategyRunnerRepository,
             RecoverTransactionStatusUseCase recoverTransactionStatusUseCase,
             AutomaticSafeModeTrigger automaticSafeModeTrigger,
+            WatchdogFailures watchdogFailures,
             AutoSafeModeProperties autoSafeModeProperties
     ) {
         return new RecoverStaleTransactionsUseCase(
                 strategyRunnerRepository,
                 recoverTransactionStatusUseCase,
                 automaticSafeModeTrigger,
+                watchdogFailures,
                 autoSafeModeProperties.getWatchdog().getMaxStuckCycles()
         );
     }

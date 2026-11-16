@@ -26,6 +26,7 @@ public class AutoSafeModeProperties {
     private BalanceDivergence balanceDivergence = new BalanceDivergence();
     private Watchdog watchdog = new Watchdog();
     private Rejections rejections = new Rejections();
+    private Resume resume = new Resume();
 
     /** Gatilhos de HALT do portfolio ligados; o drawdown sempre entra (governado pela T43). */
     public Set<SafeModeTrigger> enabledTriggers() {
@@ -38,6 +39,7 @@ public class AutoSafeModeProperties {
         }
         if (enabled && watchdog.isEnabled()) {
             triggers.add(SafeModeTrigger.WATCHDOG_STUCK);
+            triggers.add(SafeModeTrigger.EXCHANGE_UNAVAILABLE);
         }
         return triggers;
     }
@@ -72,6 +74,18 @@ public class AutoSafeModeProperties {
     public static class Watchdog extends Toggle {
         /** Ciclos consecutivos sem resolver a mesma transação que acionam HALT. */
         private int maxStuckCycles = 3;
+    }
+
+    /**
+     * Retomada automatica do HALT por exchange fora do ar (T71). Valores aprovados pelo mantenedor em 2026-11-15.
+     */
+    @Getter
+    @Setter
+    public static class Resume extends Toggle {
+        /** Minutos seguidos de exchange saudavel antes de voltar a NORMAL. */
+        private int healthyMinutes = 5;
+        /** Retomadas automaticas por portfolio em 24h; acima disso o HALT fica para o operador. */
+        private int maxPer24h = 3;
     }
 
     @Getter

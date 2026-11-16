@@ -6,6 +6,7 @@ import com.marmitt.core.dto.runner.request.RecoverStaleTransactionsRequest;
 import com.marmitt.core.dto.runner.request.RecoverTransactionStatusRequest;
 import com.marmitt.core.dto.runner.response.RecoverStaleTransactionsResponse;
 import com.marmitt.core.dto.runner.response.RecoverTransactionStatusResponse;
+import com.marmitt.core.dto.runner.response.RecoverTransactionStatusResponse.FailureReason;
 import com.marmitt.core.enums.SafeModeTrigger;
 import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.ports.inbound.runner.RecoverStaleTransactionsPort;
@@ -14,8 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -37,17 +40,36 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
     private final StrategyRunnerRepositoryPort strategyRunnerRepository;
     private final RecoverTransactionStatusUseCase recoverTransactionStatusUseCase;
     private final AutomaticSafeModeTrigger safeModeTrigger;
+    private final WatchdogFailures watchdogFailures;
     private final int maxStuckCycles;
     /** Ciclos consecutivos em que cada transacao falhou (T25); so guarda as que falharam no ultimo ciclo. */
-    private Map<UUID, Integer> consecutiveFailures = new HashMap<>();
+    private Map<UUID, StuckCount> consecutiveFailures = new HashMap<>();
+
+    /**
+     * Ciclos seguidos sem resolver uma transacao e se todos falharam por exchange fora do ar (T71).
+     */
+    private record StuckCount(int cycles, boolean onlyExchangeUnavailable) {
+
+        StuckCount next(boolean exchangeUnavailable) {
+            return new StuckCount(cycles + 1, onlyExchangeUnavailable && exchangeUnavailable);
+        }
+
+        SafeModeTrigger trigger() {
+            return onlyExchangeUnavailable ? SafeModeTrigger.EXCHANGE_UNAVAILABLE : SafeModeTrigger.WATCHDOG_STUCK;
+        }
+    }
+
+    private static final StuckCount NONE = new StuckCount(0, true);
 
     /**
      * @param maxStuckCycles ciclos consecutivos sem resolver a mesma transacao que acionam HALT do
      *                       portfolio (T25)
+     * @param watchdogFailures recebe, ao fim de cada ciclo, os runners com transacao sem resolver (T71)
      */
     public RecoverStaleTransactionsUseCase(StrategyRunnerRepositoryPort strategyRunnerRepository,
                                            RecoverTransactionStatusUseCase recoverTransactionStatusUseCase,
                                            AutomaticSafeModeTrigger safeModeTrigger,
+                                           WatchdogFailures watchdogFailures,
                                            int maxStuckCycles) {
         if (maxStuckCycles <= 0) {
             throw new IllegalArgumentException("maxStuckCycles must be positive: " + maxStuckCycles);
@@ -55,12 +77,14 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
         this.strategyRunnerRepository = strategyRunnerRepository;
         this.recoverTransactionStatusUseCase = recoverTransactionStatusUseCase;
         this.safeModeTrigger = safeModeTrigger;
+        this.watchdogFailures = watchdogFailures;
         this.maxStuckCycles = maxStuckCycles;
     }
 
     @Override
     public RecoverStaleTransactionsResponse execute(RecoverStaleTransactionsRequest request) {
         if (request.maxPerRun() == 0) {
+            watchdogFailures.cycleCompleted(Set.of());
             return new RecoverStaleTransactionsResponse(0, 0, 0, 0, 0);
         }
 
@@ -83,7 +107,8 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
         int routedToDlq = 0;
         int skipped = 0;
         int failed = 0;
-        Map<UUID, Integer> failuresThisCycle = new HashMap<>();
+        Map<UUID, StuckCount> failuresThisCycle = new HashMap<>();
+        Set<UUID> failingRunners = new HashSet<>();
 
         for (Transaction candidate : candidates) {
             try {
@@ -105,17 +130,23 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
                 }
 
                 failed++;
-                recordFailure(candidate, failuresThisCycle, response.failureReason() + ": " + response.message());
+                failingRunners.add(candidate.getRunnerId());
+                recordFailure(candidate, failuresThisCycle,
+                        response.failureReason() == FailureReason.EXCHANGE_QUERY_RETRYABLE_FAILURE,
+                        response.failureReason() + ": " + response.message());
                 log.warn("runtimeRecoveryBatch: failed transactionId={} reason={} failureReason={}",
                         response.transactionId(), response.message(), response.failureReason());
             } catch (RuntimeException e) {
                 failed++;
-                recordFailure(candidate, failuresThisCycle, e.getClass().getSimpleName() + ": " + e.getMessage());
+                failingRunners.add(candidate.getRunnerId());
+                recordFailure(candidate, failuresThisCycle, false,
+                        e.getClass().getSimpleName() + ": " + e.getMessage());
                 log.error("runtimeRecoveryBatch: unexpected failure transactionId={}", candidate.getId(), e);
             }
         }
         // Transacao resolvida, pulada ou fora dos candidatos zera a contagem: so conta ciclo seguido.
         consecutiveFailures = failuresThisCycle;
+        watchdogFailures.cycleCompleted(failingRunners);
 
         return new RecoverStaleTransactionsResponse(
                 candidates.size(),
@@ -130,19 +161,22 @@ public class RecoverStaleTransactionsUseCase implements RecoverStaleTransactions
      * Conta mais um ciclo sem resolver a transacao; no limite, aciona HALT do portfolio do runner (T25).
      * Transacao presa que nem a exchange esclarece deixa capital e posicao em estado incerto.
      *
-     * <p>O motivo leva a ultima falha (T66): o evento do Safe Mode diz sozinho se foi exchange fora do
-     * ar, limite de peso ou outra coisa, sem depender do log.
+     * <p>O gatilho diz se a exchange estava fora do ar (T71): {@code EXCHANGE_UNAVAILABLE} quando todos os
+     * ciclos contados falharam com {@code EXCHANGE_QUERY_RETRYABLE_FAILURE} (timeout, 5xx, limite de peso), e o
+     * HALT volta sozinho com a exchange saudavel; qualquer outra falha no meio mantem {@code WATCHDOG_STUCK},
+     * de retomada manual. O motivo leva a ultima falha (T66).
      */
-    private void recordFailure(Transaction candidate, Map<UUID, Integer> failuresThisCycle, String lastFailure) {
-        int cycles = consecutiveFailures.getOrDefault(candidate.getId(), 0) + 1;
-        failuresThisCycle.put(candidate.getId(), cycles);
-        if (cycles < maxStuckCycles) {
+    private void recordFailure(Transaction candidate, Map<UUID, StuckCount> failuresThisCycle,
+                               boolean exchangeUnavailable, String lastFailure) {
+        StuckCount count = consecutiveFailures.getOrDefault(candidate.getId(), NONE).next(exchangeUnavailable);
+        failuresThisCycle.put(candidate.getId(), count);
+        if (count.cycles() < maxStuckCycles) {
             return;
         }
         strategyRunnerRepository.findById(candidate.getRunnerId()).ifPresent(runner ->
-                safeModeTrigger.activate(runner.getPortfolioId(), SafeModeTrigger.WATCHDOG_STUCK,
+                safeModeTrigger.activate(runner.getPortfolioId(), count.trigger(),
                         "transactionId=" + candidate.getId() + " runnerId=" + runner.getId()
-                                + " status=" + candidate.getStatus() + " cycles=" + cycles
+                                + " status=" + candidate.getStatus() + " cycles=" + count.cycles()
                                 + " lastFailure=" + truncate(lastFailure)));
     }
 

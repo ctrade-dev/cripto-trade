@@ -2,14 +2,13 @@ package com.marmitt.core.application.usecase.operations;
 
 import com.marmitt.core.application.usecase.exchange.ExchangeBalanceReconciliation;
 import com.marmitt.core.application.usecase.websocket.OpenLotDemand;
-import com.marmitt.core.application.usecase.websocket.StreamDemand;
+import com.marmitt.core.application.usecase.websocket.StreamGaps;
 import com.marmitt.core.domain.portfolio.GlobalBalance;
 import com.marmitt.core.domain.portfolio.Portfolio;
 import com.marmitt.core.domain.runner.Position;
 import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.domain.strategy.RemoteStrategy;
-import com.marmitt.core.dto.connection.ConnectionKey;
 import com.marmitt.core.dto.operations.ExchangeComparison;
 import com.marmitt.core.dto.operations.OperationalCheck;
 import com.marmitt.core.dto.operations.OperationalSeverity;
@@ -17,14 +16,11 @@ import com.marmitt.core.dto.operations.OperationalStateReport;
 import com.marmitt.core.dto.exchange.ExchangeBalanceReport;
 import com.marmitt.core.dto.reconciliation.ReconciliationRequest;
 import com.marmitt.core.dto.reconciliation.ReconciliationSummaryDto;
-import com.marmitt.core.enums.ConnectionStatus;
 import com.marmitt.core.enums.RunnerStatus;
 import com.marmitt.core.enums.SafeModeStatus;
-import com.marmitt.core.enums.StreamChannel;
 import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.ports.inbound.operations.InspectOperationalStatePort;
 import com.marmitt.core.ports.inbound.reconciliation.ReconcileTradesPort;
-import com.marmitt.core.ports.outbound.exchange.ExchangeAdapterDescriptor;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import com.marmitt.core.ports.outbound.operations.InfrastructureSignalsPort;
 import com.marmitt.core.ports.outbound.repository.DeadLetterEntryRepositoryPort;
@@ -78,7 +74,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
     private final StrategyRepositoryPort strategyRepository;
     private final RemoteStrategyCatalogRepositoryPort catalogRepository;
     private final LatestPricePort latestPrices;
-    private final WebSocketConnectionRepositoryPort connections;
+    private final StreamGaps streamGaps;
     private final ExchangeAdapterRepositoryPort exchangeAdapters;
     private final InfrastructureSignalsPort infrastructure;
     private final ExchangeBalanceReconciliation balanceReconciliation;
@@ -110,7 +106,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         this.strategyRepository = strategyRepository;
         this.catalogRepository = catalogRepository;
         this.latestPrices = latestPrices;
-        this.connections = connections;
+        this.streamGaps = new StreamGaps(connections, exchangeAdapters);
         this.exchangeAdapters = exchangeAdapters;
         this.infrastructure = infrastructure;
         this.balanceReconciliation = balanceReconciliation;
@@ -439,55 +435,21 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
 
     /**
      * Conexao registrada que nao esta conectada, e stream de usuario ausente para exchange que precisa
-     * dele, com runner que demanda as conexoes ({@link StreamDemand}). CRITICAL quando um runner ACTIVE
+     * dele, com runner que demanda as conexoes ({@link StreamGaps}). CRITICAL quando um runner ACTIVE
      * precisa do stream (opera sem ele); WARN quando so runners parados ou terminando precisam: ordens no livro
      * ficam sem acompanhamento e a retomada pode ser recusada ate o canal voltar (T53 F23). Market data parado e coberto
      * por {@code MARKET_DATA_STALE}.
      */
     private OperationalCheck streamDisconnected(List<StrategyRunner> runners) {
-        Map<ConnectionKey, ConnectionStatus> statuses = new LinkedHashMap<>();
-        connections.getAllConnections().forEach((key, manager) -> statuses.put(key,
-                manager.getConnectionResult() == null ? null : manager.getConnectionResult().status()));
-
-        Set<String> exchanges = new TreeSet<>();
-        Set<String> marketSources = new TreeSet<>();
-        Set<String> activeExchanges = new TreeSet<>();
-        Set<String> activeSources = new TreeSet<>();
-        for (StrategyRunner runner : runners) {
-            if (!StreamDemand.needsStreams(runner)) {
-                continue;
-            }
-            exchanges.add(runner.getExchangeId());
-            marketSources.addAll(runner.getAllowedMarketDataSources());
-            if (runner.getStatus() == RunnerStatus.ACTIVE) {
-                activeExchanges.add(runner.getExchangeId());
-                activeSources.addAll(runner.getAllowedMarketDataSources());
-            }
-        }
-        List<Map<String, Object>> subjects = new ArrayList<>();
-        boolean neededByActive = false;
-        for (String exchange : exchanges) {
-            boolean needsUserStream = exchangeAdapters.findAdapter(exchange)
-                    .map(ExchangeAdapterDescriptor::hasUserStream).orElse(false);
-            ConnectionKey key = new ConnectionKey(exchange, StreamChannel.USER_DATA);
-            ConnectionStatus status = statuses.get(key);
-            if (needsUserStream && status != ConnectionStatus.CONNECTED) {
-                subjects.add(subject("exchange", exchange, "channel", StreamChannel.USER_DATA,
-                        "status", status == null ? "NOT_OPENED" : status));
-                neededByActive |= activeExchanges.contains(exchange);
-            }
-        }
-        for (String source : marketSources) {
-            ConnectionKey key = ConnectionKey.market(source);
-            if (statuses.containsKey(key) && statuses.get(key) != ConnectionStatus.CONNECTED) {
-                subjects.add(subject("exchange", source, "channel", StreamChannel.MARKET, "status", statuses.get(key)));
-                neededByActive |= activeSources.contains(source);
-            }
-        }
-        if (subjects.isEmpty()) {
+        List<StreamGaps.StreamGap> gaps = streamGaps.of(runners);
+        if (gaps.isEmpty()) {
             return ok("STREAM_DISCONNECTED", "every stream needed by ACTIVE, TERMINATING or HALTED runners is connected");
         }
-        if (neededByActive) {
+        List<Map<String, Object>> subjects = gaps.stream()
+                .map(gap -> subject("exchange", gap.exchange(), "channel", gap.channel(),
+                        "status", gap.status() == null ? "NOT_OPENED" : gap.status()))
+                .toList();
+        if (gaps.stream().anyMatch(StreamGaps.StreamGap::neededByActive)) {
             return check("STREAM_DISCONNECTED", OperationalSeverity.CRITICAL,
                     subjects.size() + " stream(s) needed by ACTIVE runners not connected", subjects, null);
         }

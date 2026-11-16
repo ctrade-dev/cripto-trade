@@ -64,7 +64,7 @@ class AdminSafeModeControllerTest {
                 .andExpect(jsonPath("$.restingOrders").value(3));
 
         verify(manageSafeMode).change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.CANCEL_ALL, "exchange instavel", true));
+                ChangeSafeModeRequest.manual(SafeModeStatus.CANCEL_ALL, "exchange instavel", true));
     }
 
     @Test

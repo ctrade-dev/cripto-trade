@@ -256,7 +256,7 @@ class SafeModeE2ETest extends ScenarioStrategyE2ETestSupport {
 
     private SafeModeStatusDto change(UUID portfolioId, SafeModeStatus level, boolean confirm) {
         return manageSafeMode.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(level, "t45 e2e", confirm));
+                ChangeSafeModeRequest.manual(level, "t45 e2e", confirm));
     }
 
     /** Publica um tick por vez ate a condicao valer, sem ultrapassar o estado de interesse. */

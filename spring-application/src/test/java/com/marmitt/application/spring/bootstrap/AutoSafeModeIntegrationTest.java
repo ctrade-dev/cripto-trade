@@ -65,7 +65,7 @@ class AutoSafeModeIntegrationTest extends AbstractIntegrationTest {
         assertEquals(1, automaticChanges(), "A segunda avaliacao com HALT ativo nao registra nova mudanca");
 
         manageSafeMode.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.NORMAL, "t25 resolvido", false));
+                ChangeSafeModeRequest.manual(SafeModeStatus.NORMAL, "t25 resolvido", false));
         assertEquals(SafeModeStatus.NORMAL, manageSafeMode.status(portfolioId).level());
     }
 

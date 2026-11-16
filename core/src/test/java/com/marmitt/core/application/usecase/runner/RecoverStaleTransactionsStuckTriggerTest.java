@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -24,7 +26,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * T25: mesma transacao sem resolver em ciclos seguidos do watchdog aciona HALT do portfolio.
+ * T25: mesma transacao sem resolver em ciclos seguidos do watchdog aciona HALT do portfolio. T71: o gatilho e
+ * EXCHANGE_UNAVAILABLE quando todos os ciclos falharam por exchange fora do ar, e WATCHDOG_STUCK nos demais casos.
  */
 class RecoverStaleTransactionsStuckTriggerTest {
 
@@ -37,8 +40,9 @@ class RecoverStaleTransactionsStuckTriggerTest {
     private final StrategyRunnerRepositoryPort repository = mock(StrategyRunnerRepositoryPort.class);
     private final RecoverTransactionStatusUseCase recoverStatus = mock(RecoverTransactionStatusUseCase.class);
     private final AutomaticSafeModeTrigger trigger = mock(AutomaticSafeModeTrigger.class);
+    private final WatchdogFailures watchdogFailures = new WatchdogFailures();
     private final RecoverStaleTransactionsUseCase useCase =
-            new RecoverStaleTransactionsUseCase(repository, recoverStatus, trigger, 3);
+            new RecoverStaleTransactionsUseCase(repository, recoverStatus, trigger, watchdogFailures, 3);
     private final Transaction stuck = transaction();
 
     RecoverStaleTransactionsStuckTriggerTest() {
@@ -61,7 +65,34 @@ class RecoverStaleTransactionsStuckTriggerTest {
 
         useCase.execute(REQUEST);
 
+        verify(trigger).activate(eq(PORTFOLIO), eq(SafeModeTrigger.EXCHANGE_UNAVAILABLE), any());
+    }
+
+    @Test
+    void anyOtherFailureAmongTheCycleKeepsWatchdogStuck() {
+        failing();
+        useCase.execute(REQUEST);
+        failingWith(RecoverTransactionStatusResponse.FailureReason.INVALID_EXCHANGE_RESPONSE);
+        useCase.execute(REQUEST);
+        failing();
+        useCase.execute(REQUEST);
+
         verify(trigger).activate(eq(PORTFOLIO), eq(SafeModeTrigger.WATCHDOG_STUCK), any());
+        verify(trigger, never()).activate(any(), eq(SafeModeTrigger.EXCHANGE_UNAVAILABLE), any());
+    }
+
+    @Test
+    void failingRunnersArePublishedEachCycleAndClearedWhenResolved() {
+        failing();
+        useCase.execute(REQUEST);
+        assertTrue(watchdogFailures.anyFailing(List.of(RUNNER)));
+        assertFalse(watchdogFailures.anyFailing(List.of(UUID.randomUUID())));
+
+        when(recoverStatus.execute(any())).thenReturn(RecoverTransactionStatusResponse.skipped(
+                STUCK_ID, RUNNER, "BINANCE", TransactionStatus.SUBMITTED, "already terminal"));
+        useCase.execute(REQUEST);
+
+        assertFalse(watchdogFailures.anyFailing(List.of(RUNNER)));
     }
 
     @Test
@@ -71,7 +102,7 @@ class RecoverStaleTransactionsStuckTriggerTest {
         useCase.execute(REQUEST);
         useCase.execute(REQUEST);
 
-        verify(trigger).activate(PORTFOLIO, SafeModeTrigger.WATCHDOG_STUCK,
+        verify(trigger).activate(PORTFOLIO, SafeModeTrigger.EXCHANGE_UNAVAILABLE,
                 "transactionId=" + STUCK_ID + " runnerId=" + RUNNER + " status=SUBMITTED cycles=3"
                         + " lastFailure=EXCHANGE_QUERY_RETRYABLE_FAILURE: circuit open");
     }
@@ -105,9 +136,12 @@ class RecoverStaleTransactionsStuckTriggerTest {
     }
 
     private void failing() {
+        failingWith(RecoverTransactionStatusResponse.FailureReason.EXCHANGE_QUERY_RETRYABLE_FAILURE);
+    }
+
+    private void failingWith(RecoverTransactionStatusResponse.FailureReason reason) {
         when(recoverStatus.execute(any())).thenReturn(RecoverTransactionStatusResponse.failed(
-                STUCK_ID, RUNNER, "BINANCE", TransactionStatus.SUBMITTED,
-                RecoverTransactionStatusResponse.FailureReason.EXCHANGE_QUERY_RETRYABLE_FAILURE, "circuit open"));
+                STUCK_ID, RUNNER, "BINANCE", TransactionStatus.SUBMITTED, reason, "circuit open"));
     }
 
     private static Transaction transaction() {

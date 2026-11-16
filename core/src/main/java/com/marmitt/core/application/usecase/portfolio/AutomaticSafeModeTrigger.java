@@ -70,7 +70,7 @@ public class AutomaticSafeModeTrigger {
         }
         String reason = trigger.name() + " " + details;
         manageSafeMode.change(portfolioId, SafeModeOrigin.AUTOMATIC,
-                new ChangeSafeModeRequest(SafeModeStatus.HALT, reason, false));
+                ChangeSafeModeRequest.automatic(SafeModeStatus.HALT, trigger, reason));
         metrics.recordActivation(portfolioId, trigger.name());
         log.error("autoSafeMode: HALT activated portfolioId={} trigger={} {}", portfolioId, trigger, details);
         notification.notifyError(ErrorNotificationEvent.circuitBreakerTriggered(

@@ -45,7 +45,7 @@ class ManageSafeModeUseCaseTest {
         when(portfolioRepository.findById(portfolioId)).thenReturn(Optional.of(portfolio));
 
         SafeModeStatusDto status = useCase.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.CANCEL_ALL, "exchange instavel", true));
+                ChangeSafeModeRequest.manual(SafeModeStatus.CANCEL_ALL, "exchange instavel", true));
 
         ArgumentCaptor<SafeModeChange> change = ArgumentCaptor.forClass(SafeModeChange.class);
         verify(portfolioRepository).saveSafeModeChange(any(), change.capture());
@@ -60,7 +60,7 @@ class ManageSafeModeUseCaseTest {
     void repeatingTheCurrentLevelSavesNothing() {
         when(portfolioRepository.findById(portfolioId)).thenReturn(Optional.of(portfolioAt(SafeModeStatus.HALT)));
 
-        useCase.change(portfolioId, SafeModeOrigin.MANUAL, new ChangeSafeModeRequest(SafeModeStatus.HALT, "again", false));
+        useCase.change(portfolioId, SafeModeOrigin.MANUAL, ChangeSafeModeRequest.manual(SafeModeStatus.HALT, "again", false));
 
         verify(portfolioRepository, never()).saveSafeModeChange(any(), any());
     }
@@ -70,7 +70,7 @@ class ManageSafeModeUseCaseTest {
         when(portfolioRepository.findById(portfolioId)).thenReturn(Optional.of(portfolioAt(SafeModeStatus.NORMAL)));
 
         assertThrows(SafeModeTransitionException.class, () -> useCase.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.PANIC_SELL, "sem confirmacao", false)));
+                ChangeSafeModeRequest.manual(SafeModeStatus.PANIC_SELL, "sem confirmacao", false)));
         verify(portfolioRepository, never()).saveSafeModeChange(any(), any());
     }
 
@@ -103,7 +103,7 @@ class ManageSafeModeUseCaseTest {
 
     private Portfolio portfolioAt(SafeModeStatus status) {
         return new Portfolio(portfolioId, "p", true, Instant.now(), status, CapitalPoolingMode.SHARED,
-                null, null, null, 0L);
+                null, null, null, null, 0L);
     }
 
     private static StrategyRunner runner(boolean operational) {

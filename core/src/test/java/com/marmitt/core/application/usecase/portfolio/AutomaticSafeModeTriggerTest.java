@@ -53,6 +53,7 @@ class AutomaticSafeModeTriggerTest {
         verify(manageSafeMode).change(eq(PORTFOLIO), eq(SafeModeOrigin.AUTOMATIC), request.capture());
         assertEquals(SafeModeStatus.HALT, request.getValue().level());
         assertEquals("DLQ_THRESHOLD unresolved=3 threshold=3", request.getValue().reason());
+        assertEquals(SafeModeTrigger.DLQ_THRESHOLD, request.getValue().trigger());
         verify(metrics).recordActivation(PORTFOLIO, "DLQ_THRESHOLD");
         ArgumentCaptor<ErrorNotificationEvent> event = ArgumentCaptor.forClass(ErrorNotificationEvent.class);
         verify(notification).notifyError(event.capture());
