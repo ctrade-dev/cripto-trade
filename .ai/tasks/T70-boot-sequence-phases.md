@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T7 (boot readiness), T31 (recovery unificado), T59 (histórico do boot)
-**Status:** Spec para revisão do mantenedor (2026-11-15)
+**Status:** Implementada em `feature/t70-boot-phases` (2026-11-16); teste na VPS depois do merge
 
 ---
 
@@ -120,6 +120,21 @@ camadas.
 2. Extração das fases e a sequência por lista.
 3. Log e falha num lugar só.
 4. Docs, PR em rascunho, CI e espera por comentários; merge pelo mantenedor; teste na VPS.
+
+## Decisões registradas na implementação (2026-11-16)
+
+- **Fail-fast pelo contexto.** `BootContext.failFast(phase, code, message)` avisa o observer e devolve a exceção que
+  a fase lança. Fica um caminho só para as três fases que pedem fail-fast.
+- **Testes de boot pela montagem de produção.** Os três `BootOrchestrator*Test` montavam o use case pelo construtor
+  antigo; agora chamam `new BootConfig().runBootSequence(...)` com os mesmos argumentos. Asserções sem mudança.
+- **Ordem de entrega.** O teste com fases falsas (`RunBootSequenceUseCaseTest`) precisa da interface `BootPhase`, então
+  veio junto com a extração. O comportamento atual ficou fixado pelos testes de boot existentes, que rodaram sem
+  mudar asserções.
+- **Logs.** Status `FAILED` da fase em `WARN` e a falha do boot uma vez em `ERROR`, com stack, como antes no Spring:
+  a contagem de `ERROR` de um boot que falha não muda. O `completed` da sequência passa a contar os runners elegíveis;
+  a fase 3 loga a própria contagem (`bootSequence.phase3: completed runId={} runners={}`).
+- **Falha antes das fases** (carga de portfólios e runners): `onRunFailed` recebe fase `null`. O `GET` do boot
+  continua mostrando `boot`, como antes, e o histórico `boot_runs` continua com fase vazia.
 
 ## Fontes
 
