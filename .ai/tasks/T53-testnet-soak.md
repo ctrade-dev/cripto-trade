@@ -4,7 +4,7 @@
 **Responsável:** Claude (spec, procedimento, análise) + mantenedor (execução no ambiente)
 **Dependências:** T2 (perfil testnet), T18 (relatório de reconciliação), T21/T51 (alertas), T25/T43/T44/T45/T48
 (proteções), T41 (estratégia remota).
-**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 completa (curta 112); F30 e F31 da rodada 13 validadas na rodada 15 (2026-11-16).
+**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 completa (curta 112); F30 e F31 da rodada 13 validadas na rodada 15 (2026-11-16); T71 testada na curta 116.
 
 ---
 

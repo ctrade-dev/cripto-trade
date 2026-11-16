@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T25 (gatilhos automáticos), T43 (drawdown), T45 (níveis do Safe Mode), T66 (motivo da falha)
-**Status:** Implementada em `feature/t71-halt-auto-resume` (2026-11-16); teste na VPS depois do merge
+**Status:** Concluída — implementada no #193 e testada na VPS na curta 116 (2026-11-16)
 
 ---
 
