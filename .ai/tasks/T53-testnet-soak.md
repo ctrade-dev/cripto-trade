@@ -4,7 +4,7 @@
 **Responsável:** Claude (spec, procedimento, análise) + mantenedor (execução no ambiente)
 **Dependências:** T2 (perfil testnet), T18 (relatório de reconciliação), T21/T51 (alertas), T25/T43/T44/T45/T48
 (proteções), T41 (estratégia remota).
-**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 em testes curtos, roteiro abaixo.
+**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 completa (curta 112); F30 e F31 da rodada 13 validadas na rodada 15 (2026-11-16).
 
 ---
 
@@ -361,6 +361,9 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | Curta 110 | 2026-11-11 | 4, F28, F4.12 e F4.13 na VPS | 60 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PRs #187, #188 e ctrade-strategies #6 | **F28, F4.12 e F4.13 passaram.** F28: a 1ª tentativa de reconexão do `MARKET` (+5 s, antes do ciclo do coordenador) reabriu com `pairs=4`, com a conexão aberta só com BTCUSDT e os outros 3 assinados depois. F4.12: 6 leituras de `/transactions` fechadas no meio, 0 `ERROR`. F4.13: 309 ordens, nenhuma em voo por mais de 136 s; 0 com mais de 150 s. 4 `ERROR`, todos da queda provocada. Conciliação 66/66, 69/69, 25/25 e 49/49. | F28, F4.12, F4.13 resolvidos |
 | Curta 111 | 2026-11-11 | 4, F4.5 e F4.11 com ordem parada de propósito | 2h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, `BOOK_OFFSET=0.01` só nesta rodada | **F4.5 passou; F4.11 não foi exercitada (F29).** F4.5: a BUY `365a26a4` do `SoakBook` ficou `PENDING` 10 min 46 s e o watchdog a achou na exchange por `clientOrderId` (`PENDING->SUBMITTED`); duas BUY que não chegaram à exchange viraram `EXPIRED` com a reserva devolvida. F4.11: o PATCH com `liquidationMaxSlippagePercent=0.000001` respondeu 500 nos 20 runners (a coluna guarda 4 casas e o valor virou 0), a política ficou MARKET e os dois `PANIC_SELL` venderam a mercado. 41 `ERROR`: 40 dos PATCH, 1 da queda provocada. Conciliação 120/120, 139/139, 46/46 e 97/97. | F29 |
 | Curta 112 | 2026-11-12 | 4, F4.11 com a F29 corrigida | 75 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #189 | **F4.11 passou.** Política LIMIT a 0.000001 aplicada nos 20 runners (200). Com 3 ticks, as 3 SELL de liquidação encheram na hora; com 1 tick, a SELL do lote `798756c2` (SOLUSDT, 81.39) ficou parada, foi cancelada 4 s depois e o lote saiu a MARKET (81.23). Política de volta a `MARKET/0.01/3` e 20 runners `ACTIVE`. 0 `ERROR`. Conciliação 120/120, 99/99, 49/49 e 95/95. | F29 resolvido; fase 4 completa |
+| 13 | 2026-11-12/15 | 3 (apps T60), 72h com 4 símbolos | 72h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com PR #189 | **Reprovada** (critérios 2 e 3). 13910 fills, todos iguais à exchange; 1 `HALT` automático explicado (timeouts da testnet); 6 runners parados por resto abaixo do `minNotional` (F30); reserva de capital perdida e confirmação na DLQ (F31). | F30 (#190), F31 (#191), F32; T71 |
+| 14 | 2026-11-15 | Validação de F30 e F31 | ~23 min (encerrada) | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com #190 e #191 | **Interrompida, sem veredito.** `HALT` automático `BALANCE_DIVERGENCE` 10 min depois da largada: portfólio de 1000 USDT e só ~604 USDT livres na conta da testnet. Divergência verdadeira, não bug. 0 em voo no fechamento; conciliação 30/30. | `round-start.sh` confere o USDT livre (#192) |
+| 15 | 2026-11-15/16 | Validação de F30 e F31 | 6h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, 500 USDT, com #190, #191 e #192 | **Aprovada.** 1744 fills, todos iguais à exchange; DLQ vazia; 0 `ERROR`; nenhum evento automático; nenhum runner parado pelo guarda de rejeições; `reserved` igual ao custo dos 6 lotes abertos e disponível + reservado = capital + realizado, ao centavo. | F30 e F31 resolvidas |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -966,7 +969,7 @@ segue coberto pelo `SafeModeE2ETest`.
 | 5 | Safe Mode / halt | 1 `HALT` automático (`WATCHDOG_STUCK`, 11-13 02:43Z) com causa explicada; 9h40 sem compras até a retomada manual. 6 runners parados pelo guarda de rejeições (F30) | OK (explicado); F30 |
 | 6 | `ERROR` | 51: 41 `Order cancellation failed: timeout` entre 02:41 e 02:43Z de 11-13 (testnet), 1 `HALT` acima, 6 do guarda (F30), 1 da DLQ (F31), 2 de versão desatualizada no `EXPIRED` com execução (F32) | Explicado; F32 |
 | 7 | Estabilidade | heap mínimo 47.2 → 44.2 MB, threads 49 → 49, avaliação média 16.7 → 15.9 ms, máximo 471.8 → 445.8 ms | OK |
-| 8 | Saldo no restart | Restart na implantação de F30 e F31, antes da rodada curta | Pendente |
+| 8 | Saldo no restart | Restart da implantação de F30 e F31 (11-15 18:13Z) com os lotes da rodada: boot `SUCCESS`, `phase2.sanity` `OK`, 0 `ERROR` | OK |
 
 - **Fluxo:** 13910 fills nos 16 runners das 4 apps de mercado. O `SoakChaos` respondeu
   13162 falhas provocadas (erro 500, JSON quebrado, decisão incoerente, desconexão, timeout), todas viraram `HOLD`
@@ -1013,6 +1016,39 @@ segue coberto pelo `SafeModeE2ETest`.
   (2026-11-15): o `HALT` causado por falha da exchange volta sozinho depois de N minutos de exchange saudável; os
   demais motivos continuam só com retomada manual. Tarefa T71 (N = 5 min de exchange saudável, no máximo 3 retomadas
   automáticas por portfólio em 24h).
+
+### Depois da rodada 13 — implantação de F30 e F31, retomada dos runners e rodadas 14 e 15 (2026-11-15/16, VPS)
+
+**Implantação (11-15 18:13Z).** `develop` com #190 e #191 sobre o banco da rodada 13, sem limpar: boot `SUCCESS`,
+`phase2.sanity` `OK`, 0 `ERROR`. Fecha o critério 8 da rodada 13.
+
+**Retomada dos 6 runners parados pela F30 (18:13Z–18:19Z).** Cada um tentou vender o resto uma vez; a SELL foi
+recusada abaixo do `minNotional` e o `UnsellableRemainderWriteOff` baixou o resto como perda. 6 de 6 baixados, 0
+runner parado de novo, 0 `HALT`, 0 `ERROR`. Runners parados de novo pelo operador no fim. Log em `~/f30-resume/` na VPS.
+
+**Rodada 14 (18:20:39Z–18:43:36Z, interrompida).** Banco limpo, portfólio `36f9ec04` de 1000 USDT. Às 18:30:38Z,
+`HALT` automático `BALANCE_DIVERGENCE`: a conta da testnet tinha ~604 USDT livres. O USDT da conta caiu de ~5200–6200
+(11-09) para 653 no fim da rodada 13, sem causa confirmada (perdas acumuladas das rodadas ou reset da testnet). O
+gatilho agiu certo. Encerrada pelo `round-close.sh`: 0 em voo, conciliação 30/30. Correção do processo no #192:
+`round-start.sh` recebe `CAPITAL` (padrão 1000) e recusa a largada com USDT livre abaixo dele. Arquivo em `~/round-14`.
+
+**Rodada 15 (11-15 22:52:45Z → 11-16 04:52:45Z).** Banco limpo, portfólio `97c5a04f` de 500 USDT, 20 runners
+(BTC, ETH, BNB, SOL). **Aprovada; F30 e F31 validadas em operação.** Arquivo em `~/round-15`.
+
+| # | Critério | Evidência | Resultado |
+|---|---|---|---|
+| 1 | Conciliação | 1744 fills (BTC 613, ETH 519, BNB 214, SOL 398), todos iguais à exchange | OK |
+| 2 | DLQ | Vazia | OK |
+| 3 | Capital | `reserved` 115.8720056 = custo dos 6 lotes abertos; disponível 373.7254792 + reservado = 489.5974848 = 500 − 10.4025152 realizado | OK (F31) |
+| 4 | Transação presa | 0 em voo no fechamento; `TRANSACTION_STUCK` `OK` | OK |
+| 5 | Safe Mode / halt | Nenhum evento automático; nenhum runner parado pelo guarda de rejeições | OK (F30) |
+| 6 | `ERROR` | 0 (Loki com 100% de cobertura) | OK |
+| 7 | Estabilidade | heap mínimo 45.3 → 42.8 MB, threads 49 → 49, avaliação média 17.7 → 18.1 ms, máximo 456.9 → 315.8 ms | OK |
+| 8 | Saldo no restart | Sem restart na rodada; coberto pela implantação acima | OK (implantação) |
+
+- Os `WARN` são os esperados: falhas provocadas pelo `SoakChaos` (1332), cancelamentos de ordem já encerrada (222),
+  SELL sem lote aberto (239) e 1 cancelamento de ordem ainda desconhecida da exchange, resolvido pelo status final.
+- Resultado realizado de -10.40 USDT: giro das apps de soak.
 
 ## Fontes
 
