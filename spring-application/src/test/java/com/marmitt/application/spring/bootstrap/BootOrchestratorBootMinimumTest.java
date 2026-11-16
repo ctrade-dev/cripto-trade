@@ -2,7 +2,8 @@ package com.marmitt.application.spring.bootstrap;
 
 import com.marmitt.core.ports.outbound.repository.BootRunRepositoryPort;
 import com.marmitt.core.application.usecase.portfolio.AutomaticSafeModeTrigger;
-import com.marmitt.core.application.usecase.boot.RunBootSequenceUseCase;
+import com.marmitt.application.spring.config.core.BootConfig;
+import com.marmitt.core.ports.inbound.boot.RunBootSequencePort;
 import com.marmitt.core.application.usecase.exchange.ExchangeBalanceReconciliation;
 import com.marmitt.core.application.usecase.boot.phase2.PortfolioZombieDetectionUseCase;
 import com.marmitt.core.application.usecase.runner.RunnerBootRecoveryUseCase;
@@ -192,7 +193,7 @@ class BootOrchestratorBootMinimumTest {
         PortfolioCutoffProperties cutoffProperties = new PortfolioCutoffProperties();
         cutoffProperties.setEnabled(true);
 
-        RunBootSequenceUseCase runBootSequence = new RunBootSequenceUseCase(
+        RunBootSequencePort runBootSequence = new BootConfig().runBootSequence(
                 portfolioRepository,
                 strategyRunnerRepository,
                 exchangeAdapterRepository,

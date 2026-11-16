@@ -70,7 +70,7 @@ Nao reintroduza. Cada um foi corrigido com custo:
 | Spring decidindo ordem de transporte de um provider | `OrderDispatchAdapter` (T15) | Selecao dentro de `BinanceOrderAdapter` |
 | Repositorio organizado por interface com `instanceof` e 8 mapas | `InMemoryExchangeAdapterRepository` (T16) | `ExchangeAdapterDescriptor` por exchange |
 | Controller decidindo status HTTP por `message().contains("not found")` | `DeadLetterController` (T27) | Excecao de dominio + `GlobalExceptionHandler` |
-| Colapsar use cases em metodos privados de um orquestrador | `RunBootSequenceUseCase` virou God Object (PR #73) | Classes separadas, reposicionadas em `usecase.boot.phase2` |
+| Colapsar use cases em metodos privados de um orquestrador | `RunBootSequenceUseCase` virou God Object (PR #73) | Classes separadas, reposicionadas em `usecase.boot.phase2`; desde a T70, uma classe `BootPhase` por fase |
 | Efeito colateral escondido (metrica registrada dentro de handler) | fluxo de sinal (T23) | Handlers retornam `BuyOutcome`/`SellOutcome`; registro centralizado no orquestrador |
 | Design documentado como se estivesse implementado | safety buffer (T36), mailbox, drawdown, Safe Mode (T39) | Doc deve marcar o que ainda nao existe |
 | Dois caminhos para a mesma operacao | `Position` com construtor por preco + `openAtCost`, `addQuantity` + `addQuantityAtCost`; `OrderDataDto` com construtor legado que preenche `feeAsset = null` (T46) | `Position.open`/`addQuantity` por custo; `OrderDataDto` so com construtor canonico (T47, ver 1.3) |

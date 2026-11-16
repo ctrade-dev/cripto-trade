@@ -525,12 +525,9 @@ Fora de escopo da Fase 4:
 
 ## Backlog Pos-Testes
 
-- Refatorar o `BootOrchestrator` para aproximar o fluxo de boot do padrao `usecase first`.
-- Objetivo da refatoracao:
-  - manter o adapter Spring restrito a lifecycle/evento/configuracao/observabilidade;
-  - extrair a orquestracao do boot para um use case do `core`;
-  - reduzir o acoplamento atual entre framework e sequenciamento das fases de boot.
-- Prioridade: somente depois de concluir a trilha atual de testes e endurecimento operacional.
+- ~~Refatorar o `BootOrchestrator` para aproximar o fluxo de boot do padrao `usecase first`.~~ Concluido na T70:
+  sequencia no `core` com uma classe por fase; o `BootOrchestrator` so monta o comando e traduz o observer
+  (`.ai/flows/boot-recovery.md`).
 - Executar soak tests de maior duracao para monitorar acumulacao de pendencias e degradacao progressiva.
 - Executar testes de carga controlada para medir latencia de conciliacao e convergencia sob pressao.
 - Avancar para staging e integracao real de exchange como proxima trilha fora do escopo atual com `MOCK`.
