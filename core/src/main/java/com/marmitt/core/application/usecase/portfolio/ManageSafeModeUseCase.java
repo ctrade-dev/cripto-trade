@@ -49,11 +49,12 @@ public class ManageSafeModeUseCase implements ManageSafeModePort {
             throw new SafeModeTransitionException("A target safe mode level is required");
         }
         Portfolio portfolio = load(portfolioId);
-        portfolio.changeSafeMode(request.level(), origin, request.reason(), request.confirm())
+        portfolio.changeSafeMode(request.level(), origin, request.trigger(), request.reason(), request.confirm())
                 .ifPresentOrElse(change -> {
                     portfolioRepository.saveSafeModeChange(portfolio, change);
-                    log.warn("safeMode: portfolioId={} {} -> {} origin={} reason={}",
-                            portfolioId, change.from(), change.to(), change.origin(), change.reason());
+                    log.warn("safeMode: portfolioId={} {} -> {} origin={} trigger={} reason={}",
+                            portfolioId, change.from(), change.to(), change.origin(), change.trigger(),
+                            change.reason());
                 }, () -> log.info("safeMode: portfolioId={} already {} - no change (origin={})",
                         portfolioId, portfolio.getSafeModeStatus(), origin));
         return statusOf(portfolio);

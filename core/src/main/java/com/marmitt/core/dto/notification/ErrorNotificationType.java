@@ -18,5 +18,7 @@ public enum ErrorNotificationType {
     /** Runner parado automaticamente por rejeicoes consecutivas da exchange (T25). */
     RUNNER_AUTO_HALTED,
     /** Estrategia remota desabilitada com runners ativos apontando para ela, que ficam em HOLD (T54). */
-    STRATEGY_DISABLED
+    STRATEGY_DISABLED,
+    /** HALT automatico por exchange fora do ar voltou a NORMAL sozinho, com a exchange saudavel (T71). */
+    SAFE_MODE_AUTO_RESUMED
 }

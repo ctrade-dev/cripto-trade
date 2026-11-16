@@ -4,6 +4,8 @@ import com.marmitt.application.spring.infrastructure.persistence.mapper.Portfoli
 import com.marmitt.application.spring.infrastructure.persistence.repository.PortfolioJdbcRepository;
 import com.marmitt.core.domain.portfolio.Portfolio;
 import com.marmitt.core.domain.portfolio.SafeModeChange;
+import com.marmitt.core.enums.SafeModeOrigin;
+import com.marmitt.core.enums.SafeModeStatus;
 import com.marmitt.core.exceptions.SafeModeTransitionException;
 import com.marmitt.core.ports.outbound.repository.PortfolioRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -98,6 +101,7 @@ public class JdbcPortfolioRepositoryAdapter implements PortfolioRepositoryPort {
                 UPDATE portfolios
                    SET safe_mode_status = :status,
                        safe_mode_origin = :origin,
+                       safe_mode_trigger = :trigger,
                        safe_mode_reason = :reason,
                        safe_mode_changed_at = :changedAt,
                        version = COALESCE(version, 0) + 1
@@ -107,6 +111,7 @@ public class JdbcPortfolioRepositoryAdapter implements PortfolioRepositoryPort {
                 new MapSqlParameterSource()
                         .addValue("status", change.to().name())
                         .addValue("origin", change.origin().name())
+                        .addValue("trigger", triggerName(change))
                         .addValue("reason", change.reason())
                         .addValue("changedAt", Timestamp.from(change.changedAt()))
                         .addValue("id", portfolio.getId())
@@ -116,8 +121,8 @@ public class JdbcPortfolioRepositoryAdapter implements PortfolioRepositoryPort {
                     "Portfolio " + portfolio.getId() + " was changed concurrently - reload and retry");
         }
         jdbcTemplate.update("""
-                INSERT INTO safe_mode_changes(id, portfolio_id, from_status, to_status, origin, reason, changed_at)
-                VALUES (:id, :portfolioId, :from, :to, :origin, :reason, :changedAt)
+                INSERT INTO safe_mode_changes(id, portfolio_id, from_status, to_status, origin, trigger, reason, changed_at)
+                VALUES (:id, :portfolioId, :from, :to, :origin, :trigger, :reason, :changedAt)
                 """,
                 new MapSqlParameterSource()
                         .addValue("id", change.id())
@@ -125,9 +130,36 @@ public class JdbcPortfolioRepositoryAdapter implements PortfolioRepositoryPort {
                         .addValue("from", change.from().name())
                         .addValue("to", change.to().name())
                         .addValue("origin", change.origin().name())
+                        .addValue("trigger", triggerName(change))
                         .addValue("reason", change.reason())
                         .addValue("changedAt", Timestamp.from(change.changedAt())));
         log.trace("[REPO] saveSafeModeChange({}, {} -> {}) - {}ms",
                 portfolio.getId(), change.from(), change.to(), RepoTiming.elapsedMs(start));
+    }
+
+    @Override
+    public long countSafeModeChanges(UUID portfolioId, SafeModeOrigin origin, SafeModeStatus to, Instant since) {
+        long start = System.nanoTime();
+        Long count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                  FROM safe_mode_changes
+                 WHERE portfolio_id = :portfolioId
+                   AND origin = :origin
+                   AND to_status = :to
+                   AND changed_at >= :since
+                """,
+                new MapSqlParameterSource()
+                        .addValue("portfolioId", portfolioId)
+                        .addValue("origin", origin.name())
+                        .addValue("to", to.name())
+                        .addValue("since", Timestamp.from(since)),
+                Long.class);
+        log.trace("[REPO] countSafeModeChanges({}, {}, {}, {}) - {}ms",
+                portfolioId, origin, to, since, RepoTiming.elapsedMs(start));
+        return count == null ? 0L : count;
+    }
+
+    private static String triggerName(SafeModeChange change) {
+        return change.trigger() == null ? null : change.trigger().name();
     }
 }

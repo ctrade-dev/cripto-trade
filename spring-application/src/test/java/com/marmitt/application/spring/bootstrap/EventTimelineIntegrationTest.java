@@ -11,6 +11,7 @@ import com.marmitt.core.dto.runner.response.CreateRunnerResponse;
 import com.marmitt.core.enums.BootRunStatus;
 import com.marmitt.core.enums.SafeModeOrigin;
 import com.marmitt.core.enums.SafeModeStatus;
+import com.marmitt.core.enums.SafeModeTrigger;
 import com.marmitt.core.enums.TimelineEventType;
 import com.marmitt.core.ports.inbound.operations.QueryEventTimelinePort;
 import com.marmitt.core.ports.inbound.portfolio.ManageSafeModePort;
@@ -61,9 +62,10 @@ class EventTimelineIntegrationTest extends ScenarioStrategyE2ETestSupport {
         runnerLifecycle.start(runnerId, "operator start");
         haltRunner.haltById(runnerId, RunnerStatusCause.automatic("consecutive order rejections: test"));
         manageSafeMode.change(portfolioId, SafeModeOrigin.AUTOMATIC,
-                new ChangeSafeModeRequest(SafeModeStatus.HALT, "drawdown above limit", false));
+                ChangeSafeModeRequest.automatic(SafeModeStatus.HALT, SafeModeTrigger.MAX_DRAWDOWN_EXCEEDED,
+                        "drawdown above limit"));
         manageSafeMode.change(portfolioId, SafeModeOrigin.MANUAL,
-                new ChangeSafeModeRequest(SafeModeStatus.NORMAL, "operator reviewed drawdown", false));
+                ChangeSafeModeRequest.manual(SafeModeStatus.NORMAL, "operator reviewed drawdown", false));
         runnerLifecycle.resume(runnerId, "operator resume");
         Instant afterCommands = Instant.now();
         UUID exitId = insertProtectiveExit(runnerId, afterCommands.plusMillis(10));

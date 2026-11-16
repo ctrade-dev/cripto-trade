@@ -2,7 +2,10 @@ package com.marmitt.core.ports.outbound.repository;
 
 import com.marmitt.core.domain.portfolio.Portfolio;
 import com.marmitt.core.domain.portfolio.SafeModeChange;
+import com.marmitt.core.enums.SafeModeOrigin;
+import com.marmitt.core.enums.SafeModeStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +31,10 @@ public interface PortfolioRepositoryPort {
      *         o portfolio depois da leitura
      */
     void saveSafeModeChange(Portfolio portfolio, SafeModeChange change);
+
+    /**
+     * Mudancas do Safe Mode do portfolio para {@code to}, com a origem dada, a partir de {@code since}
+     * (inclusive). Usado para o teto de retomadas automaticas por janela (T71).
+     */
+    long countSafeModeChanges(UUID portfolioId, SafeModeOrigin origin, SafeModeStatus to, Instant since);
 }

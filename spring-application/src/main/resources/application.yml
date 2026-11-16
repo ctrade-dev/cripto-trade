@@ -127,7 +127,8 @@ exchange:
 
 safe-mode:
   auto:
-    # T25: gatilhos automaticos (decisao de 2026-10-19). Portfolio: HALT, retomada sempre manual.
+    # T25: gatilhos automaticos (decisao de 2026-10-19). Portfolio: HALT, retomada manual, exceto o HALT por
+    # exchange fora do ar (EXCHANGE_UNAVAILABLE), que volta sozinho (resume, T71).
     # Runner: halt so do runner, retomada manual pelo resume. enabled=false desliga todos (o drawdown
     # da T43 tem chave propria em portfolio.circuit-breaker).
     enabled: true
@@ -140,8 +141,15 @@ safe-mode:
       # T57: conferencia de saldo por exchange durante a operacao; HALT na 2a leitura seguida em DEFICIT.
       evaluation-interval-ms: 300000
     watchdog:
+      # Liga WATCHDOG_STUCK e EXCHANGE_UNAVAILABLE (todos os ciclos com a exchange fora do ar, T71).
       enabled: true
       max-stuck-cycles: 3
+    resume:
+      # T71 (decisao de 2026-11-15): HALT EXCHANGE_UNAVAILABLE volta a NORMAL depois de healthy-minutes seguidos
+      # de exchange saudavel, no maximo max-per24h vezes por portfolio em 24h.
+      enabled: true
+      healthy-minutes: 5
+      max-per24h: 3
     rejections:
       enabled: true
       max-consecutive: 5
