@@ -21,7 +21,7 @@ openapi: 3.0.3
 
 info:
   title: CTrade Strategy Service Contract
-  version: 2.0.0
+  version: 2.1.0
   description: >
     Superficie de rede de uma app de estrategia. Uma decisao pura por tick:
     dado market data (input) e contexto operacional consolidado (context),
@@ -249,7 +249,7 @@ components:
 
     MarketInput:
       type: object
-      required: [symbol, currentPrice, timestamp, priceHistory]
+      required: [symbol, currentPrice, timestamp, priceHistory, candles]
       description: >
         Dados de mercado do tick. currentPrice e obrigatorio e positivo; os
         demais precos sao opcionais. A validacao semantica rica (spread, faixa
@@ -275,6 +275,13 @@ components:
           description: >
             Do mais antigo para o mais novo, terminando no tick atual, com exatamente
             os ticks declarados em requirements.priceHistory.ticks (vazio se nenhum).
+        candles:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/CandleSeries' }
+          description: >
+            (2.1) Uma serie por intervalo declarado em requirements.candles, na mesma
+            ordem. Vazio quando a estrategia nao declara candles.
         additionalData:
           type: object
           additionalProperties: true
@@ -291,6 +298,52 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    CandleInterval:
+      type: string
+      enum: [1m, 5m, 15m, 1h, 4h, 1d, 1w]
+
+    Candle:
+      type: object
+      required: [openTime, open, high, low, close, volume]
+      properties:
+        openTime:
+          type: string
+          format: date-time
+          description: Abertura do periodo, ISO-8601 UTC.
+        open: { $ref: '#/components/schemas/Decimal' }
+        high: { $ref: '#/components/schemas/Decimal' }
+        low: { $ref: '#/components/schemas/Decimal' }
+        close: { $ref: '#/components/schemas/Decimal' }
+        volume:
+          $ref: '#/components/schemas/Decimal'
+          description: Volume negociado no periodo, na moeda base.
+
+    CandleSeries:
+      type: object
+      required: [interval, candles]
+      properties:
+        interval: { $ref: '#/components/schemas/CandleInterval' }
+        candles:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/Candle' }
+          description: >
+            So candles fechados, do mais antigo para o mais novo, continuos (um por
+            intervalo), com exatamente o count declarado. O ultimo e o mais recente
+            ja fechado no instante do tick.
+
+    CandleRequirement:
+      type: object
+      additionalProperties: false
+      required: [interval, count]
+      properties:
+        interval: { $ref: '#/components/schemas/CandleInterval' }
+        count:
+          type: integer
+          minimum: 1
+          maximum: 1000
 
     StrategyContext:
       type: object
@@ -578,16 +631,16 @@ components:
           description: Versao semantica da estrategia, ex. "2.0.0".
         contractVersion:
           type: string
-          description: Versao do contrato implementada, ex. "2.0.0".
+          description: Versao do contrato implementada, ex. "2.1.0".
         requirements: { $ref: '#/components/schemas/Requirements' }
 
     Requirements:
       type: object
       additionalProperties: false
       description: >
-        O que a estrategia precisa em cada interacao. Sem os ticks declarados o
-        ctrade nao a chama. Requisito desconhecido, acima do teto ou diferente do
-        gravado no catalogo falha a conferencia.
+        O que a estrategia precisa em cada interacao. Sem os ticks e os candles
+        declarados o ctrade nao a chama. Requisito desconhecido, acima do teto ou
+        diferente do gravado no catalogo falha a conferencia.
       properties:
         priceHistory:
           type: object
@@ -598,6 +651,13 @@ components:
               type: integer
               minimum: 0
               maximum: 1000
+        candles:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/CandleRequirement' }
+          description: >
+            (2.1) Series de candles fechados, no maximo 3, sem intervalo repetido.
 
     Error:
       type: object

@@ -36,9 +36,11 @@ adaptadores externos.
    quando ela age no tick, a estrategia nao e consultada.
    Le o nivel do Safe Mode de cada portfolio uma vez por tick. Em `CANCEL_ALL`/`PANIC_SELL` o runner
    segue o ramo "Safe Mode" abaixo e a estrategia nao e consultada (T45).
-4. Com menos ticks em `PriceHistoryPort` que os requisitos da estrategia, o tick conta como
-   `WAITING_HISTORY` e a estrategia nao e consultada (T69). Cada tick recebido entra no historico antes da
-   mailbox, na thread de market data. Depois, `RunnerContextAssembler` monta `StrategyContextDto` com portfolio,
+4. Sem o historico que a estrategia declarou (`TradingStrategy.requirements()`), o tick conta como
+   `WAITING_HISTORY` e a estrategia nao e consultada: menos ticks em `PriceHistoryPort` que o pedido (T69), ou
+   alguma serie de candles incompleta, com buraco ou atrasada em relacao ao tick (`CandleHistory`, T72). Tudo
+   vem da fonte do tick. Cada tick recebido entra no historico antes da mailbox, na thread de market data. As
+   series de candles sao mantidas fora do tick pelo `EnsureCandleSeriesUseCase` (secao "Candles" abaixo). Depois, `RunnerContextAssembler` monta `StrategyContextDto` com portfolio,
    posicoes, ordens pendentes, limites e PnL. A posicao e marcada ao preco do tick (em memoria):
    `unrealizedPnl` e o percentual do lote refletem o mercado (T43); `peakPrice` vem do `LotPeakTracker` (T69).
 5. `StrategySignalEvaluator` resolve a estrategia **so por `strategyId`** e a avalia. Qualquer falha
@@ -63,6 +65,22 @@ adaptadores externos.
 9. Sinal `BUY` passa por `BuySignalHandler`.
 10. Sinal `SELL` passa por `SellSignalHandler`.
 11. A transacao e persistida antes do envio externo da ordem.
+
+## Candles (T72)
+
+- **Demanda:** runners que precisam dos streams (`StreamDemand`) cuja estrategia declara `requirements.candles`;
+  uma serie por `(fonte de market data, simbolo, intervalo)`, com o maior `count` pedido. Sem demanda, a serie e
+  descartada.
+- **Carga e manutencao pela REST** (`ExchangeCandleQueryPort`, `EnsureCandleSeriesUseCase`, a cada segundo pelo
+  `CandleSeriesScheduler`): serie vazia, curta ou atrasada pede a exchange os candles fechados que faltam; serie em
+  dia nao consulta nada ate o proximo fechamento. A mesma chamada carrega, atualiza e cobre buraco de uma queda.
+  Falha da exchange ou historico curto espera `ctrade.market-data.candles.retry-delay-ms`.
+- **Entrega** (`CandleSeries.latestClosed`): exatamente `count` candles fechados, continuos, terminando no ultimo
+  fechado no instante do tick; senao nada (decisao 4: nunca serie com buraco). Nos segundos logo depois de cada
+  fechamento, ate o candle novo chegar, a serie esta atrasada e o tick conta como `WAITING_HISTORY`.
+- **So memoria** (`InMemoryCandleRepository`): depois de um restart a serie e recarregada da exchange.
+- Exchange sem consulta de candles ou sem o intervalo: o runner fica sem decisao e o estado operacional acusa
+  `CANDLE_SERIES_UNAVAILABLE`. Binance (`GET /api/v3/klines`) e mock oferecem os 7 intervalos; Coinbase, nenhum.
 
 ## BUY
 
@@ -155,6 +173,8 @@ tipo da `LiquidationPolicy` do runner.
 | Componente | Papel |
 | --- | --- |
 | `core/src/main/java/com/marmitt/core/application/usecase/runner/processsignal/ProcessTradeSignalUseCase.java` | Orquestra ticks, runners, contexto, decisao e handlers BUY/SELL. |
+| `core/src/main/java/com/marmitt/core/application/usecase/marketdata/EnsureCandleSeriesUseCase.java` | Demanda, carga e manutencao das series de candles (T72). |
+| `core/src/main/java/com/marmitt/core/application/usecase/marketdata/CandleSeries.java` | Regras da serie: juntar o que veio e escolher o que vai para a estrategia (T72). |
 | `core/src/main/java/com/marmitt/core/application/usecase/runner/processsignal/OrderNormalizer.java` | Resolve `OrderQuantityNormalizerPort` por exchange e alinha quantidade/preco antes do persist. |
 | `core/src/main/java/com/marmitt/core/application/usecase/runner/processsignal/RunnerContextAssembler.java` | Monta `StrategyContextDto`. |
 | `core/src/main/java/com/marmitt/core/application/usecase/runner/processsignal/BuySignalHandler.java` | Persiste BUY, reserva capital e faz dispatch. |
