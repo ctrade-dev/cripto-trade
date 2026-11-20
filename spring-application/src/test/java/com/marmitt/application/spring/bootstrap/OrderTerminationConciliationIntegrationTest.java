@@ -234,6 +234,89 @@ class OrderTerminationConciliationIntegrationTest extends AbstractIntegrationTes
         awaitBalance(portfolioId, INITIAL_CAPITAL, BigDecimal.ZERO, WAIT_TIMEOUT);
     }
 
+    /**
+     * T73 (T53 F32): EXPIRED que traz execucao que a transacao nao conhecia. O fill e aplicado e gravado numa
+     * transacao de banco; o encerramento grava de novo e nao pode usar a versao lida antes do fill.
+     */
+    @Test
+    void expiredBuyWithUnseenExecutionIsCanceledKeepingTheFill() {
+        UUID portfolioId = createPortfolio();
+        UUID runnerId = createRunner(portfolioId);
+        BigDecimal reserveAmount = new BigDecimal("100.00000000");
+
+        Transaction submittedBuy = newTransaction(
+                runnerId,
+                TransactionType.BUY,
+                new BigDecimal("1.00000000"),
+                new BigDecimal("100.00000000"),
+                reserveAmount,
+                null
+        );
+        submittedBuy.submit("EX_EXPIRED_WITH_FILL_BUY");
+        strategyRunnerRepository.saveTransaction(submittedBuy);
+        assertTrue(globalBalanceRepository.reserveAtomic(portfolioId, reserveAmount));
+
+        orderConciliationPort.execute(orderData(
+                submittedBuy,
+                OrderDataDto.OrderStatus.EXPIRED,
+                null,
+                new BigDecimal("0.40000000"),
+                new BigDecimal("100.00000000")
+        ));
+
+        Transaction canceled = awaitTransactionStatus(submittedBuy.getId(), TransactionStatus.CANCELED, WAIT_TIMEOUT);
+        assertEquals(0, canceled.getEffectiveExecutedQuantity().compareTo(new BigDecimal("0.40000000")));
+        // Volta a reserva nao executada (60); o custo executado (40) segue reservado no lote aberto.
+        awaitBalance(portfolioId, new BigDecimal("960.00000000"), new BigDecimal("40.00000000"), WAIT_TIMEOUT);
+    }
+
+    /** T73 (T53 F32): CANCELED de SELL com execucao nao vista encerra, grava o match e destrava o resto do lote. */
+    @Test
+    void canceledSellWithUnseenExecutionIsCanceledAndUnlocksTheRest() {
+        UUID portfolioId = createPortfolio();
+        UUID runnerId = createRunner(portfolioId);
+        BigDecimal quantity = new BigDecimal("0.01000000");
+        BigDecimal buyPrice = new BigDecimal("50000.00000000");
+        BigDecimal sellPrice = new BigDecimal("52000.00000000");
+
+        Transaction openedByBuy = newTransaction(runnerId, TransactionType.BUY, quantity, buyPrice,
+                quantity.multiply(buyPrice), null);
+        openedByBuy.submit("EX_OPEN_BUY_F32");
+        openedByBuy.fill(quantity, buyPrice);
+        strategyRunnerRepository.saveTransaction(openedByBuy);
+
+        Position position = Position.open(runnerId, SYMBOL, quantity, quantity.multiply(buyPrice));
+        position.associateBuyTransaction(openedByBuy.getId());
+
+        Transaction sellSubmitted = newTransaction(runnerId, TransactionType.SELL, quantity, sellPrice,
+                quantity.multiply(sellPrice), null);
+        sellSubmitted.submit("EX_SELL_F32");
+        strategyRunnerRepository.saveTransaction(sellSubmitted);
+
+        position.startClosing();
+        position.lock(sellSubmitted.getId(), quantity);
+        strategyRunnerRepository.savePosition(position);
+        jdbcTemplate.update("UPDATE transactions SET target_lot_id = ? WHERE id = ?",
+                position.getId(), sellSubmitted.getId());
+
+        orderConciliationPort.execute(orderData(
+                sellSubmitted,
+                OrderDataDto.OrderStatus.CANCELED,
+                null,
+                new BigDecimal("0.00400000"),
+                sellPrice
+        ));
+
+        Transaction canceled = awaitTransactionStatus(sellSubmitted.getId(), TransactionStatus.CANCELED, WAIT_TIMEOUT);
+        assertEquals(0, canceled.getEffectiveExecutedQuantity().compareTo(new BigDecimal("0.00400000")));
+        Position unlocked = awaitPositionUnlocked(position.getId(), WAIT_TIMEOUT);
+        assertEquals(0, unlocked.getQuantity().compareTo(new BigDecimal("0.00600000")));
+        Integer matches = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM transaction_matches WHERE sell_transaction_id = ?", Integer.class,
+                sellSubmitted.getId());
+        assertEquals(1, matches);
+    }
+
     private UUID createPortfolio() {
         CreatePortfolioResponse response = createPortfolioPort.execute(
                 CreatePortfolioRequest.builder()

@@ -1011,7 +1011,7 @@ segue coberto pelo `SafeModeE2ETest`.
   aplicou o fill, destravou o lote e falhou ao gravar a `Transaction` (`OptimisticLockingFailureException` em
   `RunnerTransactionEntity`, na mesma thread). A resposta da WS API trouxe o mesmo `EXPIRED` em seguida e a ordem
   fechou certa (`CANCELED`, 0.0134 executado, fills iguais à exchange). Sem a entrega repetida, a ordem ficaria para o
-  watchdog. Causa provável: o término grava um objeto lido antes do fill. A investigar.
+  watchdog. Causa confirmada e corrigida na T73: o encerramento gravava a transação lida antes do fill.
 - **Observação:** 3 min seguidos de timeout da exchange bastam para um `HALT` de retomada manual. É o desenho da T25
   (`max-stuck-cycles: 3`), mas numa operação sem acompanhamento custou 9h40 parado. Decisão do mantenedor
   (2026-11-15): o `HALT` causado por falha da exchange volta sozinho depois de N minutos de exchange saudável; os

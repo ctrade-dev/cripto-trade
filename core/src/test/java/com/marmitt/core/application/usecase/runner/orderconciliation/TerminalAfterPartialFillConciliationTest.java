@@ -165,6 +165,8 @@ class TerminalAfterPartialFillConciliationTest {
         ConciliationOrderUpdate conciliation = new ConciliationOrderUpdate(repository, publisher, List.of(), mock(LatestPricePort.class));
         Transaction sell = submitted(TransactionType.SELL, "0.00154000", "69810.17000000");
         Position lot = lockedLot(sell, "0.00154000", "119.23884280");
+        // O encerramento rele a transacao gravada pelo fill (T73).
+        when(repository.findTransactionById(sell.getId())).thenReturn(Optional.of(sell));
 
         conciliation.execute(event(sell, OrderDataDto.OrderSide.SELL,
                 OrderDataDto.OrderStatus.CANCELED, "0.00107000", "63998.18700935"));

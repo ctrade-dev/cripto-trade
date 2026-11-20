@@ -45,7 +45,9 @@ O mesmo executor atende o fluxo normal de eventos e os fluxos de boot/recovery.
   - transacao ja final ignora o evento (`duplicate <status> ignored`); o mesmo encerramento chega
     pelo stream e pela consulta do watchdog;
   - execucao informada no evento terminal e maior que a conhecida e aplicada antes, como fill
-    parcial (fill que o stream perdeu e o watchdog leu por REST);
+    parcial (fill que o stream perdeu e o watchdog leu por REST). O fill grava a transacao na sua
+    propria transacao de banco; o encerramento rele a transacao gravada antes de encerrar, para nao
+    gravar com a versao lida antes do fill (T73, T53 F32);
   - `EXPIRED` de transacao com execucao vira `CANCELED` (IG 6.1.2): a Binance expira o resto de uma
     ordem a mercado que esgota o livro. Devolve so a reserva nao executada (BUY) ou destrava o resto
     do lote (SELL).

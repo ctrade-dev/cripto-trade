@@ -78,6 +78,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T70 | Sequência de boot por fases (fecha o item do BootOrchestrator)  | Média | Claude | Em PR        |
 | T71 | HALT por exchange indisponível volta sozinho (T53 rodada 13)    | Média | Claude | Concluída    |
 | T72 | Histórico em candles no contrato de estratégias (contrato 2.1)  | Alta  | Claude | Spec         |
+| T73 | Encerramento com execução embutida grava versão antiga (T53 F32) | Baixa | Claude | Em PR        |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução

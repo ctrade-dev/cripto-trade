@@ -130,7 +130,9 @@ public class ConciliationOrderUpdate {
      *       encerramento chega pelo stream e pela consulta do watchdog.</li>
      *   <li><b>Execucao que so chega no encerramento:</b> se a exchange informa mais quantidade executada
      *       do que a transacao conhece (o watchdog leu por REST um fill que o stream perdeu), o incremento
-     *       e aplicado como fill parcial antes de encerrar. Sem isso o fill sumiria da contabilidade.</li>
+     *       e aplicado como fill parcial antes de encerrar. Sem isso o fill sumiria da contabilidade. O fill
+     *       grava a transacao na sua propria transacao de banco; o encerramento rele a transacao gravada
+     *       (T73).</li>
      *   <li><b>EXPIRED depois de execucao parcial:</b> a Binance expira o resto de uma ordem a mercado que
      *       esgota o livro. Pela maquina de estados (IG 6.1.2), ordem interrompida depois de executar e
      *       {@code CANCELED}: devolve so a reserva nao executada e destrava o resto do lote.
@@ -152,6 +154,9 @@ public class ConciliationOrderUpdate {
             log.info("orderConciliation: execution reported with {} applied transactionId={} currentQty={} incomingQty={}",
                     orderData.status(), transaction.getId(), current, incoming);
             fillAction.apply(transaction, orderData, false);
+            // O fill gravou a transacao (outra transacao de banco): o encerramento parte da versao gravada,
+            // nao da lida antes do fill, senao a gravacao falha por versao desatualizada (T73, T53 F32).
+            transaction = reload(transaction);
         }
         switch (orderData.status()) {
             case CANCELED -> transaction.cancel();
@@ -166,6 +171,12 @@ public class ConciliationOrderUpdate {
             default -> throw new IllegalArgumentException("Not a terminal status: " + orderData.status());
         }
         releaseAction.apply(transaction);
+    }
+
+    private Transaction reload(Transaction transaction) {
+        return strategyRunnerRepository.findTransactionById(transaction.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Transaction disappeared after fill transactionId=" + transaction.getId()));
     }
 
     /**
