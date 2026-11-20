@@ -369,6 +369,8 @@ Pré-requisitos:
 - Confirmar ausência de efeito financeiro duplicado após recuperação.
 
 4. Testes de soak e estabilidade temporal
+- Executado na Binance testnet pela T53 (concluída em 2026-11-20): rodadas de 24h e 72h na VPS, falhas controladas e
+  validação dos achados (`.ai/tasks/T53-testnet-soak.md`, "Encerramento").
 - Rodar cenários contínuos por janela maior (ex.: 30-60 min) em ambiente de teste.
 - Monitorar crescimento de pendências (`PENDING`, DLQ, reconciling) ao longo do tempo.
 - Verificar ausência de degradação progressiva de estado.
@@ -528,6 +530,7 @@ Fora de escopo da Fase 4:
 - ~~Refatorar o `BootOrchestrator` para aproximar o fluxo de boot do padrao `usecase first`.~~ Concluido na T70:
   sequencia no `core` com uma classe por fase; o `BootOrchestrator` so monta o comando e traduz o observer
   (`.ai/flows/boot-recovery.md`).
-- Executar soak tests de maior duracao para monitorar acumulacao de pendencias e degradacao progressiva.
+- Executar soak tests de maior duracao (alem das 72h da T53) para monitorar acumulacao de pendencias e degradacao
+  progressiva.
 - Executar testes de carga controlada para medir latencia de conciliacao e convergencia sob pressao.
 - Avancar para staging e integracao real de exchange como proxima trilha fora do escopo atual com `MOCK`.

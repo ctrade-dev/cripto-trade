@@ -3,7 +3,7 @@
 **Complexidade:** Baixa
 **Responsável:** Claude
 **Dependências:** T67 (encerramento com execução embutida)
-**Status:** Implementada em `bugfix/t73-terminal-with-execution-stale-version` (2026-11-20)
+**Status:** Concluída — #195, implantada na VPS em 2026-11-20
 
 ---
 

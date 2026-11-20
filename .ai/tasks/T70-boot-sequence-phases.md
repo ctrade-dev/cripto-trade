@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T7 (boot readiness), T31 (recovery unificado), T59 (histórico do boot)
-**Status:** Implementada em `feature/t70-boot-phases` (2026-11-16); teste na VPS depois do merge
+**Status:** Concluída — implementada no #194 e testada na VPS na curta 117 (2026-11-20)
 
 ---
 
@@ -105,7 +105,9 @@ camadas.
 4. `onRunFailed` com a fase que falhou; o tracker marca a falha num ponto só.
 5. Testes de boot atuais verdes sem mudar asserções, e teste novo da sequência com fases falsas.
 6. Reinício na VPS com ordens e lotes abertos: boot `SUCCESS`, `phase2.sanity` `OK`, zumbis 0, runners recuperados
-   e 0 `ERROR`, igual ao reinício da implantação da F30/F31.
+   e 0 `ERROR`, igual ao reinício da implantação da F30/F31. **OK na curta 117:** implantação às 17:16Z com 2 lotes
+   abertos e 2 BUY no livro; boot `SUCCESS` em 7,9 s, as quatro fases `SUCCESS`, `phase2.sanity` `OK`, zumbis 0,
+   20 runners recuperados; log só com `bootSequence:`; 0 `ERROR` no reinício e na sessão.
 7. `.ai/flows/boot-recovery.md` atualizado. O item sai do "Backlog Pós-Testes" do `docs/TESTING_ROADMAP.md`.
 
 ## Validação

@@ -4,7 +4,7 @@
 **Responsável:** Claude (spec, procedimento, análise) + mantenedor (execução no ambiente)
 **Dependências:** T2 (perfil testnet), T18 (relatório de reconciliação), T21/T51 (alertas), T25/T43/T44/T45/T48
 (proteções), T41 (estratégia remota).
-**Status:** Em andamento — rodada final de 72h aprovada (rodada 12, 2026-11-08); fase 4 completa (curta 112); F30 e F31 da rodada 13 validadas na rodada 15 (2026-11-16); T71 testada na curta 116.
+**Status:** Concluída (2026-11-20) — fases 1 a 4 aprovadas; rodada final de 72h aprovada (rodada 12); achados da rodada 13 corrigidos e validados (rodada 15, curtas 116 e 117). Encerramento no fim deste documento.
 
 ---
 
@@ -118,7 +118,7 @@ Decisão do mantenedor, com a rodada 12 aprovada. Substitui a decisão 5 e a rod
   (`PANIC_SELL`, descer HALT automático, mudar limites de risco ou a política de liquidação) continuam pedindo
   autorização, teste a teste.
 
-## Pré-requisitos ainda abertos
+## Pré-requisitos (todos atendidos no encerramento)
 
 - **VPS** contratada e com o ambiente do Docker Compose (bloqueia as fases 2 a 4). Spec na **T63**;
   procedimento em `deploy/vps/README.md` (subir, cadastrar as apps, limpar o banco, túnel).
@@ -365,6 +365,7 @@ Os scripts saem em PR antes do primeiro teste. As duas mudanças de código só 
 | 14 | 2026-11-15 | Validação de F30 e F31 | ~23 min (encerrada) | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, com #190 e #191 | **Interrompida, sem veredito.** `HALT` automático `BALANCE_DIVERGENCE` 10 min depois da largada: portfólio de 1000 USDT e só ~604 USDT livres na conta da testnet. Divergência verdadeira, não bug. 0 em voo no fechamento; conciliação 30/30. | `round-start.sh` confere o USDT livre (#192) |
 | 15 | 2026-11-15/16 | Validação de F30 e F31 | 6h | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, 500 USDT, com #190, #191 e #192 | **Aprovada.** 1744 fills, todos iguais à exchange; DLQ vazia; 0 `ERROR`; nenhum evento automático; nenhum runner parado pelo guarda de rejeições; `reserved` igual ao custo dos 6 lotes abertos e disponível + reservado = capital + realizado, ao centavo. | F30 e F31 resolvidas |
 | Curta 116 | 2026-11-16 | Teste da T71 na VPS | 60 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, 450 USDT, com #193 | **T71 passou.** Exchange bloqueada (WS e REST) às 17:31:45Z com 3 SELL no livro; `HALT` automático `EXCHANGE_UNAVAILABLE` às 17:34:45Z (`lastFailure` de conexão); rede liberada às 17:36:05Z, exchange saudável desde 17:37:46Z e `NORMAL` automático às 17:42:47Z (`AUTO_RESUME EXCHANGE_UNAVAILABLE: exchange healthy for 5m`), auditado com origem e gatilho. Nenhuma BUY no `HALT` (13 SELL); 11 BUY nos 5 min seguintes. 37 `ERROR`, todos de 17:32Z a 17:35Z (queda provocada). 0 em voo no fechamento; DLQ vazia; conciliação 78/78, 52/52, 24/24 e 45/45. | T71 concluída |
+| Curta 117 | 2026-11-20 | Teste da T70 na VPS | 45 min | 5 apps × 4 símbolos = 20 runners, VPS Oracle ARM, banco limpo, 300 USDT, com #194 | **T70 passou.** Implantação no meio da sessão (17:16Z) com 2 lotes abertos e 2 BUY no livro: boot `SUCCESS` em 7,9 s, as quatro fases `SUCCESS`, `phase2.sanity` `OK`, zumbis 0, 20 runners recuperados, log só com `bootSequence:`. 0 `ERROR` na sessão inteira; 0 em voo no fechamento; DLQ vazia; conciliação 29/29, 23/23, 11/11 e 11/11. | T70 concluída |
 
 ### Rodada 1 — detalhes (2026-10-20)
 
@@ -1050,6 +1051,34 @@ gatilho agiu certo. Encerrada pelo `round-close.sh`: 0 em voo, conciliação 30/
 - Os `WARN` são os esperados: falhas provocadas pelo `SoakChaos` (1332), cancelamentos de ordem já encerrada (222),
   SELL sem lote aberto (239) e 1 cancelamento de ordem ainda desconhecida da exchange, resolvido pelo status final.
 - Resultado realizado de -10.40 USDT: giro das apps de soak.
+
+## Encerramento (2026-11-20)
+
+**Resultado.** A trilha de testnet está concluída. O ctrade opera na Binance testnet com estratégias fora do processo,
+por janelas longas e sob falhas provocadas, mantendo o registro igual ao da exchange.
+
+| Fase | Como foi aprovada |
+|---|---|
+| 1. Smoke de ramos | Rodadas 2 e 3 (máquina local) |
+| 2 e 3. Soak com estratégias fora do processo | Rodadas 7 a 12 na VPS, com as cinco apps da T60; rodada final de 72h aprovada (rodada 12) |
+| 4. Falhas controladas | F4.1 a F4.14 nas curtas 101 a 112 |
+| Validação final | Rodada 13 (72h, 4 símbolos) reprovada por F30 e F31; correções aprovadas na rodada 15 (6h); T71 e T70 testadas nas curtas 116 e 117 |
+
+**Achados.** F1 a F32: cada um foi corrigido por task ou PR próprio (ver a coluna "Achados → tasks" do registro e os
+detalhes de cada rodada) ou aceito como comportamento da testnet ou da operação, com o motivo registrado. Nenhum
+achado fica aberto. Tasks que saíram do soak: T55 a T58, T66 a T68, T71 e T73; outros achados foram corrigidos direto por PR
+(por exemplo #181, #183, #189, #190 e #191), com calibrações das apps (T60) e dos scripts da VPS.
+
+**Operação que fica.** Cada sessão termina sem vender os lotes abertos (decisão do mantenedor, 2026-11-20): o custo
+desses lotes sai do USDT livre da conta da testnet, e o `CAPITAL` das sessões seguintes desce junto
+(`round-start.sh` recusa capital acima do USDT livre). A Binance zera os saldos da testnet de tempos em tempos.
+
+**O que não é desta task** (próximos passos no `docs/TESTING_ROADMAP.md`, "Backlog Pós-Testes"):
+
+- soak além de 72h, para acúmulo lento de pendências;
+- teste de carga controlada, com volume crescente e medida de latência da conciliação (a F4.14 cobriu 20 runners e
+  4 streams, não uma rampa de carga);
+- plano de staging, a próxima trilha antes de produção.
 
 ## Fontes
 

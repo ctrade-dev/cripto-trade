@@ -110,7 +110,9 @@ Evidencias de Fase 1B em testes automatizados:
 
 - Item 1 (Testes automatizados minimos): PARCIAL (AVANCADO).
 - Baseline de invariantes, integracao core com MOCK, controles deterministicos do MOCK, robustez contra duplicidade/concorrencia, boot recovery completo, observabilidade operacional e ciclo de DLQ operacional cobertos (Fases 0, 1A, 1B, 2, 3 e 4).
-- Ainda faltam staging/soak test, carga controlada, guardrails finais de producao e integracao real com exchange.
+- Soak em testnet concluido (T53, 2026-11-20: 72h aprovadas, falhas controladas, achados corrigidos).
+- Ainda faltam staging, soak alem de 72h, carga controlada, guardrails finais de producao e operacao com exchange real
+  em producao.
 
 ### Evidencias adicionais de Fase 3
 
@@ -132,7 +134,7 @@ Evidencias de Fase 1B em testes automatizados:
 ### Backlog de Go-Live Apos a Fase 4
 
 - staging com comportamento proximo ao real
-- soak test por janela prolongada
+- soak test por janela prolongada (testnet ate 72h concluido na T53; falta janela maior)
 - carga controlada e medicionamento de latencia/convergencia
 - integracao real com exchange
 - kill switch global e circuit breaker por exchange

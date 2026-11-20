@@ -58,7 +58,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T50 | Limites de risco pré-trade (posições, ordens, preço, utilização) | Média | Claude | Concluído |
 | T51 | Observabilidade de capital, Safe Mode e lifecycle                | Baixa | Claude | Concluído |
 | T52 | MOCK: cancelamento de ordem em preenchimento simulado            | Média | Claude | Concluído |
-| T53 | Soak test em testnet (procedimento, critérios, execuções)        | Média | Claude | Em andamento |
+| T53 | Soak test em testnet (procedimento, critérios, execuções)        | Média | Claude | Concluída    |
 | T54 | Catálogo dinâmico de estratégias remotas (cadastro via API)       | Alta  | Claude | Concluído |
 | T55 | Operabilidade por IA (API segura, códigos, auditoria, estado consolidado) | Alta | Claude | Concluído |
 | T56 | Demanda de market data: conexões e assinaturas automáticas      | Média | Claude | Concluído |
@@ -75,10 +75,10 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T67 | Ordem expirada após preenchimento parcial (T53 F11–F13)         | Média | Claude | Concluído    |
 | T68 | Falha abrupta do WebSocket não reconecta (T53 F15–F18)          | Média | Claude | Concluído    |
 | T69 | Apps de estratégia stateless (contrato 2.0)                     | Alta  | Claude | Concluído    |
-| T70 | Sequência de boot por fases (fecha o item do BootOrchestrator)  | Média | Claude | Em PR        |
+| T70 | Sequência de boot por fases (fecha o item do BootOrchestrator)  | Média | Claude | Concluída    |
 | T71 | HALT por exchange indisponível volta sozinho (T53 rodada 13)    | Média | Claude | Concluída    |
 | T72 | Histórico em candles no contrato de estratégias (contrato 2.1)  | Alta  | Claude | Spec         |
-| T73 | Encerramento com execução embutida grava versão antiga (T53 F32) | Baixa | Claude | Em PR        |
+| T73 | Encerramento com execução embutida grava versão antiga (T53 F32) | Baixa | Claude | Concluída    |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução
