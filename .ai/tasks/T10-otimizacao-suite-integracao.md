@@ -3,7 +3,7 @@
 **Complexidade:** Média  
 **Responsável:** Codex  
 **Dependências:** nenhuma  
-**Status:** Pendente
+**Status:** Concluído (#117)
 
 ---
 

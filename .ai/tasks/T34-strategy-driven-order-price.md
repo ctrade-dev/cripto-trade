@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** nenhuma (fundação; habilita a T35)
-**Status:** Implementado (aguardando PR/merge) — `StrategyOutputDto.limitPrice` (opcional) + factories `buyAt`/`sellAt`; resolução de `effectivePrice` em `ProcessTradeSignalUseCase` (sem `limitPrice` preserva o preço de mercado). Coberto por unit test de contrato (`StrategyOutputDtoLimitPriceTest`) e teste de integração MOCK (`ProcessTradeSignalMockIntegrationTest`: `buyAt` persiste no preço da estratégia; sem limite persiste no preço de mercado). Reconciliação documental aplicada em `docs/IMPLEMENTATION_GUIDE.md` (§3.1 e §7.2.1). **Fora de escopo (follow-up):** `OrderType` MARKET/LIMIT e o safety buffer (T36).
+**Status:** Concluído
 
 ---
 

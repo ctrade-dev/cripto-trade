@@ -4,7 +4,7 @@
 **Responsável:** Claude (compose, scripts, runbook); mantenedor (contratar a VPS, chaves SSH e segredos)
 **Dependências:** T53 (decisão 2: rodadas acima de 12h numa VPS), T60 (apps de estratégia), T59 (relatório
 de rodada). Desbloqueia as fases 2 a 4 da T53.
-**Status:** Em andamento — VPS no ar (Oracle, 2026-10-28); compose, scripts e runbook em `deploy/vps`.
+**Status:** Concluído — VPS no ar desde 2026-10-28 (Oracle); compose, scripts e runbook em `deploy/vps`
 
 ---
 

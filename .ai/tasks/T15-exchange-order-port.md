@@ -3,7 +3,7 @@
 **Complexidade:** Média  
 **Responsável:** Claude  
 **Dependências:** T14 (refactor fronteiras arquiteturais: transporte e negócio)  
-**Status:** Pendente
+**Status:** Concluído
 
 ---
 

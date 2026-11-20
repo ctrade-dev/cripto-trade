@@ -3,7 +3,7 @@
 **Complexidade:** Alta  
 **Responsável:** Claude  
 **Dependências:** T12 (conexão WebSocket API estabelecida), T3 (signing), T5 (REST path existente como fallback)  
-**Status:** Pendente
+**Status:** Concluído
 
 ---
 

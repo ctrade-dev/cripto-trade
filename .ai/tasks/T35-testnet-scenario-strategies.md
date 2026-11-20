@@ -3,7 +3,7 @@
 **Complexidade:** Média
 **Responsável:** Claude
 **Dependências:** T34 (preço de ordem dirigido pela estratégia) para os cenários de ordem descansando; T32 (`SHOULD_CANCEL`) já concluída
-**Status:** Implementado (aguardando PR/merge) — 4 estratégias em `strategy/.../impl/scenario/` (`RestingBuyCancelStrategy`, `FilledBuyRestingSellCancelStrategy`, `ImmediateRoundTripStrategy`, `OverAllocationRejectStrategy`) sobre `AbstractScenarioStrategy` + `ScenarioStrategyConfig` compartilhado. Registro condicional em `InMemoryStrategyRepository` sob flag `ctrade.scenario-strategies.enabled` (default `false`, env `CTRADE_SCENARIO_STRATEGIES_ENABLED`). Cobertas por 12 unit tests sobre `StrategyContextDto` sintético (0 falhas); integração `ProcessTradeSignalMockIntegrationTest` confirma que o default off preserva o repositório. **Desvio consciente da spec:** pacote único `impl/scenario` (em vez de sub-pacotes por estratégia) e um `Config` compartilhado (em vez de um por estratégia) — reduz duplicação mantendo cada decisão isolada. **Teto de ciclos (`maxCycles`):** `ScenarioStrategyConfig` ganhou `maxCycles` (0 = ilimitado, default; `boundedConfig(n)` para e2e). Cada estratégia consome um ciclo no ponto que o inicia (via `tryStartCycle()` na base) e fica inerte (`HOLD`) após o teto, com início/fim determinísticos e sem criar mais transações que o necessário — habilita testes e2e "sobe app → ativa estratégia → valida → sem excesso". **Follow-up:** exemplo de teste e2e por estratégia (boot + runner + asserts de transações/outcome) e procedimento de boot/recovery de ordem órfã no runbook (sem código).
+**Status:** Concluído (as estratégias embutidas saíram na T65; hoje só existem como dublês dos testes de integração)
 
 ---
 

@@ -3,7 +3,7 @@
 **Complexidade:** Baixa  
 **Responsável:** Claude  
 **Dependências:** Nenhuma  
-**Status:** Implementado (Opção 1 + dedup do boot). Observabilidade dedicada **adiada** (ver "Fora de escopo / Adiado").
+**Status:** Concluído (Opção 1 + dedup do boot). Observabilidade dedicada do zombie **adiada**, sem task (ver "Fora de escopo / Adiado").
 
 ---
 

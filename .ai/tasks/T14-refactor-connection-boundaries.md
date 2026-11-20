@@ -3,7 +3,7 @@
 **Complexidade:** Alta  
 **Responsável:** Claude  
 **Dependências:** T12 (remove ListenKeyManager e HttpClientPort do ciclo de user data), T13 (valida o padrão de ordem via WebSocket)  
-**Status:** Pendente
+**Status:** Concluído
 
 ---
 

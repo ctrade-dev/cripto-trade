@@ -3,7 +3,7 @@
 **Complexidade:** Baixa
 **Responsável:** Claude
 **Dependências:** T59 (procedimento do relatório, `GET /api/admin/events`), T63 (VPS com Loki e Prometheus).
-**Status:** Em andamento
+**Status:** Concluído
 
 ---
 

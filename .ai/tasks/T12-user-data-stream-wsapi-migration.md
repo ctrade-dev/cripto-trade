@@ -3,7 +3,7 @@
 **Complexidade:** Alta  
 **Responsável:** Claude  
 **Dependências:** T4 (base implementada), T3 (signing já presente)  
-**Status:** Pendente
+**Status:** Concluído
 
 ---
 

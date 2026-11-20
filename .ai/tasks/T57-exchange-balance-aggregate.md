@@ -4,7 +4,7 @@
 **Responsável:** Claude
 **Dependências:** T25 (HALT automático `BALANCE_DIVERGENCE`), T55-C2 (comparação com a exchange), boot
 fase 2 (sanidade de saldo). Origem: achado F3 da rodada 1 da T53.
-**Status:** Implementada (2026-10-20) — aguardando PR/merge e validação na rodada 3 da T53.
+**Status:** Concluído (validada na rodada 3 da T53)
 
 ---
 
