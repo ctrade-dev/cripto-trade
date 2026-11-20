@@ -1,5 +1,12 @@
 package com.marmitt.application.spring.bootstrap;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import com.marmitt.core.domain.runner.RunnerStatusCause;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
@@ -42,6 +49,9 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
 
     private static final UUID REF = UUID.fromString("5ea5e0a0-0000-4000-a000-0000000000e2");
     private static final UUID NEEDS_HISTORY_REF = UUID.randomUUID();
+    private static final UUID CANDLES_REF = UUID.randomUUID();
+    /** Ultimo request de /evaluate para CANDLES_REF (T72). */
+    private static volatile String lastCandlesBody;
     private static volatile String lastEvaluateBody = "";
     /** Chamadas de /evaluate para NEEDS_HISTORY_REF. Runners de outros testes seguem ativos e chamam o mesmo servidor. */
     private static final AtomicInteger NEEDS_HISTORY_CALLS = new AtomicInteger();
@@ -69,11 +79,17 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
                     return json("[{\"strategyId\":\"" + REF + "\",\"name\":\"RemoteE2E\",\"version\":\"1.0.0\","
                             + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1}}},"
                             + "{\"strategyId\":\"" + NEEDS_HISTORY_REF + "\",\"name\":\"NeedsHistory\",\"version\":\"1.0.0\","
-                            + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1000}}}]");
+                            + "\"contractVersion\":\"2.0.0\",\"requirements\":{\"priceHistory\":{\"ticks\":1000}}},"
+                            + "{\"strategyId\":\"" + CANDLES_REF + "\",\"name\":\"NeedsCandles\",\"version\":\"1.0.0\","
+                            + "\"contractVersion\":\"2.1.0\",\"requirements\":{\"candles\":[{\"interval\":\"1h\",\"count\":200}]}}]");
                 }
                 lastEvaluateBody = request.getBody().clone().readUtf8();
                 if (lastEvaluateBody.contains(NEEDS_HISTORY_REF.toString())) {
                     NEEDS_HISTORY_CALLS.incrementAndGet();
+                }
+                if (lastEvaluateBody.contains(CANDLES_REF.toString())) {
+                    lastCandlesBody = lastEvaluateBody;
+                    return json("{\"strategyName\":\"NeedsCandles\",\"decision\":\"HOLD\",\"reasoning\":\"e2e\"}");
                 }
                 BigDecimal limit = MARKET_PRICE.multiply(new BigDecimal("1.01"));
                 String buy = "{\"strategyName\":\"RemoteE2E\",\"decision\":\"SHOULD_BUY\",\"confidence\":\"0.9\","
@@ -136,7 +152,7 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
     void strategyIsNotCalledUntilTheDeclaredPriceHistoryIsAvailable() {
         catalog.register(new RegisterRemoteStrategyRequest(NEEDS_HISTORY_REF, "NeedsHistory", "1.0.0",
                 SERVICE.url("/v2").toString(), "e2e-token"), "e2e setup");
-        assertEquals(1000, catalog.get(NEEDS_HISTORY_REF).priceHistoryTicks());
+        assertEquals(1000, catalog.get(NEEDS_HISTORY_REF).requirements().priceHistoryTicks());
         UUID runnerId = createAndActivateRunner(createPortfolio(), NEEDS_HISTORY_REF);
         driveTicks(4);
         awaitCondition(() -> signalEvaluatedCount(runnerId, "WAITING_HISTORY") > 0, WAIT_TIMEOUT,
@@ -145,6 +161,40 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
         assertEquals(0, NEEDS_HISTORY_CALLS.get(), "a estrategia nao foi chamada");
         assertEquals(0, transactionCount(runnerId));
         haltRunner.haltById(runnerId, RunnerStatusCause.manual("test"));
+    }
+
+    /**
+     * T72: a app declara 200 candles de 1h; o ctrade carrega a serie do mock pela consulta de candles e so chama a app
+     * com ela completa: do mais antigo para o mais novo, continua, terminando no ultimo candle fechado antes do tick.
+     */
+    @Test
+    void strategyDeclaringCandlesReceivesTheClosedSeriesFromTheMarketDataSource() throws Exception {
+        catalog.register(new RegisterRemoteStrategyRequest(CANDLES_REF, "NeedsCandles", "1.0.0",
+                SERVICE.url("/v2").toString(), "e2e-token"), "e2e setup");
+        assertEquals(List.of(new CandleRequirement(CandleInterval.H1, 200)),
+                catalog.get(CANDLES_REF).requirements().candles());
+        createAndActivateRunner(createPortfolio(), CANDLES_REF, MOCK_EXCHANGE);
+
+        awaitCondition(() -> {
+            publishTick(MOCK_EXCHANGE, MARKET_PRICE, MARKET_PRICE);
+            sleep(200);
+            return lastCandlesBody != null;
+        }, WAIT_TIMEOUT, "app chamada com a serie de candles carregada");
+
+        JsonNode input = new ObjectMapper().readTree(lastCandlesBody).path("input");
+        Instant tick = Instant.parse(input.path("timestamp").asText());
+        JsonNode series = input.path("candles");
+        assertEquals(1, series.size());
+        assertEquals("1h", series.get(0).path("interval").asText());
+        JsonNode candles = series.get(0).path("candles");
+        assertEquals(200, candles.size());
+        for (int i = 1; i < candles.size(); i++) {
+            assertEquals(Duration.ofHours(1), Duration.between(Instant.parse(candles.get(i - 1).path("openTime").asText()),
+                    Instant.parse(candles.get(i).path("openTime").asText())), "serie continua");
+        }
+        Instant lastClose = Instant.parse(candles.get(199).path("openTime").asText()).plus(Duration.ofHours(1));
+        assertFalse(lastClose.isAfter(tick), "so candles fechados");
+        assertTrue(lastClose.plus(Duration.ofHours(1)).isAfter(tick), "termina no ultimo fechado antes do tick");
     }
 
     @Test

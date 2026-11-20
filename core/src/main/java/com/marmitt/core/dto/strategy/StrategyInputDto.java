@@ -20,16 +20,22 @@ public record StrategyInputDto(
         BigDecimal low24h,
         Instant timestamp,
         Map<String, Object> additionalData,
-        List<PricePointDto> priceHistory
+        List<PricePointDto> priceHistory,
+        List<CandleSeriesDto> candles
 ) {
 
     public StrategyInputDto {
         priceHistory = priceHistory == null ? List.of() : priceHistory;
+        candles = candles == null ? List.of() : candles;
     }
 
-    public StrategyInputDto withPriceHistory(List<PricePointDto> history) {
+    /**
+     * O historico que a estrategia declarou (T69, T72): ticks da fonte do tick e uma serie de candles por intervalo
+     * declarado, na ordem declarada.
+     */
+    public StrategyInputDto withHistory(List<PricePointDto> history, List<CandleSeriesDto> candleSeries) {
         return new StrategyInputDto(symbol, currentPrice, previousPrice, bidPrice, askPrice, volume, high24h, low24h,
-                timestamp, additionalData, history);
+                timestamp, additionalData, history, candleSeries);
     }
 
     /**

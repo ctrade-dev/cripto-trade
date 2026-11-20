@@ -24,10 +24,17 @@ public final class WireTypes {
     public record MarketInput(String symbol, String currentPrice, String previousPrice, String bidPrice,
                               String askPrice, String volume, String high24h, String low24h,
                               String timestamp, Map<String, Object> additionalData,
-                              List<PricePoint> priceHistory) {
+                              List<PricePoint> priceHistory, List<CandleSeries> candles) {
     }
 
     public record PricePoint(String price, String timestamp) {
+    }
+
+    /** Contrato 2.1 (T72): uma serie por intervalo declarado em {@code requirements.candles}. */
+    public record CandleSeries(String interval, List<Candle> candles) {
+    }
+
+    public record Candle(String openTime, String open, String high, String low, String close, String volume) {
     }
 
     public record StrategyContext(String runnerId, String portfolioId, String symbol,

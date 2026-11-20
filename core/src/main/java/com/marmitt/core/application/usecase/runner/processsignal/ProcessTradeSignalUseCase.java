@@ -6,7 +6,9 @@ import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.dto.capital.BuyExecutionContext;
 import com.marmitt.core.dto.notification.ErrorNotificationEvent;
+import com.marmitt.core.dto.strategy.CandleSeriesDto;
 import com.marmitt.core.dto.strategy.PricePointDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
@@ -22,6 +24,7 @@ import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 import com.marmitt.core.ports.outbound.exchange.OrderDispatchPort;
 import com.marmitt.core.ports.outbound.exchange.rest.OrderQuantityNormalizerPort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
+import com.marmitt.core.application.usecase.marketdata.CandleHistory;
 import com.marmitt.core.ports.outbound.marketdata.PriceHistoryPort;
 import com.marmitt.core.ports.outbound.metrics.SignalDecision;
 import com.marmitt.core.ports.outbound.metrics.SignalMetricsPort;
@@ -93,6 +96,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
     private final SignalMetricsPort signalMetrics;
     private final LatestPricePort latestPrices;
     private final PriceHistoryPort priceHistory;
+    private final CandleHistory candleHistory;
     private final RunnerMailbox mailbox;
     private final Duration staleTickThreshold;
     private final Duration slowProcessingWarning;
@@ -123,6 +127,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
                                         SignalMetricsPort signalMetrics,
                                         LatestPricePort latestPrices,
                                         PriceHistoryPort priceHistory,
+                                        CandleHistory candleHistory,
                                         ErrorNotificationPort notification,
                                         Executor runnerExecutor,
                                         Duration staleTickThreshold,
@@ -133,6 +138,7 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
         this.signalMetrics = signalMetrics;
         this.latestPrices = latestPrices;
         this.priceHistory = priceHistory;
+        this.candleHistory = candleHistory;
         this.notification = notification;
         this.mailbox = new RunnerMailbox(runnerExecutor, this::evaluateTick, signalMetrics);
         this.staleTickThreshold = staleTickThreshold;
@@ -517,21 +523,25 @@ public abstract class ProcessTradeSignalUseCase implements ProcessTradeSignalPor
             return;
         }
 
-        // T69: a estrategia e stateless e recebe o historico inteiro; sem ele, nao e consultada.
-        int requiredTicks = activeStrategy.get().requiredPriceHistoryTicks();
-        // A serie e a da fonte do tick: o runner pode receber market data de outra exchange autorizada.
+        // T69/T72: a estrategia e stateless e recebe o historico inteiro (ticks e candles); sem ele completo, nao e
+        // consultada. As series sao as da fonte do tick: o runner pode receber market data de outra exchange
+        // autorizada.
+        StrategyRequirements requirements = activeStrategy.get().requirements();
+        int requiredTicks = requirements.priceHistoryTicks();
         List<PricePointDto> history = priceHistory.latest(marketDataSource, runner.getSymbol(), requiredTicks,
                 input.timestamp());
-        if (history.size() < requiredTicks) {
+        Optional<List<CandleSeriesDto>> candles = candleHistory.seriesFor(marketDataSource, runner.getSymbol(),
+                requirements.candles(), input.timestamp());
+        if (history.size() < requiredTicks || candles.isEmpty()) {
             signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.WAITING_HISTORY);
-            log.debug("priceUpdate: waiting price history runner={} have={} required={}",
-                    runner.getId(), history.size(), requiredTicks);
+            log.debug("priceUpdate: waiting history runner={} ticks={}/{} candlesReady={}",
+                    runner.getId(), history.size(), requiredTicks, candles.isPresent());
             return;
         }
 
         StrategyContextDto context = contextAssembler.assemble(runner, currentPrice);
-        StrategySignalEvaluator.Evaluation evaluation =
-                signalEvaluator.evaluate(runner, activeStrategy.get(), input.withPriceHistory(history), context);
+        StrategySignalEvaluator.Evaluation evaluation = signalEvaluator.evaluate(runner, activeStrategy.get(),
+                input.withHistory(history, candles.get()), context);
         if (evaluation.unavailable()) {
             signalMetrics.recordSignalEvaluated(runner.getId(), SignalDecision.STRATEGY_UNAVAILABLE);
             return;

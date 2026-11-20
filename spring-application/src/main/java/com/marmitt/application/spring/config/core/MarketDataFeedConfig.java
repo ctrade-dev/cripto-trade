@@ -1,5 +1,11 @@
 package com.marmitt.application.spring.config.core;
 
+import com.marmitt.core.application.usecase.marketdata.CandleHistory;
+import com.marmitt.core.application.usecase.marketdata.CandleSeriesGaps;
+import com.marmitt.core.application.usecase.marketdata.EnsureCandleSeriesUseCase;
+import com.marmitt.core.ports.inbound.marketdata.EnsureCandleSeriesPort;
+import com.marmitt.core.ports.outbound.marketdata.CandleHistoryPort;
+import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.application.spring.bootstrap.OperationalStateProperties;
 import com.marmitt.core.application.usecase.websocket.EnsureMarketDataFeedUseCase;
 import com.marmitt.core.ports.inbound.websocket.ConnectMarketStreamPort;
@@ -38,6 +44,28 @@ public class MarketDataFeedConfig {
                 webSocketConnections, latestPrices, connectMarketStream, connectUserStream, sendMessageWebSocket,
                 properties::streamTypeFor, Duration.ofMillis(operationalStateProperties.getMarketDataStaleMs()),
                 Clock.systemUTC());
+    }
+
+    /** Series de candles das estrategias (T72): leitura no portao de historico e manutencao pela REST. */
+    @Bean
+    public CandleHistory candleHistory(CandleHistoryPort candleHistoryStore) {
+        return new CandleHistory(candleHistoryStore);
+    }
+
+    @Bean
+    public CandleSeriesGaps candleSeriesGaps() {
+        return new CandleSeriesGaps();
+    }
+
+    @Bean
+    public EnsureCandleSeriesPort ensureCandleSeries(StrategyRunnerRepositoryPort strategyRunnerRepository,
+                                                     StrategyRepositoryPort strategyRepository,
+                                                     ExchangeAdapterRepositoryPort exchangeAdapterRepository,
+                                                     CandleHistoryPort candleHistoryStore,
+                                                     CandleSeriesGaps candleSeriesGaps,
+                                                     CandleSeriesProperties properties) {
+        return new EnsureCandleSeriesUseCase(strategyRunnerRepository, strategyRepository, exchangeAdapterRepository,
+                candleHistoryStore, candleSeriesGaps, Clock.systemUTC(), Duration.ofMillis(properties.getRetryDelayMs()));
     }
 
     /**

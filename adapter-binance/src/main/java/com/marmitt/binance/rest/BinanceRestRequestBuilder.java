@@ -16,6 +16,7 @@ public class BinanceRestRequestBuilder {
     private static final String OPEN_ORDERS_PATH = "/api/v3/openOrders";
     private static final String ACCOUNT_PATH     = "/api/v3/account";
     private static final String MY_TRADES_PATH   = "/api/v3/myTrades";
+    private static final String KLINES_PATH      = "/api/v3/klines";
 
     private final String restBaseUrl;
     private final BinanceRequestSigner signer;
@@ -87,6 +88,18 @@ public class BinanceRestRequestBuilder {
         params.put("fromId", String.valueOf(fromId));
         params.put("limit", "1000");
         return get(MY_TRADES_PATH, params);
+    }
+
+    /** Candles (T72): dado publico, sem assinatura nem chave. {@code endTime} filtra pela abertura do candle. */
+    public RestRequest buildKlines(String symbol, String interval, long endTime, int limit) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("symbol", symbol);
+        params.put("interval", interval);
+        params.put("endTime", String.valueOf(endTime));
+        params.put("limit", String.valueOf(limit));
+        StringJoiner query = new StringJoiner("&");
+        params.forEach((k, v) -> query.add(k + "=" + v));
+        return new RestRequest("GET", restBaseUrl + KLINES_PATH + "?" + query, Map.of(), null);
     }
 
     private RestRequest get(String path, Map<String, String> params) {

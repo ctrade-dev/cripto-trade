@@ -190,6 +190,11 @@ ctrade:
       interval-ms: 30000
       default-stream-type: TICKER
       stream-types: {}                   # por exchange, ex.: BINANCE: TICKER
+    candles:
+      # T72: series de candles fechados que as estrategias declaram, carregadas e mantidas pela REST da exchange.
+      enabled: ${CTRADE_MARKET_DATA_CANDLES_ENABLED:true}
+      interval-ms: 1000                  # serie em dia nao consulta a exchange ate o proximo fechamento
+      retry-delay-ms: 10000              # depois de falha da exchange ou historico curto
   strategy:
     remote:
       # T41: estrategias fora do processo (docs/strategy-service/CONTRACT.md).

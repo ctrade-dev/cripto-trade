@@ -45,6 +45,7 @@ import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 import com.marmitt.core.ports.outbound.runner.RunnerActivationObserverPort;
 import org.springframework.beans.factory.annotation.Qualifier;
+import com.marmitt.core.application.usecase.marketdata.CandleHistory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -161,6 +162,7 @@ public class RunnerConfig {
             SignalMetricsPort signalMetrics,
             LatestPricePort latestPrices,
             PriceHistoryPort priceHistory,
+            CandleHistory candleHistory,
             ErrorNotificationPort errorNotification,
             @Qualifier("runnerSignalExecutor") Executor runnerSignalExecutor,
             RunnerSignalProperties runnerSignalProperties) {
@@ -176,6 +178,7 @@ public class RunnerConfig {
                 signalMetrics,
                 latestPrices,
                 priceHistory,
+                candleHistory,
                 errorNotification,
                 runnerSignalExecutor,
                 Duration.ofMillis(runnerSignalProperties.getStaleTickThresholdMs()),

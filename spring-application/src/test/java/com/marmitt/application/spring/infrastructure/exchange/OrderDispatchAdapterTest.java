@@ -303,6 +303,8 @@ class OrderDispatchAdapterTest {
         @Override public boolean hasTradeHistory() { return false; }
         @Override public com.marmitt.core.ports.outbound.exchange.TradeHistoryQueryPort tradeHistory() { throw new com.marmitt.core.exceptions.UnsupportedCapabilityException(EXCHANGE, "tradeHistory"); }
         @Override public boolean hasBootReadiness() { return false; }
+        @Override public boolean hasCandleQuery() { return false; }
+        @Override public com.marmitt.core.ports.outbound.exchange.rest.ExchangeCandleQueryPort candleQuery() { throw new UnsupportedOperationException(); }
         @Override public com.marmitt.core.ports.outbound.exchange.rest.ExchangeBootReadinessPort bootReadiness() { throw new com.marmitt.core.exceptions.UnsupportedCapabilityException(EXCHANGE, "bootReadiness"); }
     }
 

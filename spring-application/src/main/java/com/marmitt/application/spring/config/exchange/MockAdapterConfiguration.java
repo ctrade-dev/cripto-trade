@@ -1,5 +1,8 @@
 package com.marmitt.application.spring.config.exchange;
 
+import com.marmitt.mock.config.MockMarketDataFeedConfig;
+import com.marmitt.mock.config.MockScenarioConfig;
+import com.marmitt.mock.simulator.MockCandleGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.application.spring.repository.DefaultExchangeAdapterDescriptor;
 import com.marmitt.core.dto.exchange.OrderSubmissionResult;
@@ -69,7 +72,10 @@ public class MockAdapterConfiguration {
                 .orderExecution(mockExchangeAdapter)
                 .orderQuery(mockExchangeAdapter)
                 .accountQuery(mockExchangeAdapter)
-                .bootReadiness(mockExchangeAdapter);
+                .bootReadiness(mockExchangeAdapter)
+                .candleQuery(new MockCandleGenerator(MockScenarioConfig.defaultConfig().randomSeed(),
+                        MockMarketDataFeedConfig.defaultConfig().defaultStartPrice(),
+                        MockMarketDataFeedConfig.defaultConfig().defaultVolume()));
 
         userStreamPorts.stream()
                 .filter(p -> "MOCK".equals(p.getExchangeName()))

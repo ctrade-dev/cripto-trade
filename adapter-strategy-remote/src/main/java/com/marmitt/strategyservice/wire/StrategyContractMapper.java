@@ -5,7 +5,12 @@ import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.dto.strategy.OpenLotDto;
 import com.marmitt.core.dto.strategy.PendingOrderDto;
 import com.marmitt.core.dto.strategy.PositionContext;
+import com.marmitt.core.dto.strategy.CandleDto;
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import com.marmitt.core.dto.strategy.CandleSeriesDto;
 import com.marmitt.core.dto.strategy.PricePointDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
@@ -54,7 +59,16 @@ public final class StrategyContractMapper {
                 instant(input.timestamp()), input.additionalData(),
                 input.priceHistory().stream()
                         .map(point -> new WireTypes.PricePoint(decimal(point.price()), instant(point.timestamp())))
-                        .toList());
+                        .toList(),
+                input.candles().stream().map(StrategyContractMapper::toWire).toList());
+    }
+
+    private static WireTypes.CandleSeries toWire(CandleSeriesDto series) {
+        return new WireTypes.CandleSeries(series.interval().code(), series.candles().stream()
+                .map(candle -> new WireTypes.Candle(instant(candle.openTime()), decimal(candle.open()),
+                        decimal(candle.high()), decimal(candle.low()), decimal(candle.close()),
+                        decimal(candle.volume())))
+                .toList());
     }
 
     private static WireTypes.StrategyContext toWire(StrategyContextDto context) {
@@ -107,7 +121,18 @@ public final class StrategyContractMapper {
                 input.additionalData() == null ? Map.of() : input.additionalData(),
                 input.priceHistory() == null ? List.of() : input.priceHistory().stream()
                         .map(point -> new PricePointDto(new BigDecimal(point.price()), Instant.parse(point.timestamp())))
+                        .toList(),
+                input.candles() == null ? List.of() : input.candles().stream()
+                        .map(StrategyContractMapper::toCore)
                         .toList());
+    }
+
+    private static CandleSeriesDto toCore(WireTypes.CandleSeries series) {
+        return new CandleSeriesDto(interval(series.interval()), series.candles().stream()
+                .map(candle -> new CandleDto(Instant.parse(candle.openTime()), new BigDecimal(candle.open()),
+                        new BigDecimal(candle.high()), new BigDecimal(candle.low()), new BigDecimal(candle.close()),
+                        new BigDecimal(candle.volume())))
+                .toList());
     }
 
     public static StrategyContextDto toCore(WireTypes.StrategyContext context) {
@@ -138,21 +163,27 @@ public final class StrategyContractMapper {
     }
 
     /**
-     * Ticks de historico declarados em {@code requirements}. Requisito desconhecido e recusado: a estrategia
-     * precisaria de algo que este ctrade nao entrega, e a falha deve aparecer na conferencia, nao no tick.
+     * Requisitos declarados em {@code requirements} (ticks, T69; candles, T72). Requisito desconhecido e recusado:
+     * a estrategia precisaria de algo que este ctrade nao entrega, e a falha deve aparecer na conferencia, nao no
+     * tick. So o formato e conferido aqui; tetos e repeticao sao regra do core
+     * ({@link StrategyRequirements#violation()}).
      *
      * @throws IllegalArgumentException se {@code requirements} faltar ou estiver fora do contrato
      */
-    public static int priceHistoryTicks(JsonNode requirements) {
+    public static StrategyRequirements requirements(JsonNode requirements) {
         if (requirements == null || !requirements.isObject()) {
             throw new IllegalArgumentException("requirements is required");
         }
         requirements.fieldNames().forEachRemaining(name -> {
-            if (!"priceHistory".equals(name)) {
+            if (!"priceHistory".equals(name) && !"candles".equals(name)) {
                 throw new IllegalArgumentException("unknown requirement " + name);
             }
         });
-        JsonNode priceHistory = requirements.get("priceHistory");
+        return new StrategyRequirements(priceHistoryTicks(requirements.get("priceHistory")),
+                candles(requirements.get("candles")));
+    }
+
+    private static int priceHistoryTicks(JsonNode priceHistory) {
         if (priceHistory == null) {
             return 0;
         }
@@ -161,6 +192,41 @@ public final class StrategyContractMapper {
             throw new IllegalArgumentException("requirements.priceHistory.ticks must be an integer");
         }
         return ticks.intValue();
+    }
+
+    private static List<CandleRequirement> candles(JsonNode candles) {
+        if (candles == null) {
+            return List.of();
+        }
+        if (!candles.isArray()) {
+            throw new IllegalArgumentException("requirements.candles must be an array");
+        }
+        List<CandleRequirement> required = new java.util.ArrayList<>();
+        for (JsonNode candle : candles) {
+            if (!candle.isObject()) {
+                throw new IllegalArgumentException("requirements.candles items must be objects");
+            }
+            candle.fieldNames().forEachRemaining(name -> {
+                if (!"interval".equals(name) && !"count".equals(name)) {
+                    throw new IllegalArgumentException("unknown field requirements.candles." + name);
+                }
+            });
+            JsonNode count = candle.get("count");
+            if (count == null || !count.isIntegralNumber() || !count.canConvertToInt()) {
+                throw new IllegalArgumentException("requirements.candles.count must be an integer");
+            }
+            JsonNode interval = candle.get("interval");
+            if (interval == null || !interval.isTextual()) {
+                throw new IllegalArgumentException("requirements.candles.interval is required");
+            }
+            required.add(new CandleRequirement(interval(interval.asText()), count.intValue()));
+        }
+        return required;
+    }
+
+    private static CandleInterval interval(String code) {
+        return CandleInterval.fromCode(code)
+                .orElseThrow(() -> new IllegalArgumentException("unknown candle interval " + code));
     }
 
     // ---------------------------------------------------------------- escalares

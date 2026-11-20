@@ -4,6 +4,7 @@ import com.marmitt.core.domain.strategy.StrategyEndpoint;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 
 import java.util.UUID;
 
@@ -29,10 +30,10 @@ public interface StrategyEvaluationPort {
     RemoteStrategyIdentity describe(UUID strategyRef, StrategyEndpoint endpoint);
 
     /**
-     * @param contractVersion   versão do contrato de rede que o serviço implementa (ex.: {@code 2.0.0})
-     * @param priceHistoryTicks ticks de histórico que a estratégia declarou precisar (T69)
+     * @param contractVersion versão do contrato de rede que o serviço implementa (ex.: {@code 2.1.0})
+     * @param requirements    histórico que a estratégia declarou precisar (ticks, T69; candles, T72)
      */
     record RemoteStrategyIdentity(UUID strategyId, String name, String version, String contractVersion,
-                                  int priceHistoryTicks) {
+                                  StrategyRequirements requirements) {
     }
 }

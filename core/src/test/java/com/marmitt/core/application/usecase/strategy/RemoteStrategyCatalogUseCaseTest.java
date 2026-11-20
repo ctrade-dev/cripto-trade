@@ -1,5 +1,8 @@
 package com.marmitt.core.application.usecase.strategy;
 
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.domain.runner.StrategyRunner;
 import com.marmitt.core.domain.strategy.RemoteStrategy;
 import com.marmitt.core.domain.strategy.RemoteStrategyEvent;
@@ -58,7 +61,7 @@ class RemoteStrategyCatalogUseCaseTest {
 
     private static final UUID REF = UUID.randomUUID();
     private static final String URL = "http://strategy:8090/v1";
-    private static final RemoteStrategyIdentity IDENTITY = new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", 20);
+    private static final RemoteStrategyIdentity IDENTITY = new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", ticks(20));
 
     private final InMemoryCatalog catalog = new InMemoryCatalog();
     private final InMemoryStrategies strategies = new InMemoryStrategies();
@@ -79,8 +82,8 @@ class RemoteStrategyCatalogUseCaseTest {
         assertTrue(view.usable());
         assertTrue(view.tokenConfigured());
         assertEquals("2.0.0", view.servedContractVersion());
-        assertEquals(20, view.priceHistoryTicks());
-        assertEquals(20, strategies.findById(REF).orElseThrow().requiredPriceHistoryTicks());
+        assertEquals(ticks(20), view.requirements());
+        assertEquals(ticks(20), strategies.findById(REF).orElseThrow().requirements());
         assertTrue(strategies.findById(REF).orElseThrow().isEnabled());
         assertEquals(List.of(RemoteStrategyEventType.REGISTERED, RemoteStrategyEventType.VERIFIED), eventTypes());
         assertEquals("first deploy", catalog.events.get(REF).getFirst().reason());
@@ -115,11 +118,20 @@ class RemoteStrategyCatalogUseCaseTest {
     @Test
     void divergentIdentityOrContractIsNeverUsed() {
         for (RemoteStrategyIdentity served : List.of(
-                new RemoteStrategyIdentity(REF, "SMA", "2.0.0", "2.0.0", 20),
-                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "1.1.0", 20),
-                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", -1),
-                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", 1001),
-                new RemoteStrategyIdentity(UUID.randomUUID(), "SMA", "1.0.0", "2.0.0", 20))) {
+                new RemoteStrategyIdentity(REF, "SMA", "2.0.0", "2.0.0", ticks(20)),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "1.1.0", ticks(20)),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", ticks(-1)),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", ticks(1001)),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", new StrategyRequirements(0,
+                        List.of(new CandleRequirement(CandleInterval.H1, 0)))),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", new StrategyRequirements(0,
+                        List.of(new CandleRequirement(CandleInterval.H1, 1001)))),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", new StrategyRequirements(0,
+                        List.of(new CandleRequirement(CandleInterval.H1, 10), new CandleRequirement(CandleInterval.H1, 20)))),
+                new RemoteStrategyIdentity(REF, "SMA", "1.0.0", "2.0.0", new StrategyRequirements(0,
+                        List.of(new CandleRequirement(CandleInterval.M1, 10), new CandleRequirement(CandleInterval.M5, 10),
+                                new CandleRequirement(CandleInterval.H1, 10), new CandleRequirement(CandleInterval.D1, 10)))),
+                new RemoteStrategyIdentity(UUID.randomUUID(), "SMA", "1.0.0", "2.0.0", ticks(20)))) {
             InMemoryStrategies fresh = new InMemoryStrategies();
             StrategyEvaluationPort port = mock(StrategyEvaluationPort.class);
             when(port.describe(eq(REF), any())).thenReturn(served);
@@ -138,7 +150,7 @@ class RemoteStrategyCatalogUseCaseTest {
     void aChangedRequirementWithoutANewStrategyRefIsNeverUsed() {
         Instant now = Instant.parse("2026-10-20T12:00:00Z");
         catalog.save(new RemoteStrategy(REF, "SMA", "1.0.0", new StrategyEndpoint(URL, null),
-                RemoteStrategyStatus.ENABLED, RemoteStrategyVerification.PENDING, null, null, "2.0.0", 50, now, now),
+                RemoteStrategyStatus.ENABLED, RemoteStrategyVerification.PENDING, null, null, "2.0.0", ticks(50), now, now),
                 List.of());
         when(evaluation.describe(eq(REF), any())).thenReturn(IDENTITY);
 
@@ -147,7 +159,7 @@ class RemoteStrategyCatalogUseCaseTest {
         RemoteStrategy stored = catalog.findByRef(REF).orElseThrow();
         assertEquals(RemoteStrategyVerification.FAILED, stored.getVerification());
         assertTrue(stored.getLastError().contains("new strategyRef"), stored.getLastError());
-        assertEquals(50, stored.getPriceHistoryTicks());
+        assertEquals(ticks(50), stored.getRequirements());
         assertFalse(strategies.findById(REF).orElseThrow().isEnabled());
     }
 
@@ -266,9 +278,9 @@ class RemoteStrategyCatalogUseCaseTest {
         Instant now = Instant.parse("2026-10-20T12:00:00Z");
         UUID disabledRef = UUID.randomUUID();
         catalog.save(new RemoteStrategy(REF, "SMA", "1.0.0", new StrategyEndpoint(URL, null),
-                RemoteStrategyStatus.ENABLED, RemoteStrategyVerification.VERIFIED, null, now, "2.0.0", 20, now, now), List.of());
+                RemoteStrategyStatus.ENABLED, RemoteStrategyVerification.VERIFIED, null, now, "2.0.0", ticks(20), now, now), List.of());
         catalog.save(new RemoteStrategy(disabledRef, "OLD", "0.9.0", new StrategyEndpoint(URL, null),
-                RemoteStrategyStatus.DISABLED, RemoteStrategyVerification.VERIFIED, null, now, "2.0.0", 20, now, now), List.of());
+                RemoteStrategyStatus.DISABLED, RemoteStrategyVerification.VERIFIED, null, now, "2.0.0", ticks(20), now, now), List.of());
         when(evaluation.describe(eq(REF), any())).thenReturn(IDENTITY);
 
         useCase.syncAll();
@@ -340,4 +352,9 @@ class RemoteStrategyCatalogUseCaseTest {
             byId.putIfAbsent(strategy.getStrategyId(), strategy);
         }
     }
+
+    private static StrategyRequirements ticks(int ticks) {
+        return new StrategyRequirements(ticks, List.of());
+    }
+
 }

@@ -1,5 +1,6 @@
 package com.marmitt.core.application.usecase.operations;
 
+import com.marmitt.core.application.usecase.marketdata.CandleSeriesGaps;
 import com.marmitt.core.application.usecase.exchange.ExchangeBalanceReconciliation;
 import com.marmitt.core.application.usecase.websocket.OpenLotDemand;
 import com.marmitt.core.application.usecase.websocket.StreamGaps;
@@ -80,6 +81,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
     private final ExchangeBalanceReconciliation balanceReconciliation;
     private final ReconcileTradesPort tradeReconciliation;
     private final StrategyCallHealthPort strategyCallHealth;
+    private final CandleSeriesGaps candleSeriesGaps;
     private final Thresholds thresholds;
     private final Clock clock;
     private final OpenLotDemand openLotDemand;
@@ -97,6 +99,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
                                           ExchangeBalanceReconciliation balanceReconciliation,
                                           ReconcileTradesPort tradeReconciliation,
                                           StrategyCallHealthPort strategyCallHealth,
+                                          CandleSeriesGaps candleSeriesGaps,
                                           Thresholds thresholds,
                                           Clock clock) {
         this.portfolioRepository = portfolioRepository;
@@ -112,6 +115,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         this.balanceReconciliation = balanceReconciliation;
         this.tradeReconciliation = tradeReconciliation;
         this.strategyCallHealth = strategyCallHealth;
+        this.candleSeriesGaps = candleSeriesGaps;
         this.thresholds = thresholds;
         this.clock = clock;
         this.openLotDemand = new OpenLotDemand(runnerRepository);
@@ -146,6 +150,7 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         checks.add(strategyVerificationFailed());
         checks.add(strategyUnavailable(active, now));
         checks.add(marketDataStale(active, runners, now));
+        checks.add(candleSeriesUnavailable(now));
         checks.add(streamDisconnected(runners));
         checks.add(orderDispatchBlocked(active));
         checks.add(restCircuitOpen());
@@ -431,6 +436,27 @@ public class InspectOperationalStateUseCase implements InspectOperationalStatePo
         return check("MARKET_DATA_STALE", activeStale ? OperationalSeverity.CRITICAL : OperationalSeverity.WARN,
                 subjects.size() + " symbol(s) with ACTIVE runners or open lots and no tick in the last "
                         + thresholds.marketDataStale(), subjects, oldest(since.stream()));
+    }
+
+    /**
+     * Serie de candles declarada por estrategia que nao esta pronta (T72): os runners que dependem dela ficam sem
+     * decisao ({@code WAITING_HISTORY}). Intervalo que a exchange nao oferece acusa na hora; serie incompleta, depois
+     * do limiar de market data parado (carga lenta, exchange falhando ou simbolo com historico curto).
+     */
+    private OperationalCheck candleSeriesUnavailable(Instant now) {
+        List<CandleSeriesGaps.Gap> gaps = candleSeriesGaps.current().stream()
+                .filter(gap -> gap.reason() == CandleSeriesGaps.Reason.UNSUPPORTED
+                        || olderThan(gap.since(), thresholds.marketDataStale(), now))
+                .toList();
+        if (gaps.isEmpty()) {
+            return ok("CANDLE_SERIES_UNAVAILABLE", "every candle series declared by a strategy is ready");
+        }
+        return check("CANDLE_SERIES_UNAVAILABLE", OperationalSeverity.WARN,
+                gaps.size() + " candle series not ready: runners that declare them get no decision",
+                gaps.stream().map(gap -> subject("exchange", gap.key().exchangeId(), "symbol", gap.key().symbol(),
+                        "interval", gap.key().interval().code(), "reason", gap.reason(), "detail", gap.detail()))
+                        .toList(),
+                oldest(gaps.stream().map(CandleSeriesGaps.Gap::since)));
     }
 
     /**

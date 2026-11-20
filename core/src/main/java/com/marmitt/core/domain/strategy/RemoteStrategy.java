@@ -1,5 +1,6 @@
 package com.marmitt.core.domain.strategy;
 
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -28,14 +29,17 @@ public class RemoteStrategy {
     private Instant lastVerificationAt;
     /** Versao do contrato que o servico declarou na ultima conferencia bem-sucedida. */
     private String servedContractVersion;
-    /** Ticks de historico declarados na primeira conferencia (T69); mudar exige novo {@code strategyRef}. */
-    private Integer priceHistoryTicks;
+    /**
+     * Historico declarado na primeira conferencia (ticks, T69; candles, T72); nulo antes dela. Mudar exige novo
+     * {@code strategyRef}.
+     */
+    private StrategyRequirements requirements;
     private final Instant createdAt;
     private Instant updatedAt;
 
     public RemoteStrategy(UUID strategyRef, String name, String version, StrategyEndpoint endpoint,
                           RemoteStrategyStatus status, RemoteStrategyVerification verification, String lastError,
-                          Instant lastVerificationAt, String servedContractVersion, Integer priceHistoryTicks,
+                          Instant lastVerificationAt, String servedContractVersion, StrategyRequirements requirements,
                           Instant createdAt, Instant updatedAt) {
         this.strategyRef = Objects.requireNonNull(strategyRef, "strategyRef cannot be null");
         this.name = requireText(name, "name");
@@ -46,7 +50,7 @@ public class RemoteStrategy {
         this.lastError = lastError;
         this.lastVerificationAt = lastVerificationAt;
         this.servedContractVersion = servedContractVersion;
-        this.priceHistoryTicks = priceHistoryTicks;
+        this.requirements = requirements;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt cannot be null");
     }
@@ -118,12 +122,12 @@ public class RemoteStrategy {
     /**
      * @return {@code true} se o resultado mudou (antes nao estava conferida)
      */
-    public boolean markVerified(String contractVersion, int declaredPriceHistoryTicks, Instant now) {
+    public boolean markVerified(String contractVersion, StrategyRequirements declaredRequirements, Instant now) {
         boolean changed = verification != RemoteStrategyVerification.VERIFIED;
         verification = RemoteStrategyVerification.VERIFIED;
         lastError = null;
         servedContractVersion = contractVersion;
-        priceHistoryTicks = declaredPriceHistoryTicks;
+        requirements = Objects.requireNonNull(declaredRequirements, "requirements cannot be null");
         lastVerificationAt = now;
         if (changed) {
             updatedAt = now;

@@ -6,7 +6,14 @@ import com.marmitt.core.domain.strategy.RemoteStrategyEventType;
 import com.marmitt.core.domain.strategy.RemoteStrategyStatus;
 import com.marmitt.core.domain.strategy.RemoteStrategyVerification;
 import com.marmitt.core.domain.strategy.StrategyEndpoint;
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.ports.outbound.repository.RemoteStrategyCatalogRepositoryPort;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.RowMapper;
@@ -17,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +37,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrategyCatalogRepositoryPort {
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private static final RowMapper<RemoteStrategy> STRATEGY = (rs, rowNum) -> new RemoteStrategy(
             rs.getObject("strategy_ref", UUID.class),
             rs.getString("name"),
@@ -39,7 +49,7 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
             rs.getString("last_error"),
             instant(rs.getTimestamp("last_verification_at")),
             rs.getString("served_contract_version"),
-            rs.getObject("price_history_ticks", Integer.class),
+            requirements(rs.getObject("price_history_ticks", Integer.class), rs.getString("candle_requirements")),
             instant(rs.getTimestamp("created_at")),
             instant(rs.getTimestamp("updated_at")));
 
@@ -71,9 +81,10 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
         jdbcTemplate.update("""
                 INSERT INTO remote_strategies (strategy_ref, name, version, base_url, token, status, verification,
                                                last_error, last_verification_at, served_contract_version,
-                                               price_history_ticks, created_at, updated_at)
+                                               price_history_ticks, candle_requirements, created_at, updated_at)
                 VALUES (:ref, :name, :version, :baseUrl, :token, :status, :verification, :lastError,
-                        :lastVerificationAt, :servedContractVersion, :priceHistoryTicks, :createdAt, :updatedAt)
+                        :lastVerificationAt, :servedContractVersion, :priceHistoryTicks, :candleRequirements,
+                        :createdAt, :updatedAt)
                 ON CONFLICT (strategy_ref) DO UPDATE SET
                     base_url = EXCLUDED.base_url,
                     token = EXCLUDED.token,
@@ -83,6 +94,7 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
                     last_verification_at = EXCLUDED.last_verification_at,
                     served_contract_version = EXCLUDED.served_contract_version,
                     price_history_ticks = EXCLUDED.price_history_ticks,
+                    candle_requirements = EXCLUDED.candle_requirements,
                     updated_at = EXCLUDED.updated_at
                 """,
                 new MapSqlParameterSource()
@@ -96,7 +108,9 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
                         .addValue("lastError", strategy.getLastError())
                         .addValue("lastVerificationAt", timestamp(strategy.getLastVerificationAt()))
                         .addValue("servedContractVersion", strategy.getServedContractVersion())
-                        .addValue("priceHistoryTicks", strategy.getPriceHistoryTicks())
+                        .addValue("priceHistoryTicks", strategy.getRequirements() == null ? null
+                                : strategy.getRequirements().priceHistoryTicks())
+                        .addValue("candleRequirements", candleRequirements(strategy.getRequirements()))
                         .addValue("createdAt", timestamp(strategy.getCreatedAt()))
                         .addValue("updatedAt", timestamp(strategy.getUpdatedAt())));
         for (RemoteStrategyEvent event : events) {
@@ -121,6 +135,38 @@ public class JdbcRemoteStrategyCatalogRepositoryAdapter implements RemoteStrateg
         return jdbcTemplate.query("""
                 SELECT * FROM remote_strategy_events WHERE strategy_ref = :ref ORDER BY seq
                 """, new MapSqlParameterSource("ref", strategyRef), EVENT);
+    }
+
+    /** Requisitos gravados na primeira conferencia; nulos antes dela (as duas colunas nulas). */
+    private static StrategyRequirements requirements(Integer priceHistoryTicks, String candleRequirements) {
+        if (priceHistoryTicks == null) {
+            return null;
+        }
+        if (candleRequirements == null) {
+            return new StrategyRequirements(priceHistoryTicks, List.of());
+        }
+        try {
+            List<CandleRequirement> candles = new ArrayList<>();
+            for (JsonNode node : JSON.readTree(candleRequirements)) {
+                candles.add(new CandleRequirement(CandleInterval.fromCode(node.path("interval").asText())
+                        .orElseThrow(() -> new IllegalStateException("unknown candle interval in catalog: " + node)),
+                        node.path("count").asInt()));
+            }
+            return new StrategyRequirements(priceHistoryTicks, candles);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("invalid candle_requirements in catalog: " + candleRequirements, e);
+        }
+    }
+
+    private static String candleRequirements(StrategyRequirements requirements) {
+        if (requirements == null) {
+            return null;
+        }
+        ArrayNode candles = JSON.createArrayNode();
+        requirements.candles().forEach(candle -> candles.addObject()
+                .put("interval", candle.interval().code())
+                .put("count", candle.count()));
+        return candles.toString();
     }
 
     private static Timestamp timestamp(Instant instant) {
