@@ -330,9 +330,9 @@ components:
           maxItems: 1000
           items: { $ref: '#/components/schemas/Candle' }
           description: >
-            So candles fechados, do mais antigo para o mais novo, continuos (um por
-            intervalo), com exatamente o count declarado. O ultimo e o mais recente
-            ja fechado no instante do tick.
+            So candles fechados e consolidados (fechados ha pelo menos 5 s), do mais
+            antigo para o mais novo, continuos (um por intervalo), com exatamente o
+            count declarado. O ultimo e o mais recente consolidado no instante do tick.
 
     CandleRequirement:
       type: object

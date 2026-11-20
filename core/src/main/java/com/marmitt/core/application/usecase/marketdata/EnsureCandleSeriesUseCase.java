@@ -139,7 +139,9 @@ public class EnsureCandleSeriesUseCase implements EnsureCandleSeriesPort {
         boolean reload = stored.size() < count || missing >= count;
         int limit = reload ? count : Math.max(1, missing);
         try {
-            List<CandleDto> fetched = query.fetchClosed(key.symbol(), key.interval(), now, limit);
+            // So o que ja consolidou (CandleSeries.SETTLE): o candle recem-fechado ainda pode receber negocios.
+            List<CandleDto> fetched = query.fetchClosed(key.symbol(), key.interval(), CandleSeries.settledAt(now),
+                    limit);
             List<CandleDto> merged = CandleSeries.merge(reload ? List.of() : stored, fetched, key.interval(), count);
             store.replace(key, merged);
             if (merged.size() < count) {
@@ -158,13 +160,13 @@ public class EnsureCandleSeriesUseCase implements EnsureCandleSeriesPort {
         }
     }
 
-    /** Candles que fecharam depois do ultimo guardado, ate {@code now}. */
+    /** Candles que consolidaram depois do ultimo guardado, ate {@code now}. */
     private static int missingSinceLast(List<CandleDto> stored, CandleSeriesKey key, Instant now) {
         if (stored.isEmpty()) {
             return Integer.MAX_VALUE;
         }
         Instant nextOpen = stored.getLast().openTime().plus(key.interval().duration());
-        long missing = Duration.between(nextOpen, now).dividedBy(key.interval().duration());
+        long missing = Duration.between(nextOpen, CandleSeries.settledAt(now)).dividedBy(key.interval().duration());
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0, missing));
     }
 }

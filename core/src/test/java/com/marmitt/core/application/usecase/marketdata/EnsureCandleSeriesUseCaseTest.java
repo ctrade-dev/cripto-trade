@@ -79,7 +79,11 @@ class EnsureCandleSeriesUseCaseTest {
         assertEquals(Instant.parse("2026-11-20T09:59:00Z"), store.series(KEY).getLast().openTime());
         assertTrue(gaps.current().isEmpty());
 
-        clock.advance(Duration.ofSeconds(15)); // 10:01:05: o candle de 10:00 fechou
+        clock.advance(Duration.ofSeconds(12)); // 10:01:02: o candle de 10:00 fechou, mas ainda nao consolidou
+        useCase.ensure();
+        assertEquals(List.of(3), exchange.limits);
+
+        clock.advance(Duration.ofSeconds(3)); // 10:01:05: consolidou (carencia de 5 s)
         useCase.ensure();
 
         assertEquals(List.of(3, 1), exchange.limits);

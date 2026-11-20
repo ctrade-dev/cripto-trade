@@ -10,7 +10,7 @@ O ctrade é o cliente; a app da estratégia é o servidor.
   spec, o spec prevalece **na fronteira de rede** — o core continua dono do contrato de domínio.
 
 > **Versão 2.1 (T72, 2026-11-20):** `requirements.candles` e `input.candles` (sempre presente, vazio sem
-> declaração), só candles fechados. Rotas seguem em `/v2`; o ctrade confere só a versão principal.
+> declaração), só candles fechados e consolidados (fechados há pelo menos 5 s). Rotas seguem em `/v2`; o ctrade confere só a versão principal.
 >
 > **Versão 2.0 (T69, 2026-11-05):** apps stateless e caminho unilateral; `requirements` em `/meta`,
 > `input.priceHistory` e `openLots[].peakPrice`; sai `sequence` e o estado de warm-up; rotas em `/v2`.
@@ -98,9 +98,11 @@ Strings `date-time` (`2026-07-03T14:22:05.123Z`). Sem epoch, sem timezone local.
   os ticks recebidos, mesmo os que o runner não avaliou. Pode ter um buraco no tempo depois de uma queda do
   stream de mercado: quem depende de tempo confere `timestamp`.
 - `input.candles` (2.1) — uma série por intervalo declarado em `requirements.candles`, na mesma ordem. Cada
-  série tem exatamente `count` candles **fechados** (`openTime`, `open`, `high`, `low`, `close`, `volume`),
-  do mais antigo para o mais novo, contínuos, terminando no último já fechado antes do tick. O candle em
-  formação não entra: o preço ao vivo é `currentPrice`. Vazio quando a estratégia não declara candles.
+  série tem exatamente `count` candles **fechados e consolidados** (`openTime`, `open`, `high`, `low`, `close`,
+  `volume`), do mais antigo para o mais novo, contínuos, terminando no último consolidado no instante do tick.
+  Consolidado = fechado há pelo menos **5 s**: a exchange ainda lança negócios no candle logo depois do
+  fechamento, então nos 5 s seguintes a série termina no candle anterior. O candle em formação não entra: o
+  preço ao vivo é `currentPrice`. Vazio quando a estratégia não declara candles.
 - `context` (`StrategyContext`) — estado operacional **read-only**: capital, posição agregada, lotes
   abertos e ordens em trânsito. `availableQuantity` de cada lote é o teto de SELL daquele lote.
 
@@ -196,8 +198,8 @@ A app declara em `/meta` o que precisa em cada interação:
 - **Enquanto não tiver o histórico declarado (ticks e candles completos e contínuos), o ctrade não chama a
   app**: o tick conta como `WAITING_HISTORY`. A app não precisa tratar histórico curto nem buraco, e pode
   responder `400` a um request incompleto.
-- Logo depois de cada fechamento de intervalo, o ctrade leva alguns segundos para buscar o candle recém-fechado;
-  nesses segundos os ticks também contam como `WAITING_HISTORY`.
+- Logo depois de cada consolidação (5 s depois do fechamento), o ctrade leva até ~1 s para buscar o candle;
+  nesse intervalo os ticks também contam como `WAITING_HISTORY`.
 
 `GET /health` e `GET /health/{strategyRef}` dizem só se a app está pronta para responder. Sem estado, não há
 warm-up: reiniciar a app não muda a decisão seguinte.

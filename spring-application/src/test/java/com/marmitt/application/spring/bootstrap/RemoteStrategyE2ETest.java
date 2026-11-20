@@ -2,6 +2,7 @@ package com.marmitt.application.spring.bootstrap;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marmitt.core.application.usecase.marketdata.CandleSeries;
 import com.marmitt.core.dto.strategy.CandleInterval;
 import com.marmitt.core.dto.strategy.CandleRequirement;
 import java.time.Duration;
@@ -193,8 +194,9 @@ class RemoteStrategyE2ETest extends ScenarioStrategyE2ETestSupport {
                     Instant.parse(candles.get(i).path("openTime").asText())), "serie continua");
         }
         Instant lastClose = Instant.parse(candles.get(199).path("openTime").asText()).plus(Duration.ofHours(1));
-        assertFalse(lastClose.isAfter(tick), "so candles fechados");
-        assertTrue(lastClose.plus(Duration.ofHours(1)).isAfter(tick), "termina no ultimo fechado antes do tick");
+        Instant settled = tick.minus(CandleSeries.SETTLE);
+        assertFalse(lastClose.isAfter(settled), "so candles fechados e consolidados");
+        assertTrue(lastClose.plus(Duration.ofHours(1)).isAfter(settled), "termina no ultimo consolidado antes do tick");
     }
 
     @Test

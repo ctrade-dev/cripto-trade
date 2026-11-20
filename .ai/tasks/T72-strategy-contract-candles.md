@@ -180,6 +180,18 @@ intervalo, o que dá 1 por minuto na série de `1m`. `StreamType.KLINE` continua
   por `requirements` (`priceHistoryTicks` e `candles`).
 - **`StrategyInputDto.withHistory(ticks, candles)`** substitui `withPriceHistory`: um caminho só para o histórico.
 
+## Decisão registrada (2026-11-20): carência de consolidação de 5 s
+
+No teste na VPS (sessão curta 118), 3 dos 5 primeiros candles de `1m` entregues diferiam da versão final da Binance
+no fechamento e no volume: o ctrade buscava o candle ~1 s depois do fechamento e a testnet ainda lançava negócios
+nele até ~3 s depois (medido: mudanças a +0,7 s e +3 s). A série de `1h`, carregada muito depois do fechamento,
+batia exatamente.
+
+Decisão do mantenedor: o candle só conta como fechado **5 s depois do fim do período** (`CandleSeries.SETTLE`,
+constante, não configurável, porque o contrato a promete). A série termina no último candle consolidado no instante
+do tick, sem janela extra de `WAITING_HISTORY`. O contrato diz "fechado e consolidado (há pelo menos 5 s)"; as apps
+conferem com a mesma regra. Correção em `bugfix/t72-candle-settle`.
+
 ## Questão em aberto: cadência de avaliação (fora de escopo)
 
 Uma estratégia de swing continuará sendo chamada a cada tick, cerca de 0,65 por segundo por runner, e responderá

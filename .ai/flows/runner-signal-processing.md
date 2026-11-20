@@ -75,9 +75,11 @@ adaptadores externos.
   `CandleSeriesScheduler`): serie vazia, curta ou atrasada pede a exchange os candles fechados que faltam; serie em
   dia nao consulta nada ate o proximo fechamento. A mesma chamada carrega, atualiza e cobre buraco de uma queda.
   Falha da exchange ou historico curto espera `ctrade.market-data.candles.retry-delay-ms`.
-- **Entrega** (`CandleSeries.latestClosed`): exatamente `count` candles fechados, continuos, terminando no ultimo
-  fechado no instante do tick; senao nada (decisao 4: nunca serie com buraco). Nos segundos logo depois de cada
-  fechamento, ate o candle novo chegar, a serie esta atrasada e o tick conta como `WAITING_HISTORY`.
+- **Entrega** (`CandleSeries.latestClosed`): exatamente `count` candles fechados e consolidados (`CandleSeries.SETTLE`,
+  5 s depois do fim do periodo), continuos, terminando no ultimo consolidado no instante do tick; senao nada
+  (decisao 4: nunca serie com buraco). A carencia vem do teste na VPS: a testnet ainda lanca negocios no candle
+  ate ~3 s depois do fechamento. Ate ~1 s depois de cada consolidacao, enquanto o candle novo nao chega, a serie
+  esta atrasada e o tick conta como `WAITING_HISTORY`.
 - **So memoria** (`InMemoryCandleRepository`): depois de um restart a serie e recarregada da exchange.
 - Exchange sem consulta de candles ou sem o intervalo: o runner fica sem decisao e o estado operacional acusa
   `CANDLE_SERIES_UNAVAILABLE`. Binance (`GET /api/v3/klines`) e mock oferecem os 7 intervalos; Coinbase, nenhum.
