@@ -23,15 +23,15 @@ public class CandleHistory {
     /**
      * Uma serie por requisito, na ordem declarada, da fonte do tick.
      *
-     * @return vazio se alguma serie nao estiver completa, continua e em dia em {@code upTo}
+     * @return vazio se alguma serie nao estiver completa, continua e em dia no instante do tick
      */
     public Optional<List<CandleSeriesDto>> seriesFor(String source, String symbol, List<CandleRequirement> required,
-                                                     Instant upTo) {
+                                                     Instant tick) {
         List<CandleSeriesDto> series = new ArrayList<>(required.size());
         for (CandleRequirement requirement : required) {
             List<CandleDto> candles = CandleSeries.latestClosed(
                     store.series(new CandleSeriesKey(source, symbol, requirement.interval())),
-                    requirement.interval(), requirement.count(), upTo);
+                    requirement.interval(), requirement.count(), tick);
             if (candles.isEmpty()) {
                 return Optional.empty();
             }

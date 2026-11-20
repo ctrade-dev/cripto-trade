@@ -38,11 +38,21 @@ class CandleSeriesTest {
         assertEquals(List.of(minute(7), minute(8)), series);
     }
 
+    /** Carencia de 5 s: o candle recem-fechado ainda pode mudar e so entra depois dela. */
+    @Test
+    void candleClosedLessThanTheSettleAgoIsLeftOut() {
+        List<CandleDto> stored = minutes(0, 10);
+
+        // Tick as 10:10:03: o candle de 10:09 fechou ha 3 s; a serie termina no de 10:08 e nao conta como atrasada.
+        assertEquals(List.of(minute(7), minute(8)), CandleSeries.latestClosed(stored, M1, 2, at(10, 3)));
+        assertEquals(List.of(minute(8), minute(9)), CandleSeries.latestClosed(stored, M1, 2, at(10, 5)));
+    }
+
     @Test
     void seriesBehindTheTickIsNotDelivered() {
         List<CandleDto> stored = minutes(0, 10);
 
-        // Tick as 10:11:05: o candle de 10:10 ja fechou e ainda nao chegou.
+        // Tick as 10:11:05: o candle de 10:10 ja consolidou e ainda nao chegou.
         assertTrue(CandleSeries.latestClosed(stored, M1, 3, at(11, 5)).isEmpty());
     }
 
@@ -52,8 +62,8 @@ class CandleSeriesTest {
 
         List<CandleDto> gapped = new ArrayList<>(minutes(0, 3));
         gapped.addAll(minutes(4, 2)); // falta 10:03
-        assertTrue(CandleSeries.latestClosed(gapped, M1, 4, at(6, 0)).isEmpty(), "buraco");
-        assertEquals(2, CandleSeries.latestClosed(gapped, M1, 2, at(6, 0)).size(), "buraco fora da janela pedida");
+        assertTrue(CandleSeries.latestClosed(gapped, M1, 4, at(6, 5)).isEmpty(), "buraco");
+        assertEquals(2, CandleSeries.latestClosed(gapped, M1, 2, at(6, 5)).size(), "buraco fora da janela pedida");
     }
 
     @Test
@@ -71,11 +81,11 @@ class CandleSeriesTest {
     }
 
     @Test
-    void upToDateUntilTheNextCandleCloses() {
+    void upToDateUntilTheNextCandleSettles() {
         List<CandleDto> stored = minutes(0, 10);
 
-        assertTrue(CandleSeries.upToDate(stored, M1, at(10, 59)));
-        assertFalse(CandleSeries.upToDate(stored, M1, at(11, 0)));
+        assertTrue(CandleSeries.upToDate(stored, M1, at(11, 4)), "o de 10:10 ainda nao consolidou");
+        assertFalse(CandleSeries.upToDate(stored, M1, at(11, 5)));
         assertFalse(CandleSeries.upToDate(List.of(), M1, at(0, 0)));
     }
 
