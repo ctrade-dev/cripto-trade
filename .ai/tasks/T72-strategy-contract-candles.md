@@ -3,7 +3,7 @@
 **Complexidade:** Alta
 **Responsável:** Claude
 **Dependências:** T41 (estratégia remota), T56 (demanda de market data), T69 (contrato 2.0, `requirements`)
-**Status:** Implementada em `feature/t72-strategy-candles` (2026-11-20); teste na VPS depois do merge, com a app de teste no `ctrade-strategies`
+**Status:** Concluída — #196, #197 (carência de 5 s) e #198 (código do intervalo na API); testada na VPS na curta 118 (2026-11-20)
 
 ---
 
@@ -236,7 +236,10 @@ Quando incomodar, há dois caminhos baratos, sem mudar o contrato:
 8. Mock entrega candles determinísticos; teste de integração ponta a ponta com uma app falsa que declara
    `1h × 200`.
 9. Na VPS testnet: runner com app de teste declarando `1m × 30` e `1h × 200` recebe as séries certas, conferidas
-   contra a REST da Binance.
+   contra a REST da Binance. **OK na curta 118** (app `SoakCandles`, ctrade-strategies #8 e #12):
+   `1h × 200` igual à Binance; antes da carência, 3 de 5 candles de `1m` diferiam da versão final (decisão registrada
+   acima); depois dela, 9 de 9 iguais, entregues ~6 s após o fechamento. Reinício às 19:02:49Z: séries recarregadas
+   (200 e 30) em menos de 1 s após o boot e app chamada às 19:03:11Z. 0 `ERROR`, nenhuma série recusada pela app.
 
 ## Validação
 
