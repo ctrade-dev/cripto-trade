@@ -9,6 +9,9 @@ O ctrade é o cliente; a app da estratégia é o servidor.
 - **Espelho interno em Java:** `core/src/main/java/com/marmitt/core/dto/strategy/*`. Se divergir do
   spec, o spec prevalece **na fronteira de rede** — o core continua dono do contrato de domínio.
 
+> **Versão 2.1 (T72, 2026-11-20):** `requirements.candles` e `input.candles` (sempre presente, vazio sem
+> declaração), só candles fechados. Rotas seguem em `/v2`; o ctrade confere só a versão principal.
+>
 > **Versão 2.0 (T69, 2026-11-05):** apps stateless e caminho unilateral; `requirements` em `/meta`,
 > `input.priceHistory` e `openLots[].peakPrice`; sai `sequence` e o estado de warm-up; rotas em `/v2`.
 >
@@ -94,6 +97,10 @@ Strings `date-time` (`2026-07-03T14:22:05.123Z`). Sem epoch, sem timezone local.
   atual, sempre com exatamente os `ticks` declarados em `requirements` (vazio se nenhum). A série tem todos
   os ticks recebidos, mesmo os que o runner não avaliou. Pode ter um buraco no tempo depois de uma queda do
   stream de mercado: quem depende de tempo confere `timestamp`.
+- `input.candles` (2.1) — uma série por intervalo declarado em `requirements.candles`, na mesma ordem. Cada
+  série tem exatamente `count` candles **fechados** (`openTime`, `open`, `high`, `low`, `close`, `volume`),
+  do mais antigo para o mais novo, contínuos, terminando no último já fechado antes do tick. O candle em
+  formação não entra: o preço ao vivo é `currentPrice`. Vazio quando a estratégia não declara candles.
 - `context` (`StrategyContext`) — estado operacional **read-only**: capital, posição agregada, lotes
   abertos e ordens em trânsito. `availableQuantity` de cada lote é o teto de SELL daquele lote.
 
@@ -169,18 +176,28 @@ cancelada (`GTC`). `MARKET` fica para as saídas que o próprio ctrade decide (f
 A app declara em `/meta` o que precisa em cada interação:
 
 ```json
-{ "requirements": { "priceHistory": { "ticks": 20 } } }
+{ "requirements": {
+    "priceHistory": { "ticks": 20 },
+    "candles": [ { "interval": "1h", "count": 200 }, { "interval": "1d", "count": 200 } ]
+} }
 ```
 
 - `requirements` é obrigatório; `{}` significa que a estratégia não precisa de nada além do básico.
 - `priceHistory.ticks` vai de 0 a 1000.
+- `candles` (2.1): até 3 séries, intervalos `1m`, `5m`, `15m`, `1h`, `4h`, `1d`, `1w`, sem repetir intervalo,
+  `count` de 1 a 1000.
+- Os candles vêm da exchange de market data do runner. Se ela não oferece o intervalo, o runner fica sem
+  decisão, e o estado operacional mostra o motivo (`CANDLE_SERIES_UNAVAILABLE`).
 - O ctrade grava os requisitos no catálogo na primeira conferência. Requisito desconhecido, acima do teto ou
   diferente do gravado falha a conferência, e a estratégia não é usada: mudar um requisito exige novo
   `strategyId`.
 - A conferência roda ao cadastrar, reabilitar, trocar o endereço e no boot do ctrade. Trocar a app no ar sem
   uma dessas ações não é detectado na hora.
-- **Enquanto não tiver o histórico declarado, o ctrade não chama a app**: o tick conta como
-  `WAITING_HISTORY`. A app não precisa tratar histórico curto, e pode responder `400` a um request incompleto.
+- **Enquanto não tiver o histórico declarado (ticks e candles completos e contínuos), o ctrade não chama a
+  app**: o tick conta como `WAITING_HISTORY`. A app não precisa tratar histórico curto nem buraco, e pode
+  responder `400` a um request incompleto.
+- Logo depois de cada fechamento de intervalo, o ctrade leva alguns segundos para buscar o candle recém-fechado;
+  nesses segundos os ticks também contam como `WAITING_HISTORY`.
 
 `GET /health` e `GET /health/{strategyRef}` dizem só se a app está pronta para responder. Sem estado, não há
 warm-up: reiniciar a app não muda a decisão seguinte.

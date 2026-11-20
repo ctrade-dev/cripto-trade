@@ -6,6 +6,7 @@ import com.marmitt.core.domain.strategy.RemoteStrategyEvent;
 import com.marmitt.core.domain.strategy.RemoteStrategyEventType;
 import com.marmitt.core.domain.strategy.StrategyEndpoint;
 import com.marmitt.core.dto.notification.ErrorNotificationEvent;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.dto.strategy.request.RegisterRemoteStrategyRequest;
 import com.marmitt.core.dto.strategy.request.UpdateRemoteStrategyRequest;
 import com.marmitt.core.dto.strategy.response.RemoteStrategyView;
@@ -19,7 +20,6 @@ import com.marmitt.core.ports.outbound.notification.ErrorNotificationPort;
 import com.marmitt.core.ports.outbound.repository.RemoteStrategyCatalogRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRepositoryPort;
 import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
-import com.marmitt.core.ports.outbound.marketdata.PriceHistoryPort;
 import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort;
 import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort.RemoteStrategyIdentity;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
@@ -283,9 +283,9 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
         }
 
         if (failure == null) {
-            remote.requirePriceHistoryTicks(served.priceHistoryTicks());
+            remote.require(served.requirements());
             remote.setEnabled(true);
-            if (strategy.markVerified(served.contractVersion(), served.priceHistoryTicks(), now)) {
+            if (strategy.markVerified(served.contractVersion(), served.requirements(), now)) {
                 log.info("remoteStrategy: verified strategyRef={} name={} version={} contract={}",
                         strategy.getStrategyRef(), served.name(), served.version(), served.contractVersion());
                 return List.of(RemoteStrategyEvent.of(strategy.getStrategyRef(), RemoteStrategyEventType.VERIFIED,
@@ -314,13 +314,14 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
             return "unsupported contract version " + served.contractVersion()
                     + " (supported major " + SUPPORTED_CONTRACT_MAJOR + ")";
         }
-        int ticks = served.priceHistoryTicks();
-        if (ticks < 0 || ticks > PriceHistoryPort.MAX_TICKS) {
-            return "service requires " + ticks + " price history ticks, supported 0 to " + PriceHistoryPort.MAX_TICKS;
+        StrategyRequirements requirements = served.requirements();
+        Optional<String> violation = requirements.violation();
+        if (violation.isPresent()) {
+            return violation.get();
         }
-        if (expected.getPriceHistoryTicks() != null && expected.getPriceHistoryTicks() != ticks) {
-            return "service requires " + ticks + " price history ticks, catalog expects "
-                    + expected.getPriceHistoryTicks() + " - a changed requirement needs a new strategyRef";
+        if (expected.getRequirements() != null && !expected.getRequirements().equals(requirements)) {
+            return "service requires " + requirements.describe() + ", catalog expects "
+                    + expected.getRequirements().describe() + " - a changed requirement needs a new strategyRef";
         }
         return null;
     }
@@ -352,7 +353,7 @@ public class RemoteStrategyCatalogUseCase implements ManageRemoteStrategiesPort,
         return new RemoteStrategyView(strategy.getStrategyRef(), strategy.getName(), strategy.getVersion(),
                 strategy.getEndpoint().baseUrl(), strategy.getEndpoint().hasToken(), strategy.getStatus(),
                 strategy.getVerification(), usable, strategy.getLastError(), strategy.getLastVerificationAt(),
-                strategy.getServedContractVersion(), strategy.getPriceHistoryTicks(), strategy.getCreatedAt(), strategy.getUpdatedAt(), runners);
+                strategy.getServedContractVersion(), strategy.getRequirements(), strategy.getCreatedAt(), strategy.getUpdatedAt(), runners);
     }
 
     private static RemoteStrategyView.RunnerRef runnerRef(StrategyRunner runner) {

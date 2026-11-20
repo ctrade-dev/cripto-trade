@@ -4,7 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.core.domain.Symbol;
 import com.marmitt.core.domain.strategy.StrategyEndpoint;
+import com.marmitt.core.dto.strategy.CandleDto;
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import com.marmitt.core.dto.strategy.CandleSeriesDto;
 import com.marmitt.core.dto.strategy.PositionContext;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
@@ -69,9 +74,12 @@ class RemoteStrategyClientTest {
         OpenLotDto lot = OpenLotDto.builder().lotId(UUID.randomUUID()).quantity(BigDecimal.ONE)
                 .availableQuantity(BigDecimal.ONE).entryPrice(new BigDecimal("64000"))
                 .currentPnlPercent(BigDecimal.ONE).openedAt(TICK).peakPrice(new BigDecimal("65500.25")).build();
-        StrategyInputDto withHistory = input().withPriceHistory(List.of(
+        StrategyInputDto withHistory = input().withHistory(List.of(
                 new PricePointDto(new BigDecimal("64999.50"), TICK.minusSeconds(1)),
-                new PricePointDto(new BigDecimal("65000.50"), TICK)));
+                new PricePointDto(new BigDecimal("65000.50"), TICK)),
+                List.of(new CandleSeriesDto(CandleInterval.H1, List.of(new CandleDto(TICK.minusSeconds(7200),
+                        new BigDecimal("64000"), new BigDecimal("65100.5"), new BigDecimal("63900"),
+                        new BigDecimal("65000"), new BigDecimal("12.345"))))));
         StrategyContextDto base = context(runner);
         StrategyContextDto withLot = StrategyContextDto.builder().runnerId(runner).portfolioId(base.portfolioId())
                 .symbol(base.symbol()).positionContext(base.positionContext()).openLots(List.of(lot))
@@ -91,6 +99,23 @@ class RemoteStrategyClientTest {
         assertEquals("64999.50", history.get(0).path("price").asText());
         assertEquals(TICK.toString(), history.get(1).path("timestamp").asText());
         assertEquals("65500.25", body.path("context").path("openLots").get(0).path("peakPrice").asText());
+        JsonNode series = body.path("input").path("candles").get(0);
+        assertEquals("1h", series.path("interval").asText());
+        JsonNode candle = series.path("candles").get(0);
+        assertEquals(TICK.minusSeconds(7200).toString(), candle.path("openTime").asText());
+        assertEquals("65100.5", candle.path("high").asText(), "Decimal trafega como string");
+        assertEquals("12.345", candle.path("volume").asText());
+    }
+
+    @Test
+    void candlesAreAlwaysSentEvenWhenNotDeclared() throws Exception {
+        http.reply = request -> new StrategyServiceHttpPort.Response(200, BUY);
+
+        client(Duration.ofSeconds(1)).evaluate(REF, ENDPOINT, input(), context(UUID.randomUUID()));
+
+        JsonNode candles = objectMapper.readTree(http.calls.getFirst().body()).path("input").path("candles");
+        assertTrue(candles.isArray(), "contrato 2.1: input.candles sempre presente");
+        assertEquals(0, candles.size());
     }
 
     @Test
@@ -154,20 +179,30 @@ class RemoteStrategyClientTest {
 
         assertEquals(REF, identity.strategyId());
         assertEquals("2.0.0", identity.contractVersion());
-        assertEquals(20, identity.priceHistoryTicks());
+        assertEquals(new StrategyRequirements(20, List.of()), identity.requirements());
         assertEquals("http://strategy:8090/v2/meta?strategyRef=" + REF, http.calls.getFirst().url());
     }
 
     @Test
     void emptyRequirementsMeanNoPriceHistory() {
-        assertEquals(0, describeWith("{}").priceHistoryTicks());
+        assertEquals(StrategyRequirements.NONE, describeWith("{}").requirements());
+    }
+
+    @Test
+    void describeReadsDeclaredCandlesInOrder() {
+        var requirements = describeWith("{\"candles\":[{\"interval\":\"1h\",\"count\":200},"
+                + "{\"interval\":\"1m\",\"count\":30}]}").requirements();
+
+        assertEquals(List.of(new CandleRequirement(CandleInterval.H1, 200), new CandleRequirement(CandleInterval.M1, 30)),
+                requirements.candles());
     }
 
     @Test
     void metaOutsideTheContractIsAnInvalidResponse() {
         for (String requirements : List.of("null", "{\"candles\":{\"limit\":500}}",
                 "{\"priceHistory\":{}}", "{\"priceHistory\":{\"ticks\":\"20\"}}",
-                "{\"priceHistory\":{\"ticks\":1.5}}")) {
+                "{\"priceHistory\":{\"ticks\":1.5}}", "{\"candles\":[{\"interval\":\"2h\",\"count\":10}]}",
+                "{\"candles\":[{\"interval\":\"1h\"}]}", "{\"candles\":[{\"interval\":\"1h\",\"count\":10,\"x\":1}]}")) {
             StrategyUnavailableException e = assertThrows(StrategyUnavailableException.class,
                     () -> describeWith(requirements), requirements);
             assertEquals(Reason.INVALID_RESPONSE, e.reason(), requirements);
@@ -195,7 +230,7 @@ class RemoteStrategyClientTest {
     private static StrategyInputDto input() {
         BigDecimal price = new BigDecimal("65000.50");
         return new StrategyInputDto(Symbol.of("BTCUSDT"), price, null, price, price, BigDecimal.ONE,
-                price, price, TICK, Map.of(), List.of());
+                price, price, TICK, Map.of(), List.of(), List.of());
     }
 
     private static StrategyContextDto context(UUID runnerId) {

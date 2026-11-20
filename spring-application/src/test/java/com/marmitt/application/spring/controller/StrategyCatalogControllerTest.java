@@ -1,5 +1,6 @@
 package com.marmitt.application.spring.controller;
 
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.application.spring.web.GlobalExceptionHandler;
 import com.marmitt.core.domain.strategy.RemoteStrategyStatus;
 import com.marmitt.core.domain.strategy.RemoteStrategyVerification;
@@ -81,6 +82,7 @@ class StrategyCatalogControllerTest {
     private RemoteStrategyView view() {
         Instant now = Instant.parse("2026-10-20T12:00:00Z");
         return new RemoteStrategyView(ref, "SMA", "1.0.0", "http://s:8090/v1", true, RemoteStrategyStatus.ENABLED,
-                RemoteStrategyVerification.VERIFIED, true, null, now, "2.0.0", 20, now, now, List.of());
+                RemoteStrategyVerification.VERIFIED, true, null, now, "2.0.0",
+                new StrategyRequirements(20, List.of()), now, now, List.of());
     }
 }

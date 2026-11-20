@@ -3,7 +3,7 @@
 **Complexidade:** Alta
 **Responsável:** Claude
 **Dependências:** T41 (estratégia remota), T56 (demanda de market data), T69 (contrato 2.0, `requirements`)
-**Status:** Spec aprovada (decisões 1 a 6 em 2026-11-15); implementação a combinar.
+**Status:** Implementada em `feature/t72-strategy-candles` (2026-11-20); teste na VPS depois do merge, com a app de teste no `ctrade-strategies`
 
 ---
 
@@ -150,6 +150,35 @@ intervalo, o que dá 1 por minuto na série de `1m`. `StreamType.KLINE` continua
 | 4 | Buracos | **Nunca entregar série com buraco** | O ctrade só chama a app com a série contínua. O buraco por queda é coberto pela própria consulta seguinte, que pede desde o último candle. Na Binance, minuto sem negócio vem como candle de volume 0 (a confirmar), então a série da exchange não tem buraco. Símbolo novo com menos histórico que o declarado nunca completa: o estado operacional precisa mostrar runner esperando histórico há muito tempo | Decidido (2026-11-15) |
 | 5 | Proteção do lote em prazo longo | **Configurável hoje; falta orientação e um alerta** | `maxLossPercentPerLot` aceita até 0,99 e `maxHoldingDuration` aceita semanas (ISO-8601, nulo desliga), os dois por runner. Um position trade com stop de 20% funciona com `PATCH` de 0,20. Faltam três coisas: o padrão de 5% vale para todo runner novo, e quem cria um runner de prazo longo precisa lembrar de mudar; a venda da proteção é sempre a mercado; o drawdown do portfólio (10% em 24h) pode dar `HALT` de compras com posições longas oscilando, sem vender nada | Decidido (2026-11-15): padrão de 5% e drawdown mantidos; o runbook orienta a configurar a proteção de runners de prazo longo |
 | 6 | Tamanho do body | **Tetos: 1000 candles por série e 3 séries** | O body não entra em log nem em trace. O pior caso é ~3000 candles, ~500 KB, ~5 ms de parse na app pela medição do estudo, bem dentro dos 250 ms. 1000 é o limite de uma chamada de klines da Binance (carga numa chamada só por série) e cobre a média de 200 dias com folga. 3 séries cobrem a análise em vários prazos típica (por exemplo 15m, 1h e 1d) | Decidido (2026-11-15): 1000 por série, 3 séries |
+
+## Decisões registradas na implementação (2026-11-20)
+
+- **Início e app de teste (mantenedor, 2026-11-20):** implementação autorizada antes do staging. A app de teste do
+  critério 9 é uma app nova de soak no `ctrade-strategies` (ex.: `SoakCandles`), em PR separado, depois do merge.
+- **Porta de guarda só guarda.** `CandleHistoryPort` tem `series`, `replace` e `retainOnly`. A regra de juntar, cortar
+  e escolher (`CandleSeries`) fica no `core`, sem estado; o repositório em memória só troca a lista inteira, então a
+  leitura de um runner nunca vê uma série pela metade.
+- **Ciclo próprio de 1 s** (`CandleSeriesScheduler`, `ctrade.market-data.candles.interval-ms`), separado do ciclo de
+  30 s dos streams: com 30 s, a série de `1m` ficaria atrasada até meio minuto depois de cada fechamento. A série em
+  dia não consulta a exchange; o custo do ciclo é ler os runners. A demanda usa a mesma regra dos streams
+  (`StreamDemand`), em cada fonte de `allowedMarketDataSources`.
+- **Série atrasada não é entregue.** Além de completa e contínua, a série tem de terminar no último candle fechado no
+  instante do tick. Nos poucos segundos depois de cada fechamento, até o candle novo chegar, o tick conta como
+  `WAITING_HISTORY`. Documentado no contrato e no runbook.
+- **"Fechado" pelo `closeTime` da Binance.** O adapter pede `limit + 1` (o último costuma estar em formação), descarta
+  o candle cujo `closeTime` não passou e pagina para trás quando faltam candles (série de 1000).
+- **Falha e histórico curto** esperam `retry-delay-ms` (10 s) antes de consultar a mesma série de novo, com log `WARN`
+  (`candles: fetch failed`), sem `ERROR`: queda da exchange já tem os seus alarmes.
+- **Estado operacional:** check novo `CANDLE_SERIES_UNAVAILABLE` (WARN), alimentado por `CandleSeriesGaps`, que o use
+  case publica a cada ciclo: `UNSUPPORTED` na hora, `INCOMPLETE` depois do limiar de market data parado (60 s).
+  Preferi um check próprio a estender o `RUNNER_ON_HOLD_STRATEGY_UNUSABLE`: a estratégia está utilizável, o que falta
+  é a série, e o sujeito é a série, não o runner.
+- **Mock:** candles por função pura de semente, símbolo, intervalo e abertura, em torno do mesmo preço inicial do feed
+  de ticks. Não é a mesma caminhada aleatória dos ticks, que depende do relógio; o que importa para os testes é ser
+  determinístico, contínuo e ter histórico para qualquer `count`.
+- **Catálogo:** `remote_strategies.candle_requirements` em JSON (`V23`). A API do catálogo troca `priceHistoryTicks`
+  por `requirements` (`priceHistoryTicks` e `candles`).
+- **`StrategyInputDto.withHistory(ticks, candles)`** substitui `withPriceHistory`: um caminho só para o histórico.
 
 ## Questão em aberto: cadência de avaliação (fora de escopo)
 

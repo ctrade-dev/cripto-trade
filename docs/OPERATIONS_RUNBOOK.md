@@ -293,6 +293,26 @@ continua `ERROR`: o símbolo ou o pedido está errado.
   Coordenador desligado: conexão manual (ver [Partida](#partida-depois-de-um-boot)).
 - **Confirmar:** em até 60s o símbolo sai de `subjects`.
 
+<a id="candle-series-unavailable"></a>
+### CANDLE_SERIES_UNAVAILABLE — série de candles declarada não está pronta (T72)
+
+Estratégia que declara `requirements.candles` só é chamada com todas as séries completas, contínuas e em dia;
+sem isso o runner fica sem decisão (`WAITING_HISTORY`), mas a proteção do lote continua. Sempre WARN. Cada
+`subject` traz exchange, símbolo, intervalo e `reason`:
+
+- `UNSUPPORTED` (na hora): a fonte de market data do runner não oferece o intervalo (Coinbase não oferece
+  candles; Binance e mock oferecem `1m` a `1w`).
+- `INCOMPLETE` (depois de 60s): a série não completou. `detail` diz quantos candles há do pedido.
+
+- **Diagnóstico:** logs `candles:` (`fetch failed` = a exchange recusou ou caiu; a série tenta de novo a cada
+  10s). `INCOMPLETE` parado com o mesmo número de candles por muito tempo = o símbolo não tem tanto histórico
+  na exchange (símbolo novo) e não vai completar.
+- **Ação:** `UNSUPPORTED`: trocar `allowedMarketDataSources` do runner para uma fonte com o intervalo, ou usar
+  outra estratégia. Histórico curto: a estratégia precisa de outro `strategyId` com `count` menor. Falha da
+  exchange: seguir [exchange-rest-circuit-open](#exchange-rest-circuit-open) se o circuito abriu; senão aguardar.
+- **Confirmar:** a série sai de `subjects` e `signal.evaluated.total{decision=WAITING_HISTORY}` do runner para
+  de crescer (fora dos poucos segundos depois de cada fechamento de intervalo, que são normais).
+
 <a id="stream-disconnected"></a>
 ### STREAM_DISCONNECTED — stream necessário não conectado
 
@@ -494,6 +514,13 @@ Venda MARKET do lote, sem a estratégia, quando a perda passa de `maxLossPercent
 passa de `maxHoldingDuration`. Vale com a estratégia fora do ar e em HALT. Ajuste:
 `PATCH /api/admin/runners/{id}` `{"maxLossPercentPerLot":0.08}` / `{"maxHoldingDuration":"PT24H"}`
 (`"PT0S"` desliga a idade). Sinais: `[PROTECTIVE_EXIT]`, `signal.evaluated.total{decision=PROTECTIVE_EXIT}`.
+
+**Runner de prazo longo (swing, position; T72, decisão 5):** o padrão de 5% vale para todo runner novo e corta
+uma operação longa na primeira oscilação normal. Ao criar o runner de uma estratégia que declara candles de
+`1h` ou mais, ajustar a proteção ao prazo dela logo depois de criar, antes do `start`, por exemplo
+`{"maxLossPercentPerLot":0.20,"maxHoldingDuration":"P30D"}`. A saída da proteção é sempre a mercado. O
+drawdown do portfólio (10% em 24h) continua valendo e pode pôr o portfólio em `HALT` de compras com posições
+longas oscilando, sem vender nada.
 
 ### Estratégia remota e catálogo (T41, T54)
 

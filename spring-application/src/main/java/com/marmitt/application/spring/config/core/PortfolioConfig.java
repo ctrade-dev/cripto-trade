@@ -1,5 +1,6 @@
 package com.marmitt.application.spring.config.core;
 
+import com.marmitt.core.application.usecase.marketdata.CandleSeriesGaps;
 import com.marmitt.application.spring.bootstrap.AutoSafeModeProperties;
 import com.marmitt.application.spring.bootstrap.CircuitBreakerProperties;
 import com.marmitt.application.spring.bootstrap.OperationalStateProperties;
@@ -191,6 +192,7 @@ public class PortfolioConfig {
             ExchangeBalanceReconciliation exchangeBalanceReconciliation,
             ObjectProvider<ReconcileTradesPort> reconcileTrades,
             StrategyCallHealthPort strategyCallHealth,
+            CandleSeriesGaps candleSeriesGaps,
             OperationalStateProperties operationalStateProperties,
             RunnerTransactionRecoveryProperties transactionRecoveryProperties
     ) {
@@ -199,7 +201,7 @@ public class PortfolioConfig {
         return new InspectOperationalStateUseCase(portfolioRepository, globalBalanceRepository,
                 strategyRunnerRepository, deadLetterEntryRepository, strategyRepository, remoteStrategyCatalog,
                 latestPrices, webSocketConnections, exchangeAdapters, infrastructureSignals,
-                exchangeBalanceReconciliation, reconcileTrades.getIfAvailable(), strategyCallHealth,
+                exchangeBalanceReconciliation, reconcileTrades.getIfAvailable(), strategyCallHealth, candleSeriesGaps,
                 new InspectOperationalStateUseCase.Thresholds(
                         Duration.ofMillis(operationalStateProperties.getMarketDataStaleMs()),
                         Duration.ofMillis(operationalStateProperties.getReservationStaleMs()),

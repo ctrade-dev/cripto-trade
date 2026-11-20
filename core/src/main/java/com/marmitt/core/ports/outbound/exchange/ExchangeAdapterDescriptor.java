@@ -2,6 +2,7 @@ package com.marmitt.core.ports.outbound.exchange;
 
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeAccountQueryPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeBootReadinessPort;
+import com.marmitt.core.ports.outbound.exchange.rest.ExchangeCandleQueryPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderExecutionPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderQueryPort;
 import com.marmitt.core.ports.outbound.exchange.streaming.ExchangeStreamingPort;
@@ -43,4 +44,9 @@ public interface ExchangeAdapterDescriptor {
     boolean hasBootReadiness();
 
     ExchangeBootReadinessPort bootReadiness();
+
+    /** Consulta de candles fechados (T72). */
+    boolean hasCandleQuery();
+
+    ExchangeCandleQueryPort candleQuery();
 }

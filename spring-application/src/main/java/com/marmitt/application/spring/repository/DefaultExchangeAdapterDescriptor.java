@@ -6,6 +6,7 @@ import com.marmitt.core.ports.outbound.exchange.ExchangeOrderPort;
 import com.marmitt.core.ports.outbound.exchange.TradeHistoryQueryPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeAccountQueryPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeBootReadinessPort;
+import com.marmitt.core.ports.outbound.exchange.rest.ExchangeCandleQueryPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderExecutionPort;
 import com.marmitt.core.ports.outbound.exchange.rest.ExchangeOrderQueryPort;
 import com.marmitt.core.ports.outbound.exchange.streaming.ExchangeStreamingPort;
@@ -24,6 +25,7 @@ public final class DefaultExchangeAdapterDescriptor implements ExchangeAdapterDe
     private final ExchangeAccountQueryPort accountQuery;
     private final TradeHistoryQueryPort tradeHistory;
     private final ExchangeBootReadinessPort bootReadiness;
+    private final ExchangeCandleQueryPort candleQuery;
 
     private DefaultExchangeAdapterDescriptor(Builder builder) {
         this.exchangeName = builder.exchangeName;
@@ -36,6 +38,7 @@ public final class DefaultExchangeAdapterDescriptor implements ExchangeAdapterDe
         this.accountQuery = builder.accountQuery;
         this.tradeHistory = builder.tradeHistory;
         this.bootReadiness = builder.bootReadiness;
+        this.candleQuery = builder.candleQuery;
     }
 
     public static Builder builder(String exchangeName) {
@@ -103,6 +106,13 @@ public final class DefaultExchangeAdapterDescriptor implements ExchangeAdapterDe
         return bootReadiness;
     }
 
+    @Override public boolean hasCandleQuery() { return candleQuery != null; }
+
+    @Override public ExchangeCandleQueryPort candleQuery() {
+        if (candleQuery == null) throw new UnsupportedCapabilityException(exchangeName, "candleQuery");
+        return candleQuery;
+    }
+
     public static final class Builder {
         private final String exchangeName;
         private ExchangeStreamingPort streaming;
@@ -114,6 +124,7 @@ public final class DefaultExchangeAdapterDescriptor implements ExchangeAdapterDe
         private ExchangeAccountQueryPort accountQuery;
         private TradeHistoryQueryPort tradeHistory;
         private ExchangeBootReadinessPort bootReadiness;
+        private ExchangeCandleQueryPort candleQuery;
 
         private Builder(String exchangeName) {
             this.exchangeName = exchangeName.toUpperCase();
@@ -128,6 +139,7 @@ public final class DefaultExchangeAdapterDescriptor implements ExchangeAdapterDe
         public Builder accountQuery(ExchangeAccountQueryPort accountQuery) { this.accountQuery = accountQuery; return this; }
         public Builder tradeHistory(TradeHistoryQueryPort tradeHistory) { this.tradeHistory = tradeHistory; return this; }
         public Builder bootReadiness(ExchangeBootReadinessPort bootReadiness) { this.bootReadiness = bootReadiness; return this; }
+        public Builder candleQuery(ExchangeCandleQueryPort candleQuery) { this.candleQuery = candleQuery; return this; }
 
         public DefaultExchangeAdapterDescriptor build() {
             return new DefaultExchangeAdapterDescriptor(this);

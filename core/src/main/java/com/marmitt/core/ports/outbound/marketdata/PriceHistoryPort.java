@@ -1,6 +1,7 @@
 package com.marmitt.core.ports.outbound.marketdata;
 
 import com.marmitt.core.dto.strategy.PricePointDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,7 +15,7 @@ import java.util.List;
 public interface PriceHistoryPort {
 
     /** Teto de ticks guardados por exchange e simbolo, e portanto do que uma estrategia pode declarar. */
-    int MAX_TICKS = 1000;
+    int MAX_TICKS = StrategyRequirements.MAX_PRICE_HISTORY_TICKS;
 
     /**
      * Chamado na thread de market data: nao pode bloquear. Tick mais velho que o ultimo guardado e ignorado.

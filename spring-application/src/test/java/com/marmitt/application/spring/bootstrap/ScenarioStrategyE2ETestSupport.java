@@ -105,13 +105,18 @@ abstract class ScenarioStrategyE2ETestSupport extends AbstractIntegrationTest {
     }
 
     protected UUID createAndActivateRunner(UUID portfolioId, UUID strategyId) {
+        return createAndActivateRunner(portfolioId, strategyId, MARKET_DATA_EXCHANGE);
+    }
+
+    /** Runner com market data de {@code marketDataSource} (ex.: {@code MOCK}, que tem candles; T72). */
+    protected UUID createAndActivateRunner(UUID portfolioId, UUID strategyId, String marketDataSource) {
         CreateRunnerResponse response = createRunnerPort.execute(
                 CreateRunnerRequest.builder()
                         .portfolioId(portfolioId)
                         .strategyId(strategyId)
                         .symbol(SYMBOL)
                         .exchangeName(MOCK_EXCHANGE)
-                        .allowedMarketDataSources(Set.of(MARKET_DATA_EXCHANGE))
+                        .allowedMarketDataSources(Set.of(marketDataSource))
                         .build()
         );
         assertNotNull(response.runnerId(), "Runner creation failed: " + response.message());
@@ -147,9 +152,13 @@ abstract class ScenarioStrategyE2ETestSupport extends AbstractIntegrationTest {
      * tick), para provar ordens que descansam porque o livro saiu do lugar.
      */
     protected void publishTick(BigDecimal price, BigDecimal exchangePrice) {
+        publishTick(MARKET_DATA_EXCHANGE, price, exchangePrice);
+    }
+
+    protected void publishTick(String marketDataSource, BigDecimal price, BigDecimal exchangePrice) {
         mockAdapter.seedReferencePrice(SYMBOL, exchangePrice);
         processTradeSignalPort.execute(new MarketDataDto(
-                MARKET_DATA_EXCHANGE,
+                marketDataSource,
                 Symbol.of(SYMBOL),
                 price,
                 price,

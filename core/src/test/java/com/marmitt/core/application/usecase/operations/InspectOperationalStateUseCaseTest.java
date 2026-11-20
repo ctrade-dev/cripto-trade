@@ -1,5 +1,8 @@
 package com.marmitt.core.application.usecase.operations;
 
+import com.marmitt.core.dto.strategy.CandleInterval;
+import com.marmitt.core.dto.strategy.CandleSeriesKey;
+import com.marmitt.core.application.usecase.marketdata.CandleSeriesGaps;
 import com.marmitt.core.application.usecase.exchange.ExchangeBalanceReconciliation;
 import com.marmitt.core.domain.portfolio.GlobalBalance;
 import com.marmitt.core.domain.portfolio.Portfolio;
@@ -76,12 +79,19 @@ class InspectOperationalStateUseCaseTest {
     private final ExchangeBalanceReconciliation balanceSanity = mock(ExchangeBalanceReconciliation.class);
     private final ReconcileTradesPort tradeReconciliation = mock(ReconcileTradesPort.class);
     private final StrategyCallHealthPort strategyCallHealth = mock(StrategyCallHealthPort.class);
+    private List<CandleSeriesGaps.Gap> candleGaps = List.of();
+    private final CandleSeriesGaps candleSeriesGaps = new CandleSeriesGaps() {
+        @Override
+        public List<Gap> current() {
+            return candleGaps;
+        }
+    };
     private final InspectOperationalStateUseCase.Thresholds thresholds = new InspectOperationalStateUseCase.Thresholds(
             Duration.ofSeconds(60), Duration.ofHours(24), Duration.ofSeconds(30), Duration.ofSeconds(60),
             Duration.ofMinutes(10), Duration.ofSeconds(60));
     private final InspectOperationalStateUseCase useCase = new InspectOperationalStateUseCase(portfolios, balances,
             runners, deadLetters, strategies, catalog, prices, connections, adapters, infrastructure, balanceSanity,
-            tradeReconciliation, strategyCallHealth, thresholds, Clock.fixed(NOW, ZoneOffset.UTC));
+            tradeReconciliation, strategyCallHealth, candleSeriesGaps, thresholds, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private Portfolio portfolio;
     private StrategyRunner runner;
@@ -112,9 +122,27 @@ class InspectOperationalStateUseCaseTest {
         OperationalStateReport report = useCase.inspect();
 
         assertEquals(OperationalSeverity.OK, report.status());
-        assertEquals(17, report.checks().size());
+        assertEquals(18, report.checks().size());
         assertTrue(report.checks().stream().allMatch(c -> c.status() == OperationalSeverity.OK), report.toString());
         assertEquals("docs/OPERATIONS_RUNBOOK.md#dlq-unresolved", check(report, "DLQ_UNRESOLVED").runbook());
+    }
+
+    /** T72: intervalo que a exchange nao oferece acusa na hora; serie incompleta so depois do limiar. */
+    @Test
+    void candleSeriesNotReadyIsAWarning() {
+        CandleSeriesKey unsupported = new CandleSeriesKey("COINBASE", "BTCUSDT", CandleInterval.H1);
+        CandleSeriesKey loading = new CandleSeriesKey("BINANCE", "BTCUSDT", CandleInterval.M1);
+        CandleSeriesKey stuck = new CandleSeriesKey("BINANCE", "NEWUSDT", CandleInterval.D1);
+        candleGaps = List.of(
+                new CandleSeriesGaps.Gap(unsupported, CandleSeriesGaps.Reason.UNSUPPORTED, NOW, "not offered"),
+                new CandleSeriesGaps.Gap(loading, CandleSeriesGaps.Reason.INCOMPLETE, NOW.minusSeconds(5), "0 of 30"),
+                new CandleSeriesGaps.Gap(stuck, CandleSeriesGaps.Reason.INCOMPLETE, NOW.minusSeconds(600), "40 of 200"));
+
+        OperationalCheck candles = check(useCase.inspect(), "CANDLE_SERIES_UNAVAILABLE");
+
+        assertEquals(OperationalSeverity.WARN, candles.status());
+        assertEquals(List.of("COINBASE", "BINANCE"), candles.subjects().stream().map(s -> s.get("exchange")).toList());
+        assertEquals(NOW.minusSeconds(600), candles.since());
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.marmitt.core.dto.strategy.response;
 
 import com.marmitt.core.domain.strategy.RemoteStrategyStatus;
 import com.marmitt.core.domain.strategy.RemoteStrategyVerification;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.enums.RunnerStatus;
 
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.UUID;
  *                  processo: habilitada e conferida desde o ultimo boot, cadastro, reabilitacao ou
  *                  troca de endereco
  * @param lastError motivo da ultima conferencia que falhou; nulo se a ultima passou
+ * @param requirements historico declarado na primeira conferencia (ticks e candles); nulo antes dela
  * @param runners   runners que apontam para a estrategia (sem ela utilizavel, ficam em HOLD)
  */
 public record RemoteStrategyView(UUID strategyRef,
@@ -28,7 +30,7 @@ public record RemoteStrategyView(UUID strategyRef,
                                  String lastError,
                                  Instant lastVerificationAt,
                                  String servedContractVersion,
-                                 Integer priceHistoryTicks,
+                                 StrategyRequirements requirements,
                                  Instant createdAt,
                                  Instant updatedAt,
                                  List<RunnerRef> runners) {

@@ -4,6 +4,7 @@ import com.marmitt.core.domain.strategy.StrategyEndpoint;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.core.ports.outbound.strategy.StrategyEvaluationPort;
 import com.marmitt.core.ports.outbound.strategy.TradingStrategy;
 
@@ -27,7 +28,7 @@ class RemoteTradingStrategy implements TradingStrategy {
     private final StrategyEvaluationPort evaluation;
     private volatile StrategyEndpoint endpoint;
     private volatile boolean enabled;
-    private volatile int requiredPriceHistoryTicks;
+    private volatile StrategyRequirements requirements = StrategyRequirements.NONE;
 
     RemoteTradingStrategy(UUID strategyRef, String name, String version, StrategyEndpoint endpoint,
                           StrategyEvaluationPort evaluation) {
@@ -60,12 +61,12 @@ class RemoteTradingStrategy implements TradingStrategy {
     }
 
     @Override
-    public int requiredPriceHistoryTicks() {
-        return requiredPriceHistoryTicks;
+    public StrategyRequirements requirements() {
+        return requirements;
     }
 
-    void requirePriceHistoryTicks(int ticks) {
-        this.requiredPriceHistoryTicks = ticks;
+    void require(StrategyRequirements requirements) {
+        this.requirements = Objects.requireNonNull(requirements, "requirements cannot be null");
     }
 
     @Override

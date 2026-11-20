@@ -115,7 +115,7 @@ public class RemoteStrategyClient implements StrategyEvaluationPort {
     private static RemoteStrategyIdentity identity(WireTypes.Meta meta, UUID strategyRef) {
         try {
             return new RemoteStrategyIdentity(UUID.fromString(meta.strategyId()), meta.name(), meta.version(),
-                    meta.contractVersion(), StrategyContractMapper.priceHistoryTicks(meta.requirements()));
+                    meta.contractVersion(), StrategyContractMapper.requirements(meta.requirements()));
         } catch (IllegalArgumentException e) {
             throw new StrategyUnavailableException(Reason.INVALID_RESPONSE,
                     "/meta outside the contract for " + strategyRef + ": " + e.getMessage(), e);

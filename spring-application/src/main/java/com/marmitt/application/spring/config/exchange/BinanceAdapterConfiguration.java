@@ -11,6 +11,7 @@ import com.marmitt.binance.BinanceOrderAdapter;
 import com.marmitt.binance.BinanceUserStreamAdapter;
 import com.marmitt.binance.BinanceUserStreamSessionAdapter;
 import com.marmitt.binance.auth.BinanceCredentials;
+import com.marmitt.binance.candle.BinanceCandleQueryAdapter;
 import com.marmitt.binance.auth.BinanceRequestSigner;
 import com.marmitt.binance.filters.BinanceOrderNormalizer;
 import com.marmitt.binance.filters.SymbolFilterCache;
@@ -142,12 +143,24 @@ public class BinanceAdapterConfiguration {
         return new BinanceTradeHistoryAdapter(requestBuilder, new OkHttpClientAdapter(binanceRestClient), objectMapper);
     }
 
+    /** Candles fechados para as estrategias que os declaram (T72): dado publico, sem assinatura. */
+    @Bean
+    public BinanceCandleQueryAdapter binanceCandleQueryAdapter(BinanceProperties properties,
+                                                               OkHttpClient binanceRestClient,
+                                                               ObjectMapper objectMapper) {
+        BinanceCredentials credentials = new BinanceCredentials(properties.getApiKey(), properties.getApiSecret());
+        BinanceRestRequestBuilder requestBuilder = new BinanceRestRequestBuilder(properties.getRestBaseUrl(),
+                new BinanceRequestSigner(credentials));
+        return new BinanceCandleQueryAdapter(requestBuilder, new OkHttpClientAdapter(binanceRestClient), objectMapper);
+    }
+
     @Bean
     public ExchangeAdapterDescriptor binanceAdapterDescriptor(BinanceMarketStreamAdapter binanceMarketStreamAdapter,
                                                                BinanceUserStreamAdapter binanceUserStreamAdapter,
                                                                BinanceUserStreamSessionAdapter binanceUserStreamSessionAdapter,
                                                                BinanceOrderAdapter binanceOrderAdapter,
                                                                BinanceTradeHistoryAdapter binanceTradeHistoryAdapter,
+                                                               BinanceCandleQueryAdapter binanceCandleQueryAdapter,
                                                                ExchangeCircuitBreakerConfiguration.ExchangeOrderQueryDecorator
                                                                        orderQueryDecorator) {
         return DefaultExchangeAdapterDescriptor.builder("BINANCE")
@@ -160,6 +173,7 @@ public class BinanceAdapterConfiguration {
                 .accountQuery(binanceMarketStreamAdapter)
                 .tradeHistory(binanceTradeHistoryAdapter)
                 .bootReadiness(binanceMarketStreamAdapter)
+                .candleQuery(binanceCandleQueryAdapter)
                 .build();
     }
 }

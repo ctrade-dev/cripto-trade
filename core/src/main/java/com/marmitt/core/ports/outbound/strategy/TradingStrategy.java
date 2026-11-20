@@ -3,6 +3,7 @@ package com.marmitt.core.ports.outbound.strategy;
 import com.marmitt.core.dto.strategy.StrategyContextDto;
 import com.marmitt.core.dto.strategy.StrategyInputDto;
 import com.marmitt.core.dto.strategy.StrategyOutputDto;
+import com.marmitt.core.dto.strategy.StrategyRequirements;
 
 import java.util.UUID;
 
@@ -24,10 +25,11 @@ public interface TradingStrategy {
     String getStrategyVersion();
 
     /**
-     * Ticks que {@link StrategyInputDto#priceHistory()} precisa trazer; sem eles a estrategia nao e consultada.
+     * Historico que {@link StrategyInputDto} precisa trazer (ticks e candles, T69 e T72); sem ele completo a
+     * estrategia nao e consultada.
      */
-    default int requiredPriceHistoryTicks() {
-        return 0;
+    default StrategyRequirements requirements() {
+        return StrategyRequirements.NONE;
     }
 
     boolean isEnabled();
