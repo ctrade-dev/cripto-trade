@@ -1,5 +1,6 @@
 package com.marmitt.core.dto.strategy;
 
+import com.fasterxml.jackson.annotation.JsonValue;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
@@ -25,7 +26,8 @@ public enum CandleInterval {
         this.duration = duration;
     }
 
-    /** Codigo do contrato, por exemplo {@code 1h}. */
+    /** Codigo do contrato, por exemplo {@code 1h}; e tambem como o intervalo aparece na API do ctrade. */
+    @JsonValue
     public String code() {
         return code;
     }
