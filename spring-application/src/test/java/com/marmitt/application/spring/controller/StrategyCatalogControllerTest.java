@@ -1,5 +1,7 @@
 package com.marmitt.application.spring.controller;
 
+import com.marmitt.core.dto.strategy.CandleRequirement;
+import com.marmitt.core.dto.strategy.CandleInterval;
 import com.marmitt.core.dto.strategy.StrategyRequirements;
 import com.marmitt.application.spring.web.GlobalExceptionHandler;
 import com.marmitt.core.domain.strategy.RemoteStrategyStatus;
@@ -55,7 +57,9 @@ class StrategyCatalogControllerTest {
                 .andExpect(jsonPath("$.verification").value("VERIFIED"))
                 .andExpect(jsonPath("$.usable").value(true))
                 .andExpect(jsonPath("$.tokenConfigured").value(true))
-                .andExpect(jsonPath("$.token").doesNotExist());
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(jsonPath("$.requirements.candles[0].interval").value("1h"))
+                .andExpect(jsonPath("$.requirements.candles[0].count").value(200));
         verify(catalog).register(new RegisterRemoteStrategyRequest(ref, "SMA", "1.0.0", "http://s:8090/v1",
                 "secret"), "first deploy");
     }
@@ -83,6 +87,7 @@ class StrategyCatalogControllerTest {
         Instant now = Instant.parse("2026-10-20T12:00:00Z");
         return new RemoteStrategyView(ref, "SMA", "1.0.0", "http://s:8090/v1", true, RemoteStrategyStatus.ENABLED,
                 RemoteStrategyVerification.VERIFIED, true, null, now, "2.0.0",
-                new StrategyRequirements(20, List.of()), now, now, List.of());
+                new StrategyRequirements(20, List.of(new CandleRequirement(CandleInterval.H1, 200))), now, now,
+                List.of());
     }
 }
