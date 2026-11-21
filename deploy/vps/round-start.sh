@@ -35,6 +35,8 @@ if [[ -e "$ROUND_DIR/round.env" && ! -e "$ROUND_DIR/CLOSED" ]]; then
   echo "Rodada em andamento em $ROUND_DIR (sem CLOSED). Abortado." >&2
   exit 1
 fi
+# T74: o soak so fica no ar nas sessoes; as conferencias de saldo abaixo leem a conta pela API dele.
+./soak-up.sh >/dev/null
 for a in $ASSETS; do
   locked=$(curl -sf -H "X-Admin-Key: $K" "$B/exchanges/BINANCE/balances?asset=$a" | python3 -c "import json,sys;print(json.load(sys.stdin)['balances'][0]['locked'])")
   python3 -c "import sys;sys.exit(0 if float('$locked')==0 else 1)" || { echo "locked $a=$locked: cancelar as ordens antes" >&2; exit 1; }
