@@ -134,7 +134,7 @@ Uma configuração de operação só, sem um terceiro perfil "staging" quase igu
 
 - O mantenedor cria a **segunda conta** (segundo login no GitHub) e as chaves. O agente nunca vê nem digita chave,
   nem cria conta.
-- Conta A (a atual ou a nova, decisão 8) para o staging; conta B para o soak. Cada `ctrade` lê só as próprias
+- Conta A (a nova, decisão 8) para o staging; conta B (a atual) para o soak. Cada `ctrade` lê só as próprias
   variáveis no `.env` (`BINANCE_*_STG` e `BINANCE_*_SOAK`, nomes finais no PR).
 - Chaves com **restrição de IP** ao IP da VPS, se a testnet oferecer, e **sem permissão de saque**.
 - `ADMIN_API_KEY` própria de cada instância.
@@ -156,7 +156,7 @@ Uma configuração de operação só, sem um terceiro perfil "staging" quase igu
 
 ### A6. Versão implantada
 
-Decisão 9, em aberto:
+Decisão 9, decidida em 2026-11-20: **releases**. As opções consideradas:
 
 - **Releases:** o staging roda tag em `main` pelo Git Flow (`release/x.y.z` → `main` + tag); o soak roda o
   `develop`. O staging só recebe o que já passou pelo soak, e a fase B herda o mesmo procedimento.
@@ -267,8 +267,8 @@ Ficam para a spec da fase B, mas precisam estar decididos antes dela:
 | 5 | Onde roda a rotina | `cron` na VPS (horário) + agente no computador do mantenedor (diário e sob alerta) | Começa sem chave na nuvem; a opção a fica para a fase B |
 | 6 | Janela mínima da fase A | 14 dias contínuos | Duas semanas cobrem a calibração dos alertas e uma implantação |
 | 7 | Estratégia da fase A | `DonchianBreakout` depois do backtest | Candidata real em vez das apps de soak |
-| 8 | Qual conta fica com o staging | A conta **nova** no staging; a atual fica com o soak | O staging começa com saldo cheio e sem os lotes deixados pelas rodadas; o soak segue com o histórico que já tem |
-| 9 | Versão no staging | Releases (tag em `main`); soak com `develop` | O staging mede uma versão fechada; ver A6 |
+| 8 | Qual conta fica com o staging | A conta **nova** no staging; a atual fica com o soak (decidido em 2026-11-20) | O staging começa com saldo cheio e sem os lotes deixados pelas rodadas; o soak segue com o histórico que já tem |
+| 9 | Versão no staging | Releases (tag em `main`); soak com `develop` (decidido em 2026-11-20) | O staging mede uma versão fechada; ver A6 |
 
 ## Ordem de entrega (fase A)
 
