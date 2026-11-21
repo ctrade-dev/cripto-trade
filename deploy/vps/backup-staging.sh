@@ -25,8 +25,9 @@ snapshot=()
 umask 077
 docker compose exec -T postgres pg_dump -U ctrade -d ctrade -n staging -Fc "${snapshot[@]}" > "$partial"
 
-# Um dump legivel tem o schema e o historico do Flyway; arquivo truncado ou vazio nao vira backup.
-if ! docker compose exec -T postgres pg_restore -l < "$partial" | grep -q 'TABLE DATA staging flyway_schema_history'; then
+# Um dump legivel tem o schema e o historico do Flyway; arquivo truncado ou vazio nao vira backup. Sem grep -q:
+# ele sai cedo, o pg_restore leva SIGPIPE e o pipefail falharia o backup bom.
+if ! docker compose exec -T postgres pg_restore -l < "$partial" | grep 'TABLE DATA staging flyway_schema_history' >/dev/null; then
   echo "backup invalido: pg_restore -l nao achou staging.flyway_schema_history em $partial" >&2
   exit 1
 fi
