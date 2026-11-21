@@ -11,7 +11,7 @@ seguras e expor observabilidade do processo.
 - Mudancas na inicializacao da aplicacao.
 - Bugs em readiness de exchange.
 - Divergencias de saldo, ordens abertas, zombies ou transacoes antigas.
-- Alteracoes em `FAIL_FAST` ou `WARN_ONLY`.
+- Alteracoes em `FAIL_FAST` ou `WARN_ONLY` (padrao `WARN_ONLY`; o perfil `prod` liga `FAIL_FAST` com `account-query-policy: FAIL`, T74).
 - Recuperacao de runners e DLQ operacional.
 - Limpeza de transacoes `PENDING` antigas (a expiracao por TTL nao e mais uma fase
   do boot desde a T31; vive em runtime no `RecoverStaleTransactionsUseCase`).

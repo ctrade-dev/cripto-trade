@@ -170,6 +170,7 @@ notification:
   discord:
     # Vazio ⇒ notificações Discord desativadas (adapter no-op); a aplicação sobe normalmente.
     webhook-url: ${DISCORD_WEBHOOK_URL:}
+    required: false                      # T74: o perfil prod exige o webhook
   grafana:
     # Opcional: template do link "ver logs" no Discord; {correlationId} é substituído em runtime.
     explore-url-template: ${GRAFANA_EXPLORE_URL_TEMPLATE:}

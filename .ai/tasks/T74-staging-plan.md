@@ -3,7 +3,7 @@
 **Complexidade:** Alta (plano; cada entrega vira PR próprio)
 **Responsável:** Claude
 **Dependências:** T53 (soak em testnet, concluída), T63 (ambiente da VPS), T21/T22 (alertas), T55 (estado operacional)
-**Status:** Spec para revisão do mantenedor (2026-11-20, revisada com o desenho de schemas e duas contas)
+**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1 em PR
 
 ---
 
@@ -93,7 +93,8 @@ Dois eixos que hoje estão misturados no perfil `testnet`:
 
 - **qual exchange:** `testnet` (já existe) e `mainnet` (fase B), só URLs da Binance;
 - **como operar:** perfil novo `prod`. Log `INFO` (sem o `DEBUG` do `core` usado no soak), boot `FAIL_FAST`,
-  notificação no Discord obrigatória (sobe com erro sem o webhook), retenção de logs e métricas maior.
+  consulta de saldo obrigatória no boot (`account-query-policy: FAIL`), notificação no Discord obrigatória (sobe com
+  erro sem o webhook). A retenção de logs e métricas é do Prometheus e do Loki, não do ctrade: fica em A8.
 
 O staging roda `SPRING_PROFILES_ACTIVE=testnet,prod`; a fase B, `mainnet,prod`; o soak continua só com `testnet`.
 Uma configuração de operação só, sem um terceiro perfil "staging" quase igual ao `prod`.
@@ -193,6 +194,7 @@ commit (por exemplo, um checkout separado para o staging em `~/ctrade-stg`).
 - Os alertas de ausência M7 a M10 (sem fill, sem ordem, sem sinal por tempo) são calibrados com o volume real da
   estratégia candidata nas duas primeiras semanas e ligados depois.
 - Cada alerta tem a seção do runbook com a ação, como já é o padrão do estado operacional.
+- Retenção: pelo menos 30 dias de métricas e de logs, para cobrir a janela de 14 dias e a análise depois dela.
 - Risco aceito: uma sessão de soak que derrube o Loki ou o Prometheus derruba também a observação do staging.
   Mitigação em A3 (falhas de infraestrutura compartilhada fora da janela ou registradas).
 
@@ -274,7 +276,8 @@ Ficam para a spec da fase B, mas precisam estar decididos antes dela:
 
 Cada item é um PR, com teste na VPS quando couber:
 
-1. A1: perfil `prod` (sem mudança de comportamento no soak).
+1. A1: perfil `prod` (sem mudança de comportamento no soak). Entregue: `application-prod.yml` (log `INFO`, boot fase 2
+   `FAIL_FAST` + `account-query-policy: FAIL`) e `notification.discord.required`.
 2. A2: schema por variável (`DB_SCHEMA`) no datasource e no Flyway, com teste de integração em schema não `public`.
 3. A3 + A4 + A8: compose com `ctrade-app` (staging) e `ctrade-soak` (perfil `soak`), usuários do Postgres por
    schema, scripts de soak apontando para o soak e recusando o staging, rótulo `env` no Prometheus e no Loki, alertas

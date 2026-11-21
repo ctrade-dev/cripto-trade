@@ -15,6 +15,7 @@ import java.time.Duration;
  *
  * <p>Registra sempre um {@link ErrorNotificationPort}; quando o webhook não está configurado,
  * o adapter opera em modo no-op, então os listeners podem depender do port incondicionalmente.
+ * Com {@code notification.discord.required=true} (perfil {@code prod}, T74) o webhook vazio impede a subida.
  */
 @Configuration
 @EnableConfigurationProperties(NotificationProperties.class)
@@ -31,6 +32,11 @@ public class NotificationConfig {
     public ErrorNotificationPort errorNotificationPort(NotificationProperties properties,
                                                        ObjectMapper objectMapper,
                                                        HttpClient notificationHttpClient) {
+        NotificationProperties.Discord discord = properties.getDiscord();
+        if (discord.isRequired() && (discord.getWebhookUrl() == null || discord.getWebhookUrl().isBlank())) {
+            throw new IllegalStateException("notification.discord.required=true and DISCORD_WEBHOOK_URL is empty:"
+                    + " set the Discord webhook for this environment");
+        }
         return new DiscordWebhookNotificationAdapter(
                 properties.getDiscord().getWebhookUrl(),
                 properties.getGrafana().getExploreUrlTemplate(),

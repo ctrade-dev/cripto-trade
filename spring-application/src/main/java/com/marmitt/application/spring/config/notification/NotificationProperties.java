@@ -27,12 +27,23 @@ public class NotificationProperties {
         /** URL do webhook Discord. Vazio ⇒ adapter no-op. */
         private String webhookUrl = "";
 
+        /** T74: {@code true} (perfil {@code prod}) recusa subir sem {@code webhook-url}. */
+        private boolean required = false;
+
         public String getWebhookUrl() {
             return webhookUrl;
         }
 
         public void setWebhookUrl(String webhookUrl) {
             this.webhookUrl = webhookUrl;
+        }
+
+        public boolean isRequired() {
+            return required;
+        }
+
+        public void setRequired(boolean required) {
+            this.required = required;
         }
     }
 
