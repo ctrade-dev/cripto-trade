@@ -101,7 +101,7 @@ Uma configuração de operação só, sem um terceiro perfil "staging" quase igu
 
 ### A2. Um banco, dois schemas
 
-- O schema vem por variável: `DB_SCHEMA` entra na URL do datasource (`currentSchema`) e no Flyway
+- O schema vem por variável: `DB_SCHEMA` entra no pool de conexões (`spring.datasource.hikari.schema`) e no Flyway
   (`spring.flyway.default-schema` e `schemas`). Cada instância migra e lê só o próprio schema. Sem `DB_SCHEMA`, o
   padrão é `public`, e o desenvolvimento local não muda.
 - **Um usuário do Postgres por schema:** `ctrade_stg` é dono só de `staging`; `ctrade_soak` é dono só de `soak`.
@@ -279,6 +279,8 @@ Cada item é um PR, com teste na VPS quando couber:
 1. A1: perfil `prod` (sem mudança de comportamento no soak). Entregue: `application-prod.yml` (log `INFO`, boot fase 2
    `FAIL_FAST` + `account-query-policy: FAIL`) e `notification.discord.required`.
 2. A2: schema por variável (`DB_SCHEMA`) no datasource e no Flyway, com teste de integração em schema não `public`.
+   Entregue: `spring.datasource.hikari.schema` e `spring.flyway.default-schema`/`schemas` com `${DB_SCHEMA:public}`;
+   `DatabaseSchemaIntegrationTest`. Os usuários do Postgres por schema entram com o compose, no item 3.
 3. A3 + A4 + A8: compose com `ctrade-app` (staging) e `ctrade-soak` (perfil `soak`), usuários do Postgres por
    schema, scripts de soak apontando para o soak e recusando o staging, rótulo `env` no Prometheus e no Loki, alertas
    filtrados, runbook de segredos. Antes: o mantenedor cria a segunda conta da testnet, as chaves e o canal do
