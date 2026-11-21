@@ -416,6 +416,33 @@ dos runners não arquivados, compara os fills locais com o histórico de trades 
 | Grafana *Rejection rate > 50%* | `signal_evaluated_total` por `decision` (capital, preço, limites); ajustar a causa. |
 | Grafana *Utilização global > 80%* | Capital quase todo reservado; ver [capital-reservation-stale](#capital-reservation-stale). |
 
+Na VPS (T74), os alertas do Grafana valem para o staging (rótulo `env="staging"`) e chegam no canal do staging;
+o soak (`env="soak"`) fica de fora.
+
+---
+
+<a id="segredos"></a>
+## Segredos e rotação (staging, T74)
+
+Os segredos do staging ficam só no `.env` da VPS (`deploy/vps`, permissão `600`), nunca no git nem em chat:
+`BINANCE_API_KEY_STG`/`BINANCE_API_SECRET_STG`, `ADMIN_API_KEY_STG`, `DB_PASSWORD_STG`,
+`DISCORD_WEBHOOK_URL_STG`. O agente lê valores só para usar (por exemplo, a chave admin num `curl`) e nunca os
+imprime.
+
+- **Quando:** chaves da Binance e `ADMIN_API_KEY_STG` a cada 90 dias; qualquer segredo na hora, se houver suspeita
+  de vazamento (apareceu em log, chat, commit ou print).
+- **Quem:** a chave da Binance e o webhook do Discord são do mantenedor (ele cria, o agente nunca vê). A chave
+  admin e a senha do banco podem ser geradas na VPS (`uuidgen`, `openssl rand -hex 24`) por quem opera.
+- **Chave da Binance:** criar a nova na conta do staging (sem saque), trocar no `.env`, `docker compose up -d
+  ctrade-app`, confirmar o boot (`GET /api/boot/status` em `SUCCESS`) e só então apagar a antiga na Binance.
+- **Chave admin:** trocar no `.env` e `docker compose up -d ctrade-app`. Rotinas que leem a chave do `.env`
+  pegam a nova sozinhas.
+- **Senha do banco:** trocar `DB_PASSWORD_STG` no `.env`, `./db-environments.sh` (aplica no Postgres) e
+  `docker compose up -d ctrade-app`.
+- **Webhook do Discord:** apagar o webhook no canal, criar outro, trocar no `.env` e `docker compose up -d
+  ctrade-app grafana`.
+- **Confirmar:** boot `SUCCESS`, estado operacional sem piora e, no webhook, uma notificação chegando.
+
 ---
 
 <a id="referencia"></a>

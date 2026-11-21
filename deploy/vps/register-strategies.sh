@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cadastra as cinco apps da T60 no catalogo do ctrade com baseUrl interno e token (T54).
+# Cadastra as cinco apps da T60 no catalogo do ctrade-soak (T74: porta 8180) com baseUrl interno e token (T54).
 # O cadastro repetido com a mesma definicao e idempotente: pode rodar de novo depois de cada subida.
 #
 # Uso:  ./register-strategies.sh
@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 env_value() { grep -E "^$1=" .env | cut -d= -f2-; }
 
 admin_key="$(env_value ADMIN_API_KEY)"
-api="http://127.0.0.1:8080/api/admin/strategies"
+api="http://127.0.0.1:8180/api/admin/strategies"
 
 # servico | strategyRef | name | variavel do token
 apps=(

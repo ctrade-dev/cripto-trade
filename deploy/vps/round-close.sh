@@ -9,10 +9,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 ROUND_DIR=${ROUND_DIR:-$HOME/round}
 source "$ROUND_DIR/round.env"
-K=$(grep ^ADMIN_API_KEY .env | cut -d= -f2-); B=http://127.0.0.1:8080/api
+K=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-); B=http://127.0.0.1:8180/api   # T74: soak
 REASON="X-Reason: fim da rodada $N da T53"
 log() { echo "$(date -u +%H:%M:%SZ) $*"; }
-psql() { docker compose exec -T postgres psql -U ctrade -d ctrade -tAc "$1"; }
+psql() { docker compose exec -T postgres psql -U ctrade_soak -d ctrade -tAc "$1"; }
 
 wait_s=$(( $(date -u -d "$END" +%s) - $(date +%s) ))
 log "dormindo ${wait_s}s ate $END"
@@ -41,6 +41,7 @@ STATS_PY='import os,urllib.request as u;print(u.urlopen(u.Request("http://localh
 for app in trend reversion book breakout chaos; do
   docker compose exec -T $app python -c "$STATS_PY" > "$ROUND_DIR/stats-$app.json" 2>&1
 done
-python3 ../../scripts/round_report.py --start "$START" --end "$END" --env-file .env --portfolio "$PORTFOLIO" > "$ROUND_DIR/report.md" 2>&1
+python3 ../../scripts/round_report.py --start "$START" --end "$END" --env-file .env --portfolio "$PORTFOLIO" \
+  --ctrade http://127.0.0.1:8180 --env soak > "$ROUND_DIR/report.md" 2>&1
 log "relatorio: $(wc -l < "$ROUND_DIR/report.md") linhas em $ROUND_DIR/report.md"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$ROUND_DIR/CLOSED"

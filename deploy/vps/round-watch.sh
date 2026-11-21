@@ -19,11 +19,11 @@ cd "$(dirname "$0")"
 ROUND_DIR=${ROUND_DIR:-$HOME/round}
 INTERVAL=${INTERVAL:-300}
 source "$ROUND_DIR/round.env"
-K=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-); B=http://127.0.0.1:8080/api
+K=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-); B=http://127.0.0.1:8180/api   # T74: soak
 WEBHOOK=$(grep ^DISCORD_WEBHOOK_URL= .env | cut -d= -f2-)
 END_TS=$(date -u -d "$END" +%s)
 START_TS=$(date -u -d "$START" +%s)
-psql() { docker compose exec -T postgres psql -U ctrade -d ctrade -tAc "$1" </dev/null; }
+psql() { docker compose exec -T postgres psql -U ctrade_soak -d ctrade -tAc "$1" </dev/null; }
 
 notify() {
   [[ -n $WEBHOOK ]] || return 0
@@ -37,6 +37,7 @@ checkpoint() {
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   report="$ROUND_DIR/checkpoint-$name.md"
   python3 ../../scripts/round_report.py --start "$START" --end "$now" --env-file .env --portfolio "$PORTFOLIO" \
+    --ctrade http://127.0.0.1:8180 --env soak \
     > "$report" 2>&1 </dev/null
   rec=$(for s in $SYMBOLS; do
     curl -s -m 60 -H "X-Admin-Key: $K" "$B/reconciliation?symbol=$s&from=$START&to=$now" | python3 -c "
@@ -59,7 +60,7 @@ while (( $(date +%s) < END_TS )); do
 import json,sys
 j=json.load(sys.stdin); bad=[c['id'] for c in j['checks'] if c['status']!='OK']
 print(j['status']+(' '+','.join(bad) if bad else ''))" 2>/dev/null || echo UNREACHABLE)
-  err=$(curl -s -m 20 -G http://127.0.0.1:9090/api/v1/query --data-urlencode "query=sum(increase(logback_events_total{level=\"error\"}[${w}s]))" | python3 -c "import json,sys;r=json.load(sys.stdin)['data']['result'];print(round(float(r[0]['value'][1])) if r else 0)" 2>/dev/null)
+  err=$(curl -s -m 20 -G http://127.0.0.1:9090/api/v1/query --data-urlencode "query=sum(increase(logback_events_total{level=\"error\",env=\"soak\"}[${w}s]))" | python3 -c "import json,sys;r=json.load(sys.stdin)['data']['result'];print(round(float(r[0]['value'][1])) if r else 0)" 2>/dev/null)
   runners=$(psql "select string_agg(strategy_name||':'||status, ' ' order by strategy_name) from strategy_runners")
   fills=$(psql "select count(*) from transactions where status='FILLED'")
   echo "$(date -u +%FT%H:%MZ) estado=$st errors=${err:-?} fills=$fills | $runners"

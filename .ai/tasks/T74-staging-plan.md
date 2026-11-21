@@ -3,7 +3,7 @@
 **Complexidade:** Alta (plano; cada entrega vira PR próprio)
 **Responsável:** Claude
 **Dependências:** T53 (soak em testnet, concluída), T63 (ambiente da VPS), T21/T22 (alertas), T55 (estado operacional)
-**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1 em PR
+**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1 e A2 entregues; A3 em PR
 
 ---
 
@@ -285,6 +285,11 @@ Cada item é um PR, com teste na VPS quando couber:
    schema, scripts de soak apontando para o soak e recusando o staging, rótulo `env` no Prometheus e no Loki, alertas
    filtrados, runbook de segredos. Antes: o mantenedor cria a segunda conta da testnet, as chaves e o canal do
    Discord, e o agente confirma que as duas contas têm saldos diferentes.
+   Entregue em PR: `ctrade-app` (staging) e `ctrade-soak` (perfil `soak`, 8180) no `deploy/vps/docker-compose.yml`;
+   `db-environments.sh` (usuários `ctrade_stg`/`ctrade_soak`, cada um dono só do seu schema); `soak-up.sh` e
+   `soak-down.sh`; scripts de soak na 8180, como `ctrade_soak` e com `env="soak"`; rótulo `env` no Loki
+   (`CTRADE_ENV`) e no Prometheus; alertas do Grafana com `env!="soak"`; `round_report.py --env`; runbook
+   "Segredos e rotação". Os dashboards ainda somam os dois ambientes (filtro por `env` fica para a A8).
 4. A5: backup diário, cópia e o procedimento de restore, com o restore testado.
 5. A6: primeira release (`release/1.0.0`) e implantação no staging; um checkout por ambiente no `up.sh`.
 6. A9: verificação horária na VPS e a rotina diária do agente.

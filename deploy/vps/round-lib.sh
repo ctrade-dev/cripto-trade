@@ -7,12 +7,13 @@
 cd "$(dirname "${BASH_SOURCE[0]}")"
 ROUND_DIR=${ROUND_DIR:-$HOME/round}
 K=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-)
-B=http://127.0.0.1:8080/api
-APP=ctrade-vps-ctrade-app-1
+# T74: os testes curtos rodam no soak (ctrade-soak, porta 8180, usuario ctrade_soak), nunca no staging.
+B=http://127.0.0.1:8180/api
+APP=ctrade-vps-ctrade-soak-1
 LOG=/dev/null
 
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$LOG"; }
-q() { docker compose exec -T postgres psql -U ctrade -d ctrade -tAc "$1" </dev/null; }
+q() { docker compose exec -T postgres psql -U ctrade_soak -d ctrade -tAc "$1" </dev/null; }
 
 # Leitura: corpo inteiro no stdout.
 get() { curl -s -m 30 -H "X-Admin-Key: $K" "$B$1"; }
@@ -52,7 +53,7 @@ import json,sys
 d=json.load(sys.stdin); bad=[c['id']+'='+c['status'] for c in d['checks'] if c['status']!='OK']
 print(d['status'], ' '.join(bad))" 2>/dev/null || echo INDISPONIVEL)
   dec=$(curl -s -m 20 -G http://127.0.0.1:9090/api/v1/query \
-    --data-urlencode 'query=sum by (decision)(signal_evaluated_total)' | python3 -c "
+    --data-urlencode 'query=sum by (decision)(signal_evaluated_total{env="soak"})' | python3 -c "
 import json,sys
 r=json.load(sys.stdin)['data']['result']
 print(' '.join(f\"{x['metric'].get('decision')}={int(float(x['value'][1]))}\" for x in sorted(r,key=lambda x:x['metric'].get('decision',''))))" 2>/dev/null)

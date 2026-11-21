@@ -10,7 +10,8 @@
 #                                                da rodada 7 dividida entre eles: teste de carga (F4.14). O ctrade
 #                                                permite um so runner ativo por estrategia, simbolo e portfolio.
 #
-# So vale para a testnet: apaga o banco (./reset-testnet-db.sh). Recusa comecar com saldo `locked` na
+# So vale para o soak da testnet: apaga o schema soak (./reset-testnet-db.sh); o staging nao e tocado.
+# Sobe o soak se estiver parado (./soak-up.sh). Recusa comecar com saldo `locked` na
 # exchange: uma ordem que descansa no livro de antes da limpeza vira trade so na exchange. Recusa tambem
 # USDT livre abaixo do CAPITAL: o portfolio diria ter mais que a conta, e a conferencia de saldo poe o
 # portfolio em HALT assim que o capital e usado (rodada 14).
@@ -27,7 +28,7 @@ CAPITAL=${CAPITAL:-1000}
 PER=$(wc -w <<< "$SYMBOLS")
 ASSETS="$(for s in $SYMBOLS; do printf '%s ' "${s%USDT}"; done)USDT"
 ROUND_DIR=${ROUND_DIR:-$HOME/round}
-K=$(grep ^ADMIN_API_KEY .env | cut -d= -f2-); B=http://127.0.0.1:8080/api
+K=$(grep ^ADMIN_API_KEY= .env | cut -d= -f2-); B=http://127.0.0.1:8180/api   # T74: soak, nunca o staging
 api() { curl -sf -H "X-Admin-Key: $K" -H "Content-Type: application/json" -H "X-Reason: T53 rodada $N ($DUR, VPS): $1" -X "$2" "$B$3" ${4:+-d "$4"}; }
 
 if [[ -e "$ROUND_DIR/round.env" && ! -e "$ROUND_DIR/CLOSED" ]]; then
@@ -41,9 +42,9 @@ done
 free=$(curl -sf -H "X-Admin-Key: $K" "$B/exchanges/BINANCE/balances?asset=USDT" | python3 -c "import json,sys;print(json.load(sys.stdin)['balances'][0]['free'])")
 python3 -c "import sys;sys.exit(0 if float('$free')>=float('$CAPITAL') else 1)" || { echo "USDT livre $free abaixo do CAPITAL $CAPITAL: use CAPITAL menor" >&2; exit 1; }
 
-docker compose stop ctrade-app
+docker compose stop ctrade-soak
 ./reset-testnet-db.sh --force
-./up.sh >/dev/null && ./register-strategies.sh >/dev/null
+./soak-up.sh >/dev/null && ./register-strategies.sh >/dev/null
 for _ in $(seq 60); do curl -sf -H "X-Admin-Key: $K" $B/admin/operational-state >/dev/null && break; sleep 5; done
 
 START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
