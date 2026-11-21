@@ -12,7 +12,8 @@ Uso (na VPS, com o ctrade ja reiniciado no fim da rodada):
     python3 scripts/round_report.py --start 2026-10-28T14:41:43Z --env-file deploy/vps/.env \\
         --portfolio <portfolioId> > round.md
 
-Enderecos padrao: ctrade em http://127.0.0.1:8080, Loki em :3100, Prometheus em :9090. A chave admin vem
+Enderecos padrao: ctrade em http://127.0.0.1:8080, Loki em :3100, Prometheus em :9090. Na VPS o soak fica em
+:8180 e divide Loki e Prometheus com o staging: --ctrade http://127.0.0.1:8180 --env soak (T74). A chave admin vem
 de --env-file (ADMIN_API_KEY) ou da variavel ADMIN_API_KEY; nunca e impressa.
 """
 
@@ -45,8 +46,16 @@ def iso(instant):
 
 
 class Sources:
-    def __init__(self, ctrade, loki, prometheus, admin_key):
+    def __init__(self, ctrade, loki, prometheus, admin_key, env=None):
         self.ctrade, self.loki, self.prometheus, self.admin_key = ctrade, loki, prometheus, admin_key
+        self.env = env
+
+    def sel(self, **labels):
+        """Seletor de rotulos com o ambiente (T74: staging e soak dividem Loki e Prometheus)."""
+        matchers = [f'{name}="{value}"' for name, value in labels.items()]
+        if self.env:
+            matchers.append(f'env="{self.env}"')
+        return "{" + ", ".join(matchers) + "}" if matchers else ""
 
     def _get(self, url, params=None, admin=False):
         if params:
@@ -182,8 +191,8 @@ def section_coverage(src, start, end, out):
     rows = []
     for k in range(hours - 1, -1, -1):
         at = datetime.fromtimestamp(end.timestamp() - k * 3600, timezone.utc)
-        got = first_value(src.loki_instant('sum(count_over_time({app="ctrade"}[1h]))', at)) or 0.0
-        expected = first_value(src.prom("sum(increase(logback_events_total[1h]))", at)) or 0.0
+        got = first_value(src.loki_instant(f'sum(count_over_time({src.sel(app="ctrade")}[1h]))', at)) or 0.0
+        expected = first_value(src.prom(f"sum(increase(logback_events_total{src.sel()}[1h]))", at)) or 0.0
         rows.append((at, got, expected))
     gaps = [row for row in rows if row[2] >= 1 and row[1] < 0.95 * row[2]]
     total = sum(row[2] for row in rows)
@@ -201,22 +210,22 @@ def section_logs(src, start, end, out):
     section_coverage(src, start, end, out)
     seconds = math.ceil((end - start).total_seconds())
     for level in ("ERROR", "WARN"):
-        lines = src.loki_range(f'{{app=~".+", level="{level}"}}', start, end)
+        lines = src.loki_range(src.sel(app="ctrade", level=level), start, end)
         groups = collections.Counter(log_pattern(line) for _, line in lines)
         capped = (f" (padrões das primeiras {LOKI_LIMIT} linhas: limite da consulta)"
                   if len(lines) >= LOKI_LIMIT else "")
         # T67: a contagem vem do proprio Loki (sem limite de linhas) e so do ctrade, a mesma origem do
         # logback_events_total; as linhas devolvidas servem so para agrupar os padroes.
         in_loki = round(first_value(src.loki_instant(
-            f'sum(count_over_time({{app="ctrade", level="{level}"}}[{seconds}s]))', end)) or 0)
+            f'sum(count_over_time({src.sel(app="ctrade", level=level)}[{seconds}s]))', end)) or 0)
         logged = first_value(src.prom(
-            f'sum(increase(logback_events_total{{level="{level.lower()}"}}[{seconds}s]))', end)) or 0.0
+            f'sum(increase(logback_events_total{src.sel(level=level.lower())}[{seconds}s]))', end)) or 0.0
         out.append(f"**{level}: {in_loki} linhas do ctrade no Loki, {len(groups)} padrões{capped}; "
                    f"o ctrade registrou {logged:.0f}.**\n")
         if round(logged) > in_loki:
             # Janela de 2 min de 1 em 1 min: um incremento entre duas coletas cai em pelo menos uma janela.
             ranges = minute_ranges(src.prom_series(
-                f'sum(increase(logback_events_total{{level="{level.lower()}"}}[2m]))', start, end, 60))
+                f'sum(increase(logback_events_total{src.sel(level=level.lower())}[2m]))', start, end, 60))
             shown = ", ".join(ranges[:12]) + (f" e mais {len(ranges) - 12} intervalos" if len(ranges) > 12 else "")
             out.append(f"> **{round(logged) - in_loki} {level} sem linha no Loki** (minutos aproximados: "
                        f"{shown or '-'}). Buscar no log do container antes de fechar o critério.\n")
@@ -233,20 +242,20 @@ def section_jvm(src, start, end, out):
     window = "1h"
     early = min(end, datetime.fromtimestamp(start.timestamp() + 3600, timezone.utc))
     rows = [
-        ("Heap mínimo (MB)", f'min_over_time(sum(jvm_memory_used_bytes{{area="heap"}})[{window}:1m]) / 1e6'),
-        ("Threads vivas (máx.)", f"max_over_time(jvm_threads_live_threads[{window}])"),
+        ("Heap mínimo (MB)", f'min_over_time(sum(jvm_memory_used_bytes{src.sel(area="heap")})[{window}:1m]) / 1e6'),
+        ("Threads vivas (máx.)", f"max_over_time(jvm_threads_live_threads{src.sel()}[{window}])"),
         ("Avaliação do sinal, média (ms)",
-         f"sum(increase(runner_signal_processing_time_seconds_sum[{window}])) / "
-         f"sum(increase(runner_signal_processing_time_seconds_count[{window}])) * 1000"),
-        ("Avaliação do sinal, máximo (ms)", f"max(max_over_time(runner_signal_processing_time_seconds_max[{window}])) * 1000"),
-        ("Uptime do processo (h)", "max(process_uptime_seconds) / 3600"),
+         f"sum(increase(runner_signal_processing_time_seconds_sum{src.sel()}[{window}])) / "
+         f"sum(increase(runner_signal_processing_time_seconds_count{src.sel()}[{window}])) * 1000"),
+        ("Avaliação do sinal, máximo (ms)", f"max(max_over_time(runner_signal_processing_time_seconds_max{src.sel()}[{window}])) * 1000"),
+        ("Uptime do processo (h)", f"max(process_uptime_seconds{src.sel()}) / 3600"),
     ]
     out.append("## 5. Estabilidade da JVM (Prometheus)\n")
     out.append(f"| Série | 1ª hora (até {iso(early)}) | Última hora (até {iso(end)}) |\n|---|---|---|")
     for name, query in rows:
         values = [first_value(src.prom(query, at)) for at in (early, end)]
         out.append(f"| {name} | " + " | ".join("-" if v is None else f"{v:.1f}" for v in values) + " |")
-    changes = src.prom(f"changes(websocket_connection_state[{math.ceil((end - start).total_seconds())}s])", end)
+    changes = src.prom(f"changes(websocket_connection_state{src.sel()}[{math.ceil((end - start).total_seconds())}s])", end)
     reconnects = ", ".join(f"{r['metric'].get('channel')}={float(r['value'][1]):.0f}" for r in changes) or "sem série"
     out.append(f"\nMudanças de estado das conexões WebSocket na rodada: {reconnects} "
                "(a Binance corta a conexão a cada 24h; cada corte vale 2 mudanças).\n")
@@ -286,6 +295,7 @@ def main():
     parser.add_argument("--ctrade", default="http://127.0.0.1:8080")
     parser.add_argument("--loki", default="http://127.0.0.1:3100")
     parser.add_argument("--prometheus", default="http://127.0.0.1:9090")
+    parser.add_argument("--env", help="rotulo env no Loki e no Prometheus (T74: staging ou soak); sem ele, todos")
     args = parser.parse_args()
 
     admin_key = read_admin_key(args.env_file)
@@ -293,7 +303,7 @@ def main():
         sys.exit("Sem chave admin: passe --env-file ou defina ADMIN_API_KEY.")
     start = parse_instant(args.start)
     end = parse_instant(args.end) if args.end else datetime.now(timezone.utc)
-    src = Sources(args.ctrade.rstrip("/"), args.loki.rstrip("/"), args.prometheus.rstrip("/"), admin_key)
+    src = Sources(args.ctrade.rstrip("/"), args.loki.rstrip("/"), args.prometheus.rstrip("/"), admin_key, args.env)
 
     out = [f"# Rodada {iso(start)} → {iso(end)} ({(end - start).total_seconds() / 3600:.1f}h)\n",
            "Rascunho gerado por `scripts/round_report.py`; classificação e veredito ficam com quem assina.\n"]

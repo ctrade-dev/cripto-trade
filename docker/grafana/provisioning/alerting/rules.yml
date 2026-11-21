@@ -2,6 +2,7 @@ apiVersion: 1
 
 # Alert rules comportamentais sobre os logs no Loki (T21 — Camadas 2 e 3).
 # Todas roteiam para o Discord via label channel=alerts-behavior.
+# T74: o soak da VPS (rotulo env=soak nos logs e metricas) fica de fora; staging e local alertam.
 groups:
   - orgId: 1
     name: ctrade-behavior
@@ -26,7 +27,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade", level="WARN"} [5m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak", level="WARN"} [5m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -56,7 +57,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade", level="ERROR"} [1m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak", level="ERROR"} [1m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -86,7 +87,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade"} |= `reconnect` [5m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak"} |= `reconnect` [5m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -117,7 +118,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade"} |= `executionConfirmedReaction:` |~ `isFinal=true` [10m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak"} |= `executionConfirmedReaction:` |~ `isFinal=true` [10m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -147,7 +148,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade"} |= `PENDING->SUBMITTED` [30m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak"} |= `PENDING->SUBMITTED` [30m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -177,7 +178,7 @@ groups:
             datasourceUid: loki
             model:
               datasource: { type: loki, uid: loki }
-              expr: 'sum(count_over_time({app="ctrade"} |= `bootRecovery: completed` |~ `hasErrors=true` [10m]))'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak"} |= `bootRecovery: completed` |~ `hasErrors=true` [10m]))'
               queryType: instant
               refId: A
           - refId: C
@@ -213,7 +214,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(circuit_breaker_current_level)'
+              expr: 'max(circuit_breaker_current_level{env!="soak"})'
               instant: true
               refId: A
           - refId: C
@@ -243,7 +244,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(runner_lifecycle_termination_stuck)'
+              expr: 'max(runner_lifecycle_termination_stuck{env!="soak"})'
               instant: true
               refId: A
           - refId: C
@@ -273,7 +274,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(increase(signal_evaluated_total{decision="CANCEL"}[1m]))'
+              expr: 'max(increase(signal_evaluated_total{decision="CANCEL", env!="soak"}[1m]))'
               instant: true
               refId: A
           - refId: C
@@ -303,7 +304,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(sum by (runnerId) (increase(signal_evaluated_total{decision=~"REJECTED_.*"}[5m])) / sum by (runnerId) (increase(signal_evaluated_total{decision!~"HOLD|SAFE_MODE|STRATEGY_UNAVAILABLE|PROTECTIVE_EXIT"}[5m])))'
+              expr: 'max(sum by (runnerId) (increase(signal_evaluated_total{decision=~"REJECTED_.*", env!="soak"}[5m])) / sum by (runnerId) (increase(signal_evaluated_total{decision!~"HOLD|SAFE_MODE|STRATEGY_UNAVAILABLE|PROTECTIVE_EXIT", env!="soak"}[5m])))'
               instant: true
               refId: A
           - refId: C
@@ -333,7 +334,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(capital_utilization_global)'
+              expr: 'max(capital_utilization_global{env!="soak"})'
               instant: true
               refId: A
           - refId: C
@@ -363,7 +364,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'min(websocket_connection_state)'
+              expr: 'min(websocket_connection_state{env!="soak"})'
               instant: true
               refId: A
           - refId: C
@@ -393,7 +394,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'max(resilience4j_circuitbreaker_state{state="open"})'
+              expr: 'max(resilience4j_circuitbreaker_state{state="open", env!="soak"})'
               instant: true
               refId: A
           - refId: C
@@ -425,7 +426,7 @@ groups:
             model:
               datasource: { type: loki, uid: loki }
               # "or vector(0)": Loki sem linha devolve 0, não "sem dado"
-              expr: 'sum(count_over_time({app="ctrade"} [10m])) or vector(0)'
+              expr: 'sum(count_over_time({app="ctrade", env!="soak"} [10m])) or vector(0)'
               queryType: instant
               refId: A
           - refId: B
@@ -433,7 +434,7 @@ groups:
             datasourceUid: prometheus
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'sum(increase(logback_events_total[10m]))'
+              expr: 'sum(increase(logback_events_total{env!="soak"}[10m]))'
               instant: true
               refId: B
           - refId: C

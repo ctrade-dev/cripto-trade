@@ -1,10 +1,16 @@
-# Ambiente de soak na VPS (T63): ctrade + Postgres + observabilidade + as cinco apps de estrategia da T60.
+# Ambiente da VPS (T63, T74): staging continuo + soak sob demanda, Postgres e observabilidade compartilhados.
 # Separado do docker-compose.yml da raiz, que continua sendo o de desenvolvimento local.
+#
+# - Staging (ctrade-app): sobe sempre com ./up.sh. Perfis testnet,prod, schema staging (usuario ctrade_stg), conta
+#   da testnet do staging (variaveis *_STG), API em 127.0.0.1:8080.
+# - Soak (ctrade-soak + apps de soak): perfil Compose "soak", sobe so com ./soak-up.sh e desce com ./soak-down.sh.
+#   Perfil testnet, schema soak (usuario ctrade_soak), conta do soak (variaveis sem sufixo), API em 127.0.0.1:8180.
+# - Cada usuario do Postgres so enxerga o proprio schema (./db-environments.sh, chamado pelo ./up.sh).
 #
 # - Nenhuma porta em 0.0.0.0: API, Grafana, Prometheus e Loki so em 127.0.0.1, acessados por tunel SSH.
 #   Postgres e as apps nao publicam porta.
 # - Segredos vem do .env ao lado deste arquivo (modelo em .env.example). Subir com ./up.sh.
-# - Limites de memoria somam ~5,5 GB, abaixo dos 12 GB da VPS.
+# - Limites de memoria: ~4 GB so com o staging, ~7,5 GB com o soak no ar; a VPS tem 11 GB.
 name: ctrade-vps
 
 x-logging: &logging
@@ -25,10 +31,32 @@ x-logging-ctrade: &logging-ctrade
 # Uma tag unica para as cinco falha no build em paralelo ("image already exists").
 x-strategy: &strategy
   build: ${STRATEGIES_DIR:?defina STRATEGIES_DIR no .env}
+  profiles: [soak]
   restart: unless-stopped
   mem_limit: 256m
   logging: *logging
   networks: [ctrade]
+
+# Staging e soak usam a mesma imagem. So o ctrade-app tem build (./up.sh); dois builds da mesma tag em paralelo
+# falham. Ate a A6 da T74 (um checkout por ambiente), o soak roda o commit que o staging montou por ultimo.
+x-ctrade: &ctrade
+  image: ctrade-app:vps
+  restart: unless-stopped
+  # Teto conhecido para o criterio 7 da T53 (memoria estavel); o heap fica em 75% dele.
+  mem_limit: 2g
+  logging: *logging-ctrade
+  networks: [ctrade]
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 90s
+  depends_on:
+    postgres:
+      condition: service_healthy
+    loki:
+      condition: service_healthy
 
 services:
   postgres:
@@ -49,40 +77,49 @@ services:
       timeout: 5s
       retries: 5
 
+  # Staging (T74): continuo, configuracao de producao, conta propria da testnet.
   ctrade-app:
+    <<: *ctrade
     build: ../..
-    image: ctrade-app:vps
-    restart: unless-stopped
-    # Teto conhecido para o criterio 7 da T53 (memoria estavel); o heap fica em 75% dele.
-    mem_limit: 2g
-    logging: *logging-ctrade
-    networks: [ctrade]
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: testnet
+      SPRING_PROFILES_ACTIVE: testnet,prod
+      CTRADE_ENV: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
       DB_HOST: postgres
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: ctrade_stg
+      DB_PASSWORD: ${DB_PASSWORD_STG:?defina DB_PASSWORD_STG no .env}
+      DB_SCHEMA: staging
+      LOKI_URL: http://loki:3100
+      BINANCE_API_KEY: ${BINANCE_API_KEY_STG:?defina BINANCE_API_KEY_STG no .env}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET_STG:?defina BINANCE_API_SECRET_STG no .env}
+      ADMIN_API_KEY: ${ADMIN_API_KEY_STG:?defina ADMIN_API_KEY_STG no .env}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL_STG:?defina DISCORD_WEBHOOK_URL_STG no .env}
+      GRAFANA_EXPLORE_URL_TEMPLATE: ${GRAFANA_EXPLORE_URL_TEMPLATE:-}
+
+  # Soak (T63/T74): so nas sessoes de teste, com os scripts de rodada. Mesma imagem do staging.
+  ctrade-soak:
+    <<: *ctrade
+    profiles: [soak]
+    ports:
+      - "127.0.0.1:8180:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: testnet
+      CTRADE_ENV: soak
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      DB_HOST: postgres
+      DB_USERNAME: ctrade_soak
+      DB_PASSWORD: ${DB_PASSWORD_SOAK:?defina DB_PASSWORD_SOAK no .env}
+      DB_SCHEMA: soak
       LOKI_URL: http://loki:3100
       BINANCE_API_KEY: ${BINANCE_API_KEY:?defina BINANCE_API_KEY no .env}
       BINANCE_API_SECRET: ${BINANCE_API_SECRET:?defina BINANCE_API_SECRET no .env}
       ADMIN_API_KEY: ${ADMIN_API_KEY:?defina ADMIN_API_KEY no .env}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       GRAFANA_EXPLORE_URL_TEMPLATE: ${GRAFANA_EXPLORE_URL_TEMPLATE:-}
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 90s
-    depends_on:
-      postgres:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
 
-  # Apps de estrategia (ctrade-dev/ctrade-strategies). O ctrade as cadastra em http://<servico>:8080/v2.
+  # Apps de soak (ctrade-dev/ctrade-strategies), perfil soak. O ctrade-soak as cadastra em http://<servico>:8080/v2.
   trend:
     <<: *strategy
     command: ["trend"]
@@ -161,7 +198,8 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD no .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      # T74: alertas do Grafana sao do staging (as regras ignoram env=soak).
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL_STG:?defina DISCORD_WEBHOOK_URL_STG no .env}
     volumes:
       - ../../docker/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana

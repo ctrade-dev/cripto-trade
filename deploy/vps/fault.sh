@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Falhas controladas da fase 4 da T53 (F4.1 a F4.7), so na VPS de testnet e com uma sessao de ./round-start.sh no ar.
+# Falhas controladas da fase 4 da T53 (F4.1 a F4.7), so no soak da VPS (ctrade-soak, T74) e com uma sessao de
+# ./round-start.sh no ar. Parar o Postgres, o Loki ou a rede da VPS atinge tambem o staging: fora deste script.
 #
 # As regras de firewall valem so no namespace de rede do container do ctrade e saem no fim, mesmo com erro ou
 # Ctrl-C (trap). Cada execucao grava o passo a passo e os retratos antes e depois em $ROUND_DIR/fault-<teste>-<hora>.log.
@@ -123,9 +124,9 @@ case ${1:-} in
     if [[ ${3:-} == lote ]]; then wait_open_lot || exit 1; else wait_book_order || exit 1; fi
     snap antes
     log "em voo ao parar: $(q "select string_agg(left(id::text,8)||':'||status, ' ') from transactions where status in ('PENDING','SUBMITTED','PARTIAL')")"
-    docker compose stop ctrade-app </dev/null >/dev/null 2>&1; log "ctrade parado"
+    docker compose stop ctrade-soak </dev/null >/dev/null 2>&1; log "ctrade parado"
     sleep "$S"
-    docker compose start ctrade-app </dev/null >/dev/null 2>&1; log "ctrade iniciado"
+    docker compose start ctrade-soak </dev/null >/dev/null 2>&1; log "ctrade iniciado"
     wait_api || { log "API nao respondeu em 10 min"; exit 1; }
     log "API de volta"
     docker logs --since 5m "$APP" 2>&1 | grep -E 'phase=|phase2.sanity: portfolios|bootRecovery: completed' \

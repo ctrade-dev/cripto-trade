@@ -1,9 +1,25 @@
-# Ambiente de soak na VPS (T63)
+# Ambiente da VPS: staging e soak (T63, T74)
 
-Roda as rodadas longas da T53 (24h e 72h) fora da máquina do mantenedor: ctrade no perfil `testnet`,
-Postgres, Prometheus, Loki, Grafana e as cinco apps de estratégia da T60, num único Compose.
+Um Compose com dois ambientes do ctrade, ambos na **testnet**, cada um com a própria conta:
 
-**Somente testnet.** Nenhuma chave ou dado de produção entra neste ambiente.
+| | Staging (T74) | Soak (T63) |
+|---|---|---|
+| Serviço | `ctrade-app` | `ctrade-soak` + apps de soak (perfil Compose `soak`) |
+| Quando | Sempre no ar (`./up.sh`) | Só nas sessões de teste (`./soak-up.sh`, `./soak-down.sh`, scripts de rodada) |
+| Perfis | `testnet,prod` | `testnet` |
+| API | `127.0.0.1:8080` | `127.0.0.1:8180` |
+| Banco | schema `staging`, usuário `ctrade_stg` | schema `soak`, usuário `ctrade_soak` |
+| Conta da testnet | `BINANCE_API_KEY_STG` / `_SECRET_STG` | `BINANCE_API_KEY` / `_SECRET` |
+| Chave admin | `ADMIN_API_KEY_STG` | `ADMIN_API_KEY` |
+| Discord | `DISCORD_WEBHOOK_URL_STG` (obrigatório; também recebe os alertas do Grafana) | `DISCORD_WEBHOOK_URL` (opcional) |
+| Rótulo `env` (Loki, Prometheus) | `staging` | `soak` |
+
+Postgres, Prometheus, Loki e Grafana são compartilhados. Cada usuário do Postgres só enxerga o próprio schema
+(`./db-environments.sh`): os scripts de soak, que limpam o banco, não alcançam o staging. Os alertas do Grafana
+ignoram `env="soak"`.
+
+**Somente testnet.** Nenhuma chave ou dado de produção entra neste ambiente. Dados do staging são tratados como
+de produção: não se limpam.
 
 ## Máquina atual
 
@@ -26,18 +42,20 @@ Nenhuma porta além da 22 fica aberta para a internet. API, Grafana, Prometheus 
 
 ```bash
 ssh -N -i ~/.ssh/ctrade_vps \
-  -L 8080:127.0.0.1:8080 -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3100:127.0.0.1:3100 \
+  -L 8080:127.0.0.1:8080 -L 8180:127.0.0.1:8180 -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090   -L 3100:127.0.0.1:3100 \
   ubuntu@129.159.24.66
 ```
 
-Com o túnel aberto, `http://localhost:8080` (API), `http://localhost:3000` (Grafana), `:9090` e `:3100`
+Com o túnel aberto, `http://localhost:8080` (API do staging), `:8180` (API do soak), `http://localhost:3000`
+(Grafana), `:9090` e `:3100`
 funcionam como no ambiente local. Feche o ctrade local antes, ou troque a porta da esquerda
 (`-L 18080:127.0.0.1:8080`).
 
 - Cada pessoa ou agente tem a própria chave em `~/.ssh/authorized_keys` da VPS: `mantenedor@ctrade-vps`
   e `claude@ctrade-vps`. Para revogar um acesso, apague a linha dele.
-- A chave admin da API (`X-Admin-Key`) é própria da VPS e fica só no `.env` de lá:
-  `ssh ubuntu@<vps> "grep ^ADMIN_API_KEY= ~/ctrade/deploy/vps/.env | cut -d= -f2"`.
+- As chaves admin da API (`X-Admin-Key`) são próprias de cada ambiente e ficam só no `.env` da VPS:
+  `ADMIN_API_KEY_STG` (staging) e `ADMIN_API_KEY` (soak). Ler com `grep ^ADMIN_API_KEY_STG= .env | cut -d= -f2-`,
+  sem imprimir.
 - Senha do Grafana (usuário `admin`): `GRAFANA_ADMIN_PASSWORD` do mesmo `.env`.
 
 ## Layout na VPS
@@ -71,23 +89,42 @@ Os repositórios do GitHub são privados e a VPS não tem credencial para eles. 
    mesmo para o `ctrade-strategies`). Na VPS: `git clone -b <branch> ~/repos/<repo>.git ~/<dir>`.
 4. Segredos: `cd ~/ctrade/deploy/vps && cp .env.example .env && chmod 600 .env` e preencher. As senhas e
    tokens são gerados na própria VPS (`openssl rand -hex 24`, `uuidgen`); as chaves da Binance são as da
-   testnet.
+   testnet, uma conta para o staging e outra para o soak, criadas pelo mantenedor. O `up.sh` recusa as duas
+   chaves iguais.
 
 ## Subir, atualizar e voltar versão
 
 ```bash
 cd ~/ctrade/deploy/vps
-./up.sh                     # build do ctrade (commit do checkout) e das apps, sobe tudo, espera UP
-./register-strategies.sh    # cadastra as cinco apps (idempotente); espera VERIFIED em todas
+./up.sh                     # usuarios do banco, build do ctrade (commit do checkout), sobe o staging, espera UP
+./soak-up.sh                # sobe o soak (ctrade-soak + apps) com a imagem do up.sh, espera UP na 8180
+./register-strategies.sh    # cadastra as cinco apps no soak (idempotente); espera VERIFIED em todas
+./soak-down.sh              # para o soak; o schema soak fica para a proxima sessao
 ./versions.sh               # commits e imagens em uso, para o relatório da rodada
 ```
+
+O soak usa a imagem que o `up.sh` montou por último: até a A6 da T74 (um checkout por ambiente), staging e soak
+rodam o mesmo commit.
 
 **Atualizar:** `git push` do novo commit para o *bare*, depois na VPS
 `git -C ~/ctrade fetch && git -C ~/ctrade checkout <commit>` (idem `~/ctrade-strategies`) e `./up.sh`.
 O `up.sh` só recria os containers cuja imagem mudou.
 
 **Voltar versão:** o mesmo, com o commit anterior. O banco não volta junto: se a versão nova aplicou
-migração do Flyway, a anterior pode não subir. Na testnet, resolver limpando o banco (abaixo).
+migração do Flyway, a anterior pode não subir. No soak, resolver limpando o schema (`./reset-testnet-db.sh`); no
+staging, pelo backup (A5 da T74), nunca limpando.
+
+## Migração do soak antigo para staging + soak (T74, uma vez)
+
+Antes da T74 o `ctrade-app` era o soak, no schema `public` com a conta atual. A migração:
+
+1. O mantenedor põe no `.env` as variáveis do staging: `BINANCE_API_KEY_STG`, `BINANCE_API_SECRET_STG` (conta
+   nova) e `DISCORD_WEBHOOK_URL_STG`. As variáveis sem sufixo continuam sendo as da conta atual, agora do soak.
+2. Gerar na VPS, sem imprimir: `ADMIN_API_KEY_STG` (`uuidgen`), `DB_PASSWORD_STG` e `DB_PASSWORD_SOAK`
+   (`openssl rand -hex 24`).
+3. `docker compose stop ctrade-app trend reversion book breakout chaos`, checkout do commit novo e `./up.sh`: cria
+   os usuários e schemas e sobe o staging vazio no schema `staging`.
+4. O schema `public` fica com os dados antigos do soak, sem uso, até ser apagado (com aviso antes).
 
 ## Rodada da T53 na VPS
 
@@ -100,7 +137,7 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
    `BTCUSDT`. O ctrade permite um só runner ativo por estratégia, símbolo e portfolio. Recusa se houver rodada sem `CLOSED`, saldo
    `locked` na exchange (ordem no livro de antes da limpeza vira trade só na exchange) ou USDT livre abaixo do
    capital (o portfolio diria ter mais que a conta, e a conferência de saldo o poria em `HALT`). Para o ctrade,
-   limpa o banco (`./reset-testnet-db.sh`, só testnet), sobe tudo, cadastra as apps, cria o portfolio de
+   limpa o schema soak (`./reset-testnet-db.sh`, só o soak), sobe o soak (`./soak-up.sh`), cadastra as apps, cria o portfolio de
    `CAPITAL` USDT (padrão 1000; ex.: `CAPITAL=500 ./round-start.sh 15 6`) e um runner por app em cada símbolo com os limites da rodada 7 (40% cada, caos 20%, 1 posição,
    1 ordem pendente, perda máxima de 5% por lote) e liga os runners. Os limites e o roteiro completo
    estão na T53 (`.ai/tasks/T53-testnet-soak.md`, "Roteiro — Apps de estratégia da T60").
@@ -114,6 +151,12 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
    `scripts/round_report.py` (T64). Classificar e assinar a rodada fica com quem opera, com `./versions.sh`
    no cabeçalho. Rodado à mão depois do fim, fecha na hora.
 4. Derrubar uma app para o teste de indisponibilidade: `docker compose stop chaos`.
+5. Fim da sessão: `./soak-down.sh` para o soak e devolve a CPU ao staging.
+
+Todos os scripts de rodada (`round-*.sh`, `fault.sh`, `drill.sh`, `register-strategies.sh`,
+`reset-testnet-db.sh`) falam só com o soak: API na 8180, banco como `ctrade_soak`, métricas e logs com
+`env="soak"`. Falhas de infraestrutura compartilhada (Postgres, Loki, rede da VPS) atingem também o staging e
+ficam fora desses scripts.
 
 ### Testes curtos da fase 4
 
@@ -131,16 +174,16 @@ cada execução grava o passo a passo em `~/round/fault-*.log` ou `~/round/drill
 
 | Serviço | Limite |
 |---|---|
-| `ctrade-app` | 2 GB (heap em 75%: `-XX:MaxRAMPercentage=75`) |
+| `ctrade-app` (staging), `ctrade-soak` | 2 GB cada (heap em 75%: `-XX:MaxRAMPercentage=75`) |
 | `postgres` | 1 GB |
 | `prometheus`, `loki` | 512 MB cada |
 | `grafana` | 256 MB |
 | cada app de estratégia | 256 MB |
 
-Total ~5,5 GB de 12 GB. Retenção de 15 dias no Prometheus. O Loki usa a configuração padrão da imagem,
+Total ~4 GB só com o staging e ~7,5 GB com o soak no ar, de 11 GB. Retenção de 15 dias no Prometheus. O Loki usa a configuração padrão da imagem,
 sem retenção automática (T66; detalhes no `loki.yml`). Logs dos containers em rotação: 3 × 20 MB por
-serviço, e 10 × 100 MB no `ctrade-app`, que guarda uma rodada de 72h e é a reserva do Loki
-(`docker compose logs --since <START> ctrade-app`).
+serviço, e 10 × 100 MB em cada ctrade (`ctrade-app`, `ctrade-soak`), a reserva do Loki
+(`docker compose logs --since <START> ctrade-soak`).
 
 ```bash
 docker stats --no-stream                 # memória por container
