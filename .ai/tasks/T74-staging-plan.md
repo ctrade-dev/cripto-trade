@@ -3,7 +3,7 @@
 **Complexidade:** Alta (plano; cada entrega vira PR próprio)
 **Responsável:** Claude
 **Dependências:** T53 (soak em testnet, concluída), T63 (ambiente da VPS), T21/T22 (alertas), T55 (estado operacional)
-**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1 e A2 entregues; A3 em PR
+**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1, A2 e A3 entregues (A3 testada na VPS em 2026-11-21); próximo: A5
 
 ---
 
@@ -290,6 +290,11 @@ Cada item é um PR, com teste na VPS quando couber:
    `soak-down.sh`; scripts de soak na 8180, como `ctrade_soak` e com `env="soak"`; rótulo `env` no Loki
    (`CTRADE_ENV`) e no Prometheus; alertas do Grafana com `env!="soak"`; `round_report.py --env`; runbook
    "Segredos e rotação". Os dashboards ainda somam os dois ambientes (filtro por `env` fica para a A8).
+   Teste na VPS (2026-11-21, PRs #201 e #202): staging no ar com `testnet,prod`, 23 migrations no schema `staging`,
+   boot SUCCESS; `ctrade_soak` sem permissão em `staging` e em `public`. Rodada de soak 119 (10 min, BTCUSDT, conta do
+   soak): 0 ERROR, 2 fills, conciliação 5/5 sem divergência, sem saldo travado. Durante e depois da rodada o staging
+   seguiu com 0 portfolios, 0 transações e 0 ERROR. Loki com `env=soak` e `env=staging`; o alerta de teste do Grafana
+   chegou ao webhook do staging.
 4. A5: backup diário, cópia e o procedimento de restore, com o restore testado.
 5. A6: primeira release (`release/1.0.0`) e implantação no staging; um checkout por ambiente no `up.sh`.
 6. A9: verificação horária na VPS e a rotina diária do agente.
