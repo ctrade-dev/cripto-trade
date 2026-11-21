@@ -101,6 +101,8 @@ cd ~/ctrade/deploy/vps
 ./register-strategies.sh    # cadastra as cinco apps no soak (idempotente); espera VERIFIED em todas
 ./soak-down.sh              # para o soak; o schema soak fica para a proxima sessao
 ./versions.sh               # commits e imagens em uso, para o relatório da rodada
+./backup-staging.sh         # backup do schema staging (o up.sh faz um antes de implantar)
+./restore-test.sh           # teste de restore: backup, restaura num banco descartável e compara tabela a tabela
 ```
 
 O soak usa a imagem que o `up.sh` montou por último: até a A6 da T74 (um checkout por ambiente), staging e soak
@@ -112,7 +114,26 @@ O `up.sh` só recria os containers cuja imagem mudou.
 
 **Voltar versão:** o mesmo, com o commit anterior. O banco não volta junto: se a versão nova aplicou
 migração do Flyway, a anterior pode não subir. No soak, resolver limpando o schema (`./reset-testnet-db.sh`); no
-staging, pelo backup (A5 da T74), nunca limpando.
+staging, pelo backup (abaixo), nunca limpando.
+
+## Backup do staging (T74, A5)
+
+- **Diário:** `pg_dump` só do schema `staging`, formato custom (comprimido), em `~/backups/staging/staging-<UTC>.dump`
+  (pasta `700`, arquivo `600`), com retenção de 14 dias. O `up.sh` também faz um antes de toda implantação. O soak
+  não tem backup: dado descartável. Cron da VPS (`crontab -e`), fora do horário das rodadas:
+
+  ```
+  15 3 * * * cd ~/ctrade/deploy/vps && ./backup-staging.sh >> ~/backups/staging/backup.log 2>&1
+  ```
+
+- **Cópia fora da VPS:** no computador do mantenedor, `deploy/vps/pull-backups.sh ubuntu@<ip-da-vps>
+  ~/.ssh/<chave>` traz os backups que faltam para `~/ctrade-backups/staging` (`DEST=` muda a pasta) e apaga os
+  locais com mais de 14 dias. Roda pela rotina diária do agente (A9).
+- **Teste de restore:** `./restore-test.sh` faz um backup dentro de um snapshot do banco, restaura no banco
+  descartável `ctrade_restore` e compara, tabela a tabela, número de linhas e md5 do conteúdo contra o staging no
+  mesmo snapshot; qualquer diferença falha. O staging só é lido e o banco descartável é apagado no fim. Rodar
+  depois de mudar o backup, de atualizar o Postgres ou quando o runbook pedir.
+- **Restore de verdade:** procedimento no runbook (`docs/OPERATIONS_RUNBOOK.md`, "Restore do staging").
 
 ## Migração do soak antigo para staging + soak (T74, uma vez)
 

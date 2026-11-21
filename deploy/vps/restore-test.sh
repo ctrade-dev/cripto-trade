@@ -39,7 +39,7 @@ while read -r -t 120 line <&"${SNAP[0]}"; do
 done
 echo "ROLLBACK;" >&"${SNAP[1]}"
 
-psql_admin -d postgres -c "DROP DATABASE IF EXISTS $RESTORE_DB" -c "CREATE DATABASE $RESTORE_DB" >/dev/null
+psql_admin -d postgres -c "SET client_min_messages = warning" -c "DROP DATABASE IF EXISTS $RESTORE_DB" -c "CREATE DATABASE $RESTORE_DB" >/dev/null
 docker compose exec -T postgres pg_restore -U ctrade -d "$RESTORE_DB" --exit-on-error < "$backup"
 echo "$checksum_sql" | psql_admin -d "$RESTORE_DB" > "$work/restaurado"
 

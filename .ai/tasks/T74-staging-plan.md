@@ -3,7 +3,7 @@
 **Complexidade:** Alta (plano; cada entrega vira PR próprio)
 **Responsável:** Claude
 **Dependências:** T53 (soak em testnet, concluída), T63 (ambiente da VPS), T21/T22 (alertas), T55 (estado operacional)
-**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1, A2 e A3 entregues (A3 testada na VPS em 2026-11-21); próximo: A5
+**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1, A2 e A3 entregues (A3 testada na VPS em 2026-11-21); A5 em PR
 
 ---
 
@@ -148,9 +148,11 @@ Uma configuração de operação só, sem um terceiro perfil "staging" quase igu
 
 - `pg_dump` diário **só do schema `staging`** (`-n staging`), comprimido, guardado na VPS com retenção de 14 dias, e
   uma cópia fora da VPS (decisão 4).
-- **Restore testado** como critério de aceite: restaurar o último backup num schema descartável (`staging_restore`),
-  subir um ctrade temporário apontando para ele, sem conectar na exchange, e conferir saldo, lotes e histórico contra
-  o original. Depois, apagar o schema de teste.
+- **Restore testado** como critério de aceite: restaurar o último backup num banco descartável (`ctrade_restore`) e
+  conferir, tabela a tabela, número de linhas e md5 do conteúdo contra o original no mesmo snapshot (saldo, lotes e
+  histórico inclusos). Depois, apagar o banco de teste. Banco em vez de schema porque o dump carrega o nome
+  `staging`; comparação de dados em vez de subir um ctrade porque o ctrade não sobe sem a exchange e a comparação
+  cobre todas as tabelas, não só o que a API mostra.
 - **Migrações:** Flyway continua só para frente, cada schema com o próprio histórico. Antes de toda implantação no
   staging, backup; migração que falhar volta pelo restore e uma migração nova corrige. Sem scripts de rollback.
 - O soak continua sem backup: dado descartável.
@@ -296,6 +298,11 @@ Cada item é um PR, com teste na VPS quando couber:
    seguiu com 0 portfolios, 0 transações e 0 ERROR. Loki com `env=soak` e `env=staging`; o alerta de teste do Grafana
    chegou ao webhook do staging.
 4. A5: backup diário, cópia e o procedimento de restore, com o restore testado.
+   Entregue em PR: `backup-staging.sh` (`pg_dump -n staging -Fc`, 14 dias, também no `up.sh` antes de implantar),
+   `restore-test.sh` (backup num snapshot, restore em `ctrade_restore`, comparação por tabela) e `pull-backups.sh`
+   (cópia no computador do mantenedor); restore real no runbook. Teste na VPS (2026-11-21): restore igual ao original
+   em 19 tabelas, 3 de 3 execuções; a comparação acusou uma linha alterada de propósito num banco de teste; a cópia
+   trouxe os backups com a data preservada e não repetiu os que já tinha. O cron diário entra depois do merge.
 5. A6: primeira release (`release/1.0.0`) e implantação no staging; um checkout por ambiente no `up.sh`.
 6. A9: verificação horária na VPS e a rotina diária do agente.
 7. A7: cadastro da estratégia candidata e início da janela de 14 dias.
