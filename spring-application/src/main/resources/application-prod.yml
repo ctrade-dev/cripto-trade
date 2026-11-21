@@ -1,0 +1,18 @@
+# T74 (A1): como operar em producao. Combina com o perfil da exchange: testnet,prod no staging e mainnet,prod
+# na fase B. So ajustes de operacao; enderecos da exchange ficam nos perfis de exchange.
+logging:
+  level:
+    # Sem o DEBUG do soak. Diagnostico pontual: LOGGING_LEVEL_COM_MARMITT=DEBUG no .env e reiniciar.
+    com.marmitt: INFO
+
+runner:
+  boot:
+    phase2:
+      # Boot falha com saldo em DEFICIT, consulta de saldo FAILED, saldo nao consultado ou zumbi detectado.
+      mode: FAIL_FAST
+      account-query-policy: FAIL
+
+notification:
+  discord:
+    # Sem webhook o ctrade nao sobe: em producao alerta sem destino e falha silenciosa.
+    required: true

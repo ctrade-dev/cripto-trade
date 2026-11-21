@@ -79,7 +79,7 @@ Trilha de tarefas para habilitar operação com a API da Binance (testnet), pré
 | T71 | HALT por exchange indisponível volta sozinho (T53 rodada 13)    | Média | Claude | Concluída    |
 | T72 | Histórico em candles no contrato de estratégias (contrato 2.1)  | Alta  | Claude | Concluída    |
 | T73 | Encerramento com execução embutida grava versão antiga (T53 F32) | Baixa | Claude | Concluída    |
-| T74 | Plano de staging: produção na testnet, depois na mainnet        | Alta  | Claude | Spec         |
+| T74 | Plano de staging: produção na testnet, depois na mainnet        | Alta  | Claude | Em andamento |
 | TD1 | Telemetria do canal USER_DATA (débito técnico)                  | Baixa | —      | Concluído |
 
 ## Ordem de execução

@@ -107,7 +107,8 @@ O script `scripts/gradle-run.ps1` fixa `GRADLE_USER_HOME` em `.gradle-local` e f
 | `BINANCE_API_KEY` | Não* | `""` | API Key da Binance. Sem ela o adapter Binance não é carregado |
 | `BINANCE_API_SECRET` | Não* | `""` | API Secret da Binance. Obrigatório junto com `BINANCE_API_KEY` |
 | `LOKI_URL` | Não | `http://loki:3100` | URL do Loki para envio de logs. Usar `http://localhost:3100` ao rodar fora do Docker |
-| `SPRING_PROFILES_ACTIVE` | Não | _(nenhum)_ | Perfis Spring ativos. Usar `testnet` para apontar para a Binance Testnet |
+| `SPRING_PROFILES_ACTIVE` | Não | _(nenhum)_ | Perfis Spring ativos: um de exchange (`testnet`) e, para operar como produção, `prod` (ex.: `testnet,prod`). Ver "Perfis" abaixo |
+| `DISCORD_WEBHOOK_URL` | Com `prod` | `""` | Webhook do canal de alertas. Vazio desliga as notificações; com o perfil `prod` o ctrade não sobe sem ele |
 | `DB_HOST` | Não | `localhost` | Host do PostgreSQL |
 | `DB_PORT` | Não | `5432` | Porta do PostgreSQL |
 | `DB_NAME` | Não | `ctrade` | Nome do banco |
@@ -116,6 +117,19 @@ O script `scripts/gradle-run.ps1` fixa `GRADLE_USER_HOME` em `.gradle-local` e f
 | `ADMIN_API_KEY` | Não | `""` | Chave para endpoints administrativos protegidos |
 
 *O par `BINANCE_API_KEY` + `BINANCE_API_SECRET` é necessário para qualquer operação real com a Binance.
+
+#### Perfis
+
+Dois eixos, combinados em `SPRING_PROFILES_ACTIVE` (T74):
+
+| Perfil | Eixo | O que muda |
+|---|---|---|
+| _(nenhum)_ | exchange | Binance real (endereços padrão do `application.yml`) |
+| `testnet` | exchange | Endereços da Binance Spot Testnet |
+| `prod` | operação | Log `INFO` (sem o `DEBUG` do soak), boot fase 2 em `FAIL_FAST` com consulta de saldo obrigatória, webhook do Discord obrigatório |
+
+Soak e desenvolvimento: `testnet`. Staging: `testnet,prod`. Produção (fase B da T74): `prod`, com os endereços
+padrão.
 
 #### Exemplo — IntelliJ Run Configuration
 
