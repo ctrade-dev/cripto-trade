@@ -53,8 +53,10 @@ for app in "${apps[@]}"; do
     -H 'X-Operator: register-strategies.sh' \
     -d "$body" -w '\n%{http_code}')"
   status="${response##*$'\n'}"
-  verification="$(grep -o '"verification":"[A-Z_]*"' <<< "$response" | head -1 | cut -d'"' -f4)"
+  verification="$(grep -o '"verification":"[A-Z_]*"' <<< "$response" | head -1 | cut -d'"' -f4 || true)"
   echo "$service: HTTP $status verification=${verification:-?}"
+  # Sem verification e porque o ctrade recusou o cadastro: mostra o motivo (o corpo nao leva o token).
+  [[ -n "$verification" ]] || echo "  ${response%$'\n'*}" >&2
   [[ "$status" =~ ^2 && "$verification" == "VERIFIED" ]] || failed=1
 done
 
