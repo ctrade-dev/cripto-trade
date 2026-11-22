@@ -4,7 +4,7 @@ Um Compose com dois ambientes do ctrade, ambos na **testnet**, cada um com a pr�
 
 | | Staging (T74) | Soak (T63) |
 |---|---|---|
-| Serviço | `ctrade-app` | `ctrade-soak` + apps de soak (perfil Compose `soak`) |
+| Serviço | `ctrade-app` + apps do staging (`channel`, `channel-xrp`, `following`, `following-xrp`) | `ctrade-soak` + apps de soak (perfil Compose `soak`) |
 | Quando | Sempre no ar (`./up.sh`) | Só nas sessões de teste (`./soak-up.sh`, `./soak-down.sh`, scripts de rodada) |
 | Perfis | `testnet,prod` | `testnet` |
 | API | `127.0.0.1:8080` | `127.0.0.1:8180` |
@@ -13,6 +13,8 @@ Um Compose com dois ambientes do ctrade, ambos na **testnet**, cada um com a pr�
 | Chave admin | `ADMIN_API_KEY_STG` | `ADMIN_API_KEY` |
 | Discord | `DISCORD_WEBHOOK_URL_STG` (obrigatório; também recebe os alertas do Grafana) | `DISCORD_WEBHOOK_URL` (opcional) |
 | Rótulo `env` (Loki, Prometheus) | `staging` | `soak` |
+| Candles das estratégias | Binance real (`BINANCE_CANDLES_BASE_URL`, só leitura pública) | testnet |
+| Cadastro das apps | `./register-strategies.sh staging` | `./register-strategies.sh` |
 
 Postgres, Prometheus, Loki e Grafana são compartilhados. Cada usuário do Postgres só enxerga o próprio schema
 (`./db-environments.sh`): os scripts de soak, que limpam o banco, não alcançam o staging. Os alertas do Grafana
@@ -99,6 +101,7 @@ cd ~/ctrade/deploy/vps
 ./up.sh                     # usuarios do banco, build do ctrade (commit do checkout), sobe o staging, espera UP
 ./soak-up.sh                # sobe o soak (ctrade-soak + apps) com a imagem do up.sh, espera UP na 8180
 ./register-strategies.sh    # cadastra as cinco apps no soak (idempotente); espera VERIFIED em todas
+./register-strategies.sh staging  # idem, as quatro apps do staging (uma vez, ou depois de trocar token ou versão)
 ./soak-down.sh              # para o soak; o schema soak fica para a proxima sessao
 ./versions.sh               # commits e imagens em uso, para o relatório da rodada
 ./backup-staging.sh         # backup do schema staging (o up.sh faz um antes de implantar)
@@ -174,7 +177,7 @@ A rodada é largada e fechada por scripts, sem depender da sessão de quem opera
 4. Derrubar uma app para o teste de indisponibilidade: `docker compose stop chaos`.
 5. Fim da sessão: `./soak-down.sh` para o soak e devolve a CPU ao staging.
 
-Todos os scripts de rodada (`round-*.sh`, `fault.sh`, `drill.sh`, `register-strategies.sh`,
+Todos os scripts de rodada (`round-*.sh`, `fault.sh`, `drill.sh`, `register-strategies.sh` sem argumento,
 `reset-testnet-db.sh`) falam só com o soak: API na 8180, banco como `ctrade_soak`, métricas e logs com
 `env="soak"`. Falhas de infraestrutura compartilhada (Postgres, Loki, rede da VPS) atingem também o staging e
 ficam fora desses scripts.

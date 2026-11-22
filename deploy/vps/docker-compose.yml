@@ -5,12 +5,14 @@
 #   da testnet do staging (variaveis *_STG), API em 127.0.0.1:8080.
 # - Soak (ctrade-soak + apps de soak): perfil Compose "soak", sobe so com ./soak-up.sh e desce com ./soak-down.sh.
 #   Perfil testnet, schema soak (usuario ctrade_soak), conta do soak (variaveis sem sufixo), API em 127.0.0.1:8180.
+# - Apps de estrategia do staging (channel, following e as instancias do XRP) sobem com o staging; as de soak, no
+#   perfil "soak". Todas do checkout STRATEGIES_DIR.
 # - Cada usuario do Postgres so enxerga o proprio schema (./db-environments.sh, chamado pelo ./up.sh).
 #
 # - Nenhuma porta em 0.0.0.0: API, Grafana, Prometheus e Loki so em 127.0.0.1, acessados por tunel SSH.
 #   Postgres e as apps nao publicam porta.
 # - Segredos vem do .env ao lado deste arquivo (modelo em .env.example). Subir com ./up.sh.
-# - Limites de memoria: ~4 GB so com o staging, ~7,5 GB com o soak no ar; a VPS tem 11 GB.
+# - Limites de memoria: ~5 GB so com o staging, ~8,5 GB com o soak no ar; a VPS tem 11 GB.
 name: ctrade-vps
 
 x-logging: &logging
@@ -29,13 +31,16 @@ x-logging-ctrade: &logging-ctrade
 
 # Uma imagem por servico (ctrade-vps-<servico>), todas do mesmo build: as camadas sao compartilhadas.
 # Uma tag unica para as cinco falha no build em paralelo ("image already exists").
-x-strategy: &strategy
+x-strategy-staging: &strategy-staging
   build: ${STRATEGIES_DIR:?defina STRATEGIES_DIR no .env}
-  profiles: [soak]
   restart: unless-stopped
   mem_limit: 256m
   logging: *logging
   networks: [ctrade]
+
+x-strategy: &strategy
+  <<: *strategy-staging
+  profiles: [soak]
 
 # Staging e soak usam a mesma imagem. So o ctrade-app tem build (./up.sh); dois builds da mesma tag em paralelo
 # falham. Ate a A6 da T74 (um checkout por ambiente), o soak roda o commit que o staging montou por ultimo.
@@ -150,6 +155,39 @@ services:
     environment:
       STRATEGY_TOKEN: ${CHAOS_TOKEN:?defina CHAOS_TOKEN no .env}
       CHAOS_HOLD_POSITION: ${CHAOS_HOLD_POSITION:-true}
+
+  # Estrategias do staging (T74, A7), definidas pelo estudo do ctrade-strategies: candles diarios, padroes da app.
+  # TICK_SIZE e fixo por instancia: 0.01 para BTC, ETH, SOL e BNB; 0.0001 para o XRP, numa instancia com STRATEGY_REF
+  # proprio. A quantidade (5 casas) o ctrade ajusta ao stepSize de cada par. Cadastro: ./register-strategies.sh staging.
+  channel:
+    <<: *strategy-staging
+    command: ["channel"]
+    environment:
+      STRATEGY_TOKEN: ${CHANNEL_TOKEN:?defina CHANNEL_TOKEN no .env}
+
+  channel-xrp:
+    <<: *strategy-staging
+    command: ["channel"]
+    environment:
+      STRATEGY_TOKEN: ${CHANNEL_TOKEN:?defina CHANNEL_TOKEN no .env}
+      STRATEGY_REF: f523250f-46b2-40cb-84a7-03cd889c89b5
+      CHANNEL_TICK_SIZE: "0.0001"
+
+  following:
+    <<: *strategy-staging
+    command: ["following"]
+    environment:
+      STRATEGY_TOKEN: ${FOLLOWING_TOKEN:?defina FOLLOWING_TOKEN no .env}
+      FOLLOW_EXIT: trailing
+
+  following-xrp:
+    <<: *strategy-staging
+    command: ["following"]
+    environment:
+      STRATEGY_TOKEN: ${FOLLOWING_TOKEN:?defina FOLLOWING_TOKEN no .env}
+      STRATEGY_REF: 9cc599de-cad4-44e7-b271-975caa04b989
+      FOLLOW_EXIT: trailing
+      FOLLOW_TICK_SIZE: "0.0001"
 
   prometheus:
     image: prom/prometheus:v3.5.0
