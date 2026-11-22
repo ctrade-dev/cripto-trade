@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Sobe o staging da VPS (T63, T74): build do ctrade (commit do checkout atual), Postgres com os usuarios por
-# ambiente (./db-environments.sh), observabilidade e o ctrade-app; espera o /actuator/health responder UP.
+# Sobe o staging da VPS (T63, T74): Postgres com os usuarios por ambiente (./db-environments.sh), backup do
+# staging antes de implantar (./backup-staging.sh), build do ctrade (commit do checkout atual), observabilidade e o
+# ctrade-app; espera o /actuator/health responder UP.
 # O soak (perfil Compose "soak") nao sobe aqui: ./soak-up.sh.
 #
 # Uso:  ./up.sh
@@ -50,6 +51,8 @@ fi
 
 docker compose up -d postgres
 ./db-environments.sh
+# Toda implantacao no staging passa por um backup: migracao que falhar volta pelo restore (runbook, T74 A5).
+echo "backup do staging antes de implantar: $(./backup-staging.sh)"
 docker compose up -d --build --remove-orphans
 
 echo "Esperando o staging responder UP em 127.0.0.1:8080..."

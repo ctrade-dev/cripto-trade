@@ -443,6 +443,28 @@ imprime.
   ctrade-app grafana`.
 - **Confirmar:** boot `SUCCESS`, estado operacional sem piora e, no webhook, uma notificação chegando.
 
+<a id="restore-staging"></a>
+## Restore do staging (T74, A5)
+
+Backups em `~/backups/staging` na VPS (diário e antes de toda implantação, 14 dias) e cópia no computador do
+mantenedor (`deploy/vps/README.md`, "Backup do staging"). Restaurar troca o estado do staging pelo do backup: tudo
+depois dele (ordens, fills, eventos) some do banco e passa a existir só na exchange.
+
+- **Quando:** migração do Flyway que falhou na implantação, ou banco do staging corrompido. Migração com bug volta
+  pelo restore e uma migração nova corrige; não há script de rollback.
+- **Quem decide:** o mantenedor. Restaurar apaga dado do staging, que é tratado como produção: o agente propõe, com
+  o backup escolhido e o que se perde, e só executa com o sim.
+- **Passos** (em `~/ctrade/deploy/vps`):
+  1. `./backup-staging.sh`: backup do estado atual, mesmo quebrado, para análise.
+  2. `docker compose stop ctrade-app`.
+  3. Voltar o checkout para o commit compatível com o backup, se a causa foi a versão nova.
+  4. `docker compose exec -T postgres psql -U ctrade -d ctrade -v ON_ERROR_STOP=1 -c "DROP SCHEMA staging CASCADE"`.
+  5. `docker compose exec -T postgres pg_restore -U ctrade -d ctrade --exit-on-error < ~/backups/staging/<backup>.dump`
+     (recria o schema `staging` com o dono `ctrade_stg`).
+  6. `./up.sh` e conferir boot `SUCCESS`. O `up.sh` faz outro backup antes de subir, agora do estado restaurado.
+- **Confirmar:** saldos e conciliação contra a exchange (`GET /api/reconciliation`). O que aconteceu na exchange
+  depois do backup aparece como divergência e segue os procedimentos de conciliação deste runbook.
+
 ---
 
 <a id="referencia"></a>
