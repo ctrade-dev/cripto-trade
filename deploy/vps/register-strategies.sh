@@ -30,9 +30,9 @@ case "${1:-soak}" in
     # docker-compose.yml).
     apps=(
       "channel|3f6b2a4e-7c1d-4e58-9a0b-5d2c8e1f4a73|ChannelBreakout|1.0.0|CHANNEL_TOKEN"
-      "channel-xrp|b5df6e62-0527-447f-bee0-74242bc8f894|ChannelBreakout|1.0.0|CHANNEL_TOKEN"
+      "channel-xrp|f523250f-46b2-40cb-84a7-03cd889c89b5|ChannelBreakout|1.0.0|CHANNEL_TOKEN"
       "following|89dce8d5-8343-48b1-b899-ad96af683c4b|TrendFollowing|1.0.1|FOLLOWING_TOKEN"
-      "following-xrp|f2c6e9af-f380-4ce4-8ee3-81a61d3ee643|TrendFollowing|1.0.1|FOLLOWING_TOKEN"
+      "following-xrp|9cc599de-cad4-44e7-b271-975caa04b989|TrendFollowing|1.0.1|FOLLOWING_TOKEN"
     )
     ;;
   *)

@@ -170,7 +170,7 @@ services:
     command: ["channel"]
     environment:
       STRATEGY_TOKEN: ${CHANNEL_TOKEN:?defina CHANNEL_TOKEN no .env}
-      STRATEGY_REF: b5df6e62-0527-447f-bee0-74242bc8f894
+      STRATEGY_REF: f523250f-46b2-40cb-84a7-03cd889c89b5
       CHANNEL_TICK_SIZE: "0.0001"
 
   following:
@@ -185,7 +185,7 @@ services:
     command: ["following"]
     environment:
       STRATEGY_TOKEN: ${FOLLOWING_TOKEN:?defina FOLLOWING_TOKEN no .env}
-      STRATEGY_REF: f2c6e9af-f380-4ce4-8ee3-81a61d3ee643
+      STRATEGY_REF: 9cc599de-cad4-44e7-b271-975caa04b989
       FOLLOW_EXIT: trailing
       FOLLOW_TICK_SIZE: "0.0001"
 
