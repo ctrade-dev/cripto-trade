@@ -26,12 +26,13 @@ case "${1:-soak}" in
   staging)
     admin_key="$(env_value ADMIN_API_KEY_STG)"
     api="http://127.0.0.1:8080/api/admin/strategies"
-    # Refs do XRP iguais aos STRATEGY_REF do docker-compose.yml.
+    # name e version iguais aos que a app declara em /v2/meta; o XRP difere so no strategyRef (o STRATEGY_REF do
+    # docker-compose.yml).
     apps=(
       "channel|3f6b2a4e-7c1d-4e58-9a0b-5d2c8e1f4a73|ChannelBreakout|1.0.0|CHANNEL_TOKEN"
-      "channel-xrp|b5df6e62-0527-447f-bee0-74242bc8f894|ChannelBreakoutXRP|1.0.0|CHANNEL_TOKEN"
+      "channel-xrp|b5df6e62-0527-447f-bee0-74242bc8f894|ChannelBreakout|1.0.0|CHANNEL_TOKEN"
       "following|89dce8d5-8343-48b1-b899-ad96af683c4b|TrendFollowing|1.0.1|FOLLOWING_TOKEN"
-      "following-xrp|f2c6e9af-f380-4ce4-8ee3-81a61d3ee643|TrendFollowingXRP|1.0.1|FOLLOWING_TOKEN"
+      "following-xrp|f2c6e9af-f380-4ce4-8ee3-81a61d3ee643|TrendFollowing|1.0.1|FOLLOWING_TOKEN"
     )
     ;;
   *)
