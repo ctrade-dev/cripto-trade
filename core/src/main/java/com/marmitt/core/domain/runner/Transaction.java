@@ -9,6 +9,9 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -95,6 +98,13 @@ public class Transaction {
      */
     private final UUID targetLotId;
 
+    /**
+     * {@code metadata} da decisao da estrategia que originou a ordem (T74), como veio no contrato: ex.
+     * {@code exitKind} e {@code stop}. Vazio nas ordens do proprio ctrade (liquidacao). Registrado para auditoria e
+     * para comparar a operacao com o backtest da estrategia; o ctrade nao decide nada por ele.
+     */
+    private final Map<String, Object> strategyMetadata;
+
     private final Instant requestedAt;
     private Instant updatedAt;
     private Instant executedAt;
@@ -121,7 +131,8 @@ public class Transaction {
             BigDecimal total,
             BigDecimal confidence,
             String reasoning,
-            UUID targetLotId
+            UUID targetLotId,
+            Map<String, Object> strategyMetadata
     ) {
         this.id = UUID.randomUUID();
         this.runnerId = Objects.requireNonNull(runnerId, "runnerId cannot be null");
@@ -135,6 +146,7 @@ public class Transaction {
         this.confidence = validateConfidence(confidence);
         this.reasoning = reasoning;
         this.targetLotId = targetLotId;
+        this.strategyMetadata = copyOf(strategyMetadata);
         this.status = TransactionStatus.PENDING;
         this.requestedAt = Instant.now();
         this.updatedAt = this.requestedAt;
@@ -163,6 +175,7 @@ public class Transaction {
             BigDecimal confidence,
             String reasoning,
             UUID targetLotId,
+            Map<String, Object> strategyMetadata,
             Instant requestedAt,
             Instant updatedAt,
             Instant executedAt,
@@ -186,6 +199,7 @@ public class Transaction {
         this.confidence = confidence;
         this.reasoning = reasoning;
         this.targetLotId = targetLotId;
+        this.strategyMetadata = copyOf(strategyMetadata);
         this.requestedAt = Objects.requireNonNull(requestedAt, "requestedAt cannot be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt cannot be null");
         this.executedAt = executedAt;
@@ -376,5 +390,12 @@ public class Transaction {
             throw new IllegalArgumentException("confidence must be between 0.0 and 1.0");
         }
         return confidence;
+    }
+
+    /** Copia imutavel; aceita valores nulos (JSON {@code null}) e mantem a ordem das chaves. */
+    private static Map<String, Object> copyOf(Map<String, Object> metadata) {
+        return metadata == null || metadata.isEmpty()
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
     }
 }

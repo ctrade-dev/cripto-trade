@@ -52,6 +52,9 @@ public class RunnerTransactionEntity {
 
     private UUID targetLotId;
 
+    /** JSON do metadata da decisao da estrategia (T74); null quando vazio. */
+    private String strategyMetadata;
+
     private Instant requestedAt;
     private Instant updatedAt;
     private Instant executedAt;

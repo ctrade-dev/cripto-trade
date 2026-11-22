@@ -195,6 +195,9 @@ POST /api/websocket/exchange/market-data/unsubscribe
 # Exchange Queries
 GET  /api/exchanges/{exchange}/balances          # ?asset=USDT filtra um ativo
 GET  /api/exchanges/{exchange}/trades            # ?symbol=BTCUSDT&from=...&to=...
+
+# Operacoes de um portfolio, por requestedAt, com a decisao da estrategia (reasoning, strategyMetadata; T74)
+GET  /api/portfolios/{id}/transactions           # ?from=2026-11-01T00:00:00Z&to=2026-12-01T00:00:00Z (opcionais)
 ```
 
 ### Documentação

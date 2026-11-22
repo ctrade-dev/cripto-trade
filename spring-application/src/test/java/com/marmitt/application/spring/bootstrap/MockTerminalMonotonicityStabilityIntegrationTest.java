@@ -13,6 +13,7 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.RepetitionInfo;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,7 +52,7 @@ class MockTerminalMonotonicityStabilityIntegrationTest extends MockOrderOverride
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_REORDERED_BUY_FILLED_BEFORE_PARTIAL + " repeat " + repetition,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());
@@ -184,7 +185,7 @@ class MockTerminalMonotonicityStabilityIntegrationTest extends MockOrderOverride
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_LATE_CANCELED_AFTER_BUY_FILLED + " repeat " + repetition,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());

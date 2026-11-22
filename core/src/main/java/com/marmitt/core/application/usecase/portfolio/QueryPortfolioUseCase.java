@@ -5,6 +5,7 @@ import com.marmitt.core.dto.portfolio.response.GlobalBalanceDto;
 import com.marmitt.core.dto.portfolio.response.PortfolioPnlDto;
 import com.marmitt.core.dto.portfolio.response.TransactionDto;
 import com.marmitt.core.domain.portfolio.GlobalBalance;
+import com.marmitt.core.domain.runner.Transaction;
 import com.marmitt.core.enums.TransactionStatus;
 import com.marmitt.core.ports.inbound.portfolio.QueryPortfolioPort;
 import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
@@ -14,6 +15,8 @@ import com.marmitt.core.ports.outbound.repository.StrategyRunnerRepositoryPort;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -72,7 +75,7 @@ public class QueryPortfolioUseCase implements QueryPortfolioPort {
     }
 
     @Override
-    public List<TransactionDto> findTransactionsByPortfolioId(UUID portfolioId) {
+    public List<TransactionDto> findTransactionsByPortfolioId(UUID portfolioId, Instant from, Instant to) {
         log.debug("Querying transactions for portfolio: {}", portfolioId);
 
         if (portfolioRepository.findById(portfolioId).isEmpty()) {
@@ -83,6 +86,9 @@ public class QueryPortfolioUseCase implements QueryPortfolioPort {
         return strategyRunnerRepository.findByPortfolioId(portfolioId).stream()
                 .flatMap(runner -> strategyRunnerRepository
                         .findByRunnerIdAndStatuses(runner.getId(), ALL_ACTIVE_STATUSES).stream())
+                .filter(transaction -> from == null || !transaction.getRequestedAt().isBefore(from))
+                .filter(transaction -> to == null || transaction.getRequestedAt().isBefore(to))
+                .sorted(Comparator.comparing(Transaction::getRequestedAt))
                 .map(TransactionDto::fromDomain)
                 .toList();
     }

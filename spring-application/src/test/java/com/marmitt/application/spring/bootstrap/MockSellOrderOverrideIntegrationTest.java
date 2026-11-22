@@ -12,6 +12,7 @@ import com.marmitt.mock.config.MockOrderScenarioOverride;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,7 +45,7 @@ class MockSellOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationT
                 buyCost,
                 new BigDecimal("0.90"),
                 SCENARIO_DUPLICATE_SELL_FILLED + " setup buy",
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertTrue(globalBalanceRepository.reserveAtomic(portfolioId, buyCost),
@@ -85,7 +86,7 @@ class MockSellOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationT
                 quantity.multiply(sellPrice),
                 new BigDecimal("0.90"),
                 SCENARIO_DUPLICATE_SELL_FILLED,
-                openedPosition.id()
+                openedPosition.id(), Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingSell);
         assertEquals(0, countMatchesByTransactionId(pendingSell.getId()));

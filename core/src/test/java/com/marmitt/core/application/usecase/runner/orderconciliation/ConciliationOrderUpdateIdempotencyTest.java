@@ -16,6 +16,7 @@ import com.marmitt.core.ports.outbound.marketdata.LatestPricePort;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Map;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -414,7 +415,7 @@ class ConciliationOrderUpdateIdempotencyTest {
                 quantity.multiply(price),
                 new BigDecimal("0.8"),
                 "test",
-                null
+                null, Map.of()
         );
     }
 

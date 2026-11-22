@@ -6,6 +6,7 @@ import com.marmitt.core.enums.TransactionType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +77,23 @@ class TransactionInvariantsTest {
         assertAmount("27.00000000", transaction.getExecutedValue());
     }
 
+    @Test
+    void strategyMetadataIsAnImmutableCopyAndNullMeansEmpty() {
+        Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("exitKind", "trailing");
+        metadata.put("stop", null);
+        Transaction transaction = new Transaction(UUID.randomUUID(), "client-1", TransactionType.SELL, OrderType.LIMIT,
+                "BTCUSDT", BigDecimal.ONE, BigDecimal.TEN, BigDecimal.TEN, null, "t74", null, metadata);
+        metadata.put("exitKind", "changed");
+
+        assertEquals("trailing", transaction.getStrategyMetadata().get("exitKind"));
+        assertEquals(true, transaction.getStrategyMetadata().containsKey("stop"));
+        assertThrows(UnsupportedOperationException.class, () -> transaction.getStrategyMetadata().put("x", 1));
+        assertEquals(Map.of(), new Transaction(UUID.randomUUID(), "client-2", TransactionType.BUY, OrderType.LIMIT,
+                "BTCUSDT", BigDecimal.ONE, BigDecimal.TEN, BigDecimal.TEN, null, null, null, null)
+                .getStrategyMetadata());
+    }
+
     private static Transaction newTransaction() {
         BigDecimal quantity = new BigDecimal("2.5");
         BigDecimal price = new BigDecimal("10");
@@ -91,7 +109,7 @@ class TransactionInvariantsTest {
                 total,
                 new BigDecimal("0.8"),
                 "test",
-                null
+                null, Map.of()
         );
     }
 

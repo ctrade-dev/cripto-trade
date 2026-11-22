@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -242,7 +243,7 @@ class TerminalAfterPartialFillConciliationTest {
         BigDecimal px = new BigDecimal(price);
         Transaction tx = new Transaction(runnerId, ClientOrderId.generate("x1", type), type, OrderType.MARKET,
                 "BTCUSDT", qty, px, qty.multiply(px).setScale(8, RoundingMode.HALF_UP), new BigDecimal("1.0"),
-                "t67", null);
+                "t67", null, Map.of());
         tx.submit("EX_ORDER_1");
         return tx;
     }

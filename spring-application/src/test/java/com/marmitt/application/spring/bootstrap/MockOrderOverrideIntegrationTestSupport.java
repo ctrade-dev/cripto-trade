@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -190,7 +191,7 @@ abstract class MockOrderOverrideIntegrationTestSupport extends AbstractIntegrati
                 buyCost,
                 new BigDecimal("0.90"),
                 reason + " setup buy",
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertTrue(globalBalanceRepository.reserveAtomic(portfolioId, buyCost),
@@ -231,7 +232,7 @@ abstract class MockOrderOverrideIntegrationTestSupport extends AbstractIntegrati
                 quantity.multiply(sellPrice),
                 new BigDecimal("0.90"),
                 reason,
-                openedPosition.id()
+                openedPosition.id(), Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingSell);
         assertEquals(0, countMatchesByTransactionId(pendingSell.getId()));

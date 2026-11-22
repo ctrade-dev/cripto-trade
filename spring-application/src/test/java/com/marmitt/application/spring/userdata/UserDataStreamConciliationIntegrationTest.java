@@ -48,6 +48,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -322,7 +323,7 @@ class UserDataStreamConciliationIntegrationTest {
     private Transaction seedBuyTransaction(StrategyRunner runner, String clientOrderId, BigDecimal cost) {
         Transaction tx = new Transaction(
                 runner.getId(), clientOrderId, TransactionType.BUY, OrderType.LIMIT, SYMBOL,
-                QUANTITY, PRICE, cost, new BigDecimal("0.90"), "user-data-stream-test", null);
+                QUANTITY, PRICE, cost, new BigDecimal("0.90"), "user-data-stream-test", null, Map.of());
         strategyRunnerRepository.saveTransaction(tx);
         return tx;
     }

@@ -17,8 +17,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,11 +79,15 @@ public class PortfolioController {
     }
 
     /**
-     * Lista transações agregadas dos runners de um portfolio
-     * GET /portfolios/{id}/transactions
+     * Lista transações agregadas dos runners de um portfolio, por {@code requestedAt}, com a decisão da estratégia
+     * (reasoning, metadata). {@code from} (inclusivo) e {@code to} (exclusivo), ISO-8601, limitam o período (T74).
+     * GET /portfolios/{id}/transactions?from=&to=
      */
     @GetMapping("/{id}/transactions")
-    public ResponseEntity<AggregatedTransactionsResponse> getTransactionsByPortfolioId(@PathVariable UUID id) {
+    public ResponseEntity<AggregatedTransactionsResponse> getTransactionsByPortfolioId(
+            @PathVariable UUID id,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to) {
         log.debug("Received request to get transactions for portfolio: {}", id);
 
         Optional<PortfolioDto> portfolioOpt = queryPortfolio.findById(id);
@@ -92,7 +98,7 @@ public class PortfolioController {
         }
 
         PortfolioDto portfolio = portfolioOpt.get();
-        List<TransactionDto> transactions = queryPortfolio.findTransactionsByPortfolioId(id);
+        List<TransactionDto> transactions = queryPortfolio.findTransactionsByPortfolioId(id, from, to);
 
         AggregatedTransactionsResponse response = new AggregatedTransactionsResponse(
                 portfolio.id(),

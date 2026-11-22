@@ -95,7 +95,8 @@ class TradeIntentFactory {
                 total,
                 signal.confidence(),
                 signal.reasoning(),
-                signal.targetLotId()
+                signal.targetLotId(),
+                signal.metadata()
         );
     }
 

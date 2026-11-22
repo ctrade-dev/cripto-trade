@@ -1,5 +1,8 @@
 package com.marmitt.application.spring.infrastructure.persistence.mapper;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marmitt.application.spring.infrastructure.persistence.entity.RunnerMarketDataSourceEntity;
 import com.marmitt.application.spring.infrastructure.persistence.entity.RunnerPositionEntity;
 import com.marmitt.application.spring.infrastructure.persistence.entity.RunnerTransactionEntity;
@@ -16,10 +19,17 @@ import com.marmitt.core.enums.FeeType;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public class StrategyRunnerEntityMapper {
+
+    /** So para o metadata da decisao (T74): mapa JSON livre, sem tipos do dominio. */
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final TypeReference<LinkedHashMap<String, Object>> METADATA = new TypeReference<>() {
+    };
 
     // ── StrategyRunner ──────────────────────────────────────────────────────
 
@@ -151,6 +161,7 @@ public class StrategyRunnerEntityMapper {
                 .confidence(domain.getConfidence())
                 .reasoning(domain.getReasoning())
                 .targetLotId(domain.getTargetLotId())
+                .strategyMetadata(metadataJson(domain.getStrategyMetadata()))
                 .requestedAt(domain.getRequestedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .executedAt(domain.getExecutedAt())
@@ -178,6 +189,7 @@ public class StrategyRunnerEntityMapper {
                 .confidence(entity.getConfidence())
                 .reasoning(entity.getReasoning())
                 .targetLotId(entity.getTargetLotId())
+                .strategyMetadata(metadataMap(entity.getStrategyMetadata()))
                 .requestedAt(entity.getRequestedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .executedAt(entity.getExecutedAt())
@@ -243,5 +255,27 @@ public class StrategyRunnerEntityMapper {
         return entities.stream()
                 .map(RunnerMarketDataSourceEntity::source)
                 .collect(Collectors.toSet());
+    }
+
+    private static String metadataJson(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        try {
+            return JSON.writeValueAsString(metadata);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("strategy metadata is not serializable: " + e.getMessage(), e);
+        }
+    }
+
+    private static Map<String, Object> metadataMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return JSON.readValue(json, METADATA);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored strategy metadata is not valid JSON: " + e.getMessage(), e);
+        }
     }
 }

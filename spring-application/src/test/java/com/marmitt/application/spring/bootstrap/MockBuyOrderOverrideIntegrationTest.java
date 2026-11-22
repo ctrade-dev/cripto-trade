@@ -12,6 +12,7 @@ import com.marmitt.mock.config.MockOrderScenarioOverride;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +42,7 @@ class MockBuyOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationTe
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_DUPLICATE_PARTIAL,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());
@@ -111,7 +112,7 @@ class MockBuyOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationTe
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_PARTIAL_FILLED_CONVERGENCE,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());
@@ -188,7 +189,7 @@ class MockBuyOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationTe
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_DUPLICATE_FILLED,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());
@@ -247,7 +248,7 @@ class MockBuyOrderOverrideIntegrationTest extends MockOrderOverrideIntegrationTe
                 quantity.multiply(price),
                 new BigDecimal("0.90"),
                 SCENARIO_REORDERED_BUY_FILLED_BEFORE_PARTIAL,
-                null
+                null, Map.of()
         );
         strategyRunnerRepository.saveTransaction(pendingBuy);
         assertNoInitialPositionOrMatch(pendingBuy.getId());

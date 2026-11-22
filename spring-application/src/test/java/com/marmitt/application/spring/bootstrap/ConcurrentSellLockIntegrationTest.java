@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -283,7 +284,7 @@ class ConcurrentSellLockIntegrationTest extends AbstractIntegrationTest {
                 POSITION_QUANTITY.multiply(POSITION_PRICE),
                 new BigDecimal("0.90"),
                 "phase2 seed buy position",
-                null
+                null, Map.of()
         );
     }
 
@@ -303,7 +304,7 @@ class ConcurrentSellLockIntegrationTest extends AbstractIntegrationTest {
                 quantity.multiply(POSITION_PRICE),
                 new BigDecimal("0.90"),
                 "phase2 concurrent sell lock",
-                targetLotId
+                targetLotId, Map.of()
         );
     }
 

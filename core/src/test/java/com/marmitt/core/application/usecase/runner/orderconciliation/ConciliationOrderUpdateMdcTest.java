@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
+import java.util.Map;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -73,7 +74,7 @@ class ConciliationOrderUpdateMdcTest {
                 quantity.multiply(price),
                 new BigDecimal("0.8"),
                 "test",
-                null
+                null, Map.of()
         );
     }
 

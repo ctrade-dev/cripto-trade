@@ -28,6 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -360,7 +361,7 @@ class OrderTerminationConciliationIntegrationTest extends AbstractIntegrationTes
                 total,
                 new BigDecimal("0.80"),
                 "phase1b termination test",
-                targetLotId
+                targetLotId, Map.of()
         );
     }
 

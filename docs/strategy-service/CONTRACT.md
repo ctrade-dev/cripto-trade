@@ -151,6 +151,10 @@ genérico: são dados que o ctrade **envia** já validados, não saída remota n
   exchange. `null` = usar o preço de mercado do tick (default). A mais de 10% do preço do tick, o
   ctrade descarta o sinal (`REJECTED_PRICE_DEVIATION`, T50).
 - `quantity` é **absoluta** (ex.: `"0.05"` BTC), não percentual.
+- `reasoning` e `metadata` são da app: o ctrade não decide nada por eles. Na decisão que vira ordem, os dois ficam
+  gravados na transação e saem em `GET /api/portfolios/{id}/transactions` (`reasoning`, `strategyMetadata`), para
+  auditar a operação e compará-la com o backtest (T74). Use `metadata` para o que explica a decisão (ex.: `stop`,
+  `exitKind`).
 
 ### Urgência da execução: expressa pelo `limitPrice`
 
