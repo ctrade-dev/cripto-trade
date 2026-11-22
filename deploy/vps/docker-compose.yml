@@ -94,6 +94,8 @@ services:
       LOKI_URL: http://loki:3100
       BINANCE_API_KEY: ${BINANCE_API_KEY_STG:?defina BINANCE_API_KEY_STG no .env}
       BINANCE_API_SECRET: ${BINANCE_API_SECRET_STG:?defina BINANCE_API_SECRET_STG no .env}
+      # Ordens na testnet, candles das estrategias da Binance real: a testnet guarda poucas semanas de historico.
+      BINANCE_CANDLES_BASE_URL: https://api.binance.com
       ADMIN_API_KEY: ${ADMIN_API_KEY_STG:?defina ADMIN_API_KEY_STG no .env}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL_STG:?defina DISCORD_WEBHOOK_URL_STG no .env}
       GRAFANA_EXPLORE_URL_TEMPLATE: ${GRAFANA_EXPLORE_URL_TEMPLATE:-}

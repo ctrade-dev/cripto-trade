@@ -143,13 +143,16 @@ public class BinanceAdapterConfiguration {
         return new BinanceTradeHistoryAdapter(requestBuilder, new OkHttpClientAdapter(binanceRestClient), objectMapper);
     }
 
-    /** Candles fechados para as estrategias que os declaram (T72): dado publico, sem assinatura. */
+    /**
+     * Candles fechados para as estrategias que os declaram (T72): dado publico, sem assinatura nem chave no pedido.
+     * Vem de {@code binance.candles-base-url}, que no staging e a Binance real (T74).
+     */
     @Bean
     public BinanceCandleQueryAdapter binanceCandleQueryAdapter(BinanceProperties properties,
                                                                OkHttpClient binanceRestClient,
                                                                ObjectMapper objectMapper) {
         BinanceCredentials credentials = new BinanceCredentials(properties.getApiKey(), properties.getApiSecret());
-        BinanceRestRequestBuilder requestBuilder = new BinanceRestRequestBuilder(properties.getRestBaseUrl(),
+        BinanceRestRequestBuilder requestBuilder = new BinanceRestRequestBuilder(properties.getCandlesBaseUrl(),
                 new BinanceRequestSigner(credentials));
         return new BinanceCandleQueryAdapter(requestBuilder, new OkHttpClientAdapter(binanceRestClient), objectMapper);
     }

@@ -112,6 +112,7 @@ O script `scripts/gradle-run.ps1` fixa `GRADLE_USER_HOME` em `.gradle-local` e f
 | `DB_HOST` | Não | `localhost` | Host do PostgreSQL |
 | `DB_PORT` | Não | `5432` | Porta do PostgreSQL |
 | `DB_NAME` | Não | `ctrade` | Nome do banco |
+| `BINANCE_CANDLES_BASE_URL` | Não | REST das ordens | REST dos candles das estratégias (dado público, sem chave). O staging usa `https://api.binance.com`: a testnet guarda poucas semanas de histórico (T74) |
 | `DB_SCHEMA` | Não | `public` | Schema do ambiente no banco (`staging`, `soak`). O Flyway migra e o ctrade lê e grava só nele (T74) |
 | `DB_USERNAME` | Não | `ctrade` | Usuário do banco |
 | `DB_PASSWORD` | Não | `ctrade123` | Senha do banco |

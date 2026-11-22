@@ -39,6 +39,9 @@ logging:
 binance:
   ws-base-url: wss://stream.binance.com:9443
   rest-base-url: https://api.binance.com
+  # T74: REST dos candles das estrategias (dado publico, sem chave). Padrao: a mesma das ordens. O staging aponta
+  # para a Binance real (BINANCE_CANDLES_BASE_URL), porque a testnet guarda poucas semanas de historico.
+  candles-base-url: ${BINANCE_CANDLES_BASE_URL:${binance.rest-base-url}}
   ws-api-base-url: wss://ws-api.binance.com:443/ws-api/v3
   api-key: ${BINANCE_API_KEY:}
   api-secret: ${BINANCE_API_SECRET:}
