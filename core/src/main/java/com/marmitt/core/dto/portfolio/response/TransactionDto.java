@@ -7,11 +7,13 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Builder
 public record TransactionDto(
         UUID id,
+        UUID runnerId,
         String clientOrderId,
         TransactionStatus status,
         TransactionType type,
@@ -34,12 +36,18 @@ public record TransactionDto(
         Instant executedAt,
 
         // Rejeição
-        String rejectReason
+        String rejectReason,
+
+        // Decisao da estrategia (T74): motivo, lote alvo da SELL e metadata do contrato (ex.: exitKind, stop)
+        String reasoning,
+        UUID targetLotId,
+        Map<String, Object> strategyMetadata
 ) {
 
     public static TransactionDto fromDomain(Transaction transaction) {
         return TransactionDto.builder()
                 .id(transaction.getId())
+                .runnerId(transaction.getRunnerId())
                 .clientOrderId(transaction.getClientOrderId())
                 .status(transaction.getStatus())
                 .type(transaction.getType())
@@ -52,6 +60,9 @@ public record TransactionDto(
                 .requestedAt(transaction.getRequestedAt())
                 .executedAt(transaction.getExecutedAt())
                 .rejectReason(transaction.getRejectReason())
+                .reasoning(transaction.getReasoning())
+                .targetLotId(transaction.getTargetLotId())
+                .strategyMetadata(transaction.getStrategyMetadata())
                 .build();
     }
 }

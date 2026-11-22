@@ -37,6 +37,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -741,7 +742,7 @@ class RunnerBootRecoveryIntegrationTest extends AbstractIntegrationTest {
                 total,
                 new BigDecimal("0.80"),
                 "phase1a boot recovery test",
-                null
+                null, Map.of()
         );
     }
 

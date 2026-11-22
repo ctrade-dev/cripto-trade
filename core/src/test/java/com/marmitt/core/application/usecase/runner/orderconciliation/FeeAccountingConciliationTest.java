@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -157,7 +158,7 @@ class FeeAccountingConciliationTest {
         BigDecimal qty = new BigDecimal(quantity);
         BigDecimal px = new BigDecimal(price);
         Transaction tx = new Transaction(runnerId, ClientOrderId.generate("x1", type), type, OrderType.LIMIT, "BTCUSDT",
-                qty, px, qty.multiply(px).setScale(8, RoundingMode.HALF_UP), new BigDecimal("0.8"), "t46", null);
+                qty, px, qty.multiply(px).setScale(8, RoundingMode.HALF_UP), new BigDecimal("0.8"), "t46", null, Map.of());
         tx.submit("EX_ORDER_1");
         return tx;
     }

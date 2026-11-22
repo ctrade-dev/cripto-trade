@@ -19,6 +19,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -77,7 +78,7 @@ class MarketDataAutoFeedIntegrationTest extends ScenarioStrategyE2ETestSupport {
         BigDecimal price = new BigDecimal("82853");
         Transaction buy = new Transaction(runnerId, ClientOrderId.generate(runner.getShortCode(), TransactionType.BUY),
                 TransactionType.BUY, OrderType.LIMIT, LOT_SYMBOL, quantity, price, quantity.multiply(price),
-                new BigDecimal("0.90"), "t58 seed buy", null);
+                new BigDecimal("0.90"), "t58 seed buy", null, Map.of());
         strategyRunnerRepository.saveTransaction(buy);
         Position lot = Position.open(runnerId, LOT_SYMBOL, quantity, quantity.multiply(price));
         lot.associateBuyTransaction(buy.getId());

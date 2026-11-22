@@ -5,6 +5,7 @@ import com.marmitt.core.dto.portfolio.response.GlobalBalanceDto;
 import com.marmitt.core.dto.portfolio.response.PortfolioPnlDto;
 import com.marmitt.core.dto.portfolio.response.TransactionDto;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +18,11 @@ public interface QueryPortfolioPort {
 
     List<PortfolioDto> findBySymbol(String symbol);
 
-    List<TransactionDto> findTransactionsByPortfolioId(UUID portfolioId);
+    /**
+     * Transacoes dos runners do portfolio, por {@code requestedAt} ascendente. {@code from} (inclusivo) e {@code to}
+     * (exclusivo) sao opcionais: null nao limita (T74, exportacao por periodo).
+     */
+    List<TransactionDto> findTransactionsByPortfolioId(UUID portfolioId, Instant from, Instant to);
 
     Optional<GlobalBalanceDto> findBalanceByPortfolioId(UUID portfolioId);
 
