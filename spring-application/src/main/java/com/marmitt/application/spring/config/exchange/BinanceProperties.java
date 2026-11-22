@@ -17,6 +17,10 @@ public class BinanceProperties {
     @NotBlank(message = "binance.rest-base-url cannot be blank")
     private String restBaseUrl;
 
+    /** REST dos candles das estrategias; padrao {@code rest-base-url} (application.yml). */
+    @NotBlank(message = "binance.candles-base-url cannot be blank")
+    private String candlesBaseUrl;
+
     @NotBlank(message = "binance.ws-api-base-url cannot be blank")
     private String wsApiBaseUrl;
 
@@ -42,6 +46,14 @@ public class BinanceProperties {
 
     public void setRestBaseUrl(String restBaseUrl) {
         this.restBaseUrl = restBaseUrl;
+    }
+
+    public String getCandlesBaseUrl() {
+        return candlesBaseUrl;
+    }
+
+    public void setCandlesBaseUrl(String candlesBaseUrl) {
+        this.candlesBaseUrl = candlesBaseUrl;
     }
 
     public String getApiKey() {

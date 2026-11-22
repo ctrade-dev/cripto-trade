@@ -22,6 +22,7 @@ class BinanceAdapterConfigurationIntegrationTest {
             .withPropertyValues(
                     "binance.ws-base-url=wss://stream.binance.com:9443",
                     "binance.rest-base-url=https://api.binance.com",
+                    "binance.candles-base-url=https://api.binance.com",
                     "binance.ws-api-base-url=wss://ws-api.binance.com:443/ws-api/v3"
             );
 

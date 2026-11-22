@@ -74,7 +74,8 @@ adaptadores externos.
 - **Carga e manutencao pela REST** (`ExchangeCandleQueryPort`, `EnsureCandleSeriesUseCase`, a cada segundo pelo
   `CandleSeriesScheduler`): serie vazia, curta ou atrasada pede a exchange os candles fechados que faltam; serie em
   dia nao consulta nada ate o proximo fechamento. A mesma chamada carrega, atualiza e cobre buraco de uma queda.
-  Falha da exchange ou historico curto espera `ctrade.market-data.candles.retry-delay-ms`.
+  Falha da exchange ou historico curto espera `ctrade.market-data.candles.retry-delay-ms`. Na Binance, a REST dos
+  candles e `binance.candles-base-url` (padrao: a das ordens); o staging le da Binance real e opera na testnet (T74).
 - **Entrega** (`CandleSeries.latestClosed`): exatamente `count` candles fechados e consolidados (`CandleSeries.SETTLE`,
   5 s depois do fim do periodo), continuos, terminando no ultimo consolidado no instante do tick; senao nada
   (decisao 4: nunca serie com buraco). A carencia vem do teste na VPS: a testnet ainda lanca negocios no candle

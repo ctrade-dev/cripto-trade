@@ -3,7 +3,7 @@
 **Complexidade:** Alta (plano; cada entrega vira PR próprio)
 **Responsável:** Claude
 **Dependências:** T53 (soak em testnet, concluída), T63 (ambiente da VPS), T21/T22 (alertas), T55 (estado operacional)
-**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1, A2 e A3 entregues (A3 testada na VPS em 2026-11-21); A5 em PR
+**Status:** Em andamento: spec aprovada em 2026-11-20 (desenho de schemas e duas contas, decisões 8 e 9); A1, A2, A3 e A5 entregues; A7 em andamento (candles em PR)
 
 ---
 
@@ -178,10 +178,23 @@ commit (por exemplo, um checkout separado para o staging em `~/ctrade-stg`).
 
 ### A7. Estratégia e capital
 
-- Estratégia candidata real: **`DonchianBreakout`** (rompimento em candles de 15 min), depois do backtest que o
-  mantenedor está fazendo. Outras candidatas entram por cadastro, sem implantação (T54).
-- Capital do portfólio do staging: o USDT da conta A. Limites por runner e proteção do lote configurados para o prazo
-  da estratégia (runbook, decisão 5 da T72).
+- Estratégias, definidas pelo estudo do ctrade-strategies em 2026-11-22 (no lugar da `DonchianBreakout` de 15 min):
+  **ChannelBreakout** (`channel`, 1.0.0) e **TrendFollowing** (`following`, 1.0.1, `FOLLOW_EXIT=trailing`), em
+  candles diários (1d × 250), nos pares BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT e XRPUSDT: 10 runners. Outras candidatas
+  entram por cadastro, sem implantação (T54).
+- **Apps:** 4 no compose do staging, uma por estratégia para BTC, ETH, SOL e BNB (`TICK_SIZE` 0.01) e outra para o
+  XRP (`TICK_SIZE` 0.0001, `STRATEGY_REF` próprio). `QUANTITY_DECIMALS` 5 em todas: o ctrade ajusta a quantidade ao
+  `stepSize` e o preço ao `tickSize` de cada par (`BinanceOrderNormalizer`).
+- **Candles da Binance real:** a testnet tem só 47 candles diários por par (desde 2026-10-07) e é reiniciada de
+  tempos em tempos. O staging lê os candles da API pública da Binance real (`BINANCE_CANDLES_BASE_URL`), sem chave, e
+  opera na testnet; nos fechamentos diários conferidos, as duas diferem em até ~0,03%. Decidido em 2026-11-22.
+- **Capital:** uma carteira com o USDT da conta A (10.000), 10 runners com 10% de alocação cada. O `totalCapital` do
+  contrato é o saldo da carteira: 0,5% de risco dá ~50 USDT por operação, como no backtest, mas os 10 runners dividem
+  o capital. Proteção do lote: `maxLossPercentPerLot` 15%, `maxHoldingDuration` desligado (stops em ATR diário).
+  Decidido em 2026-11-22.
+- **Acompanhar:** execução dentro do `limitPrice`, `metadata.exitKind` de cada saída, ação da proteção do lote e
+  `metadata.stop` da BUY contra o preço de saída. Guardar decisões e operações para o estudo comparar com o backtest
+  do mesmo período.
 - Lotes abertos não são vendidos ao fim de nada: o staging não tem "fim de sessão". O soak continua como hoje, na
   conta B.
 
